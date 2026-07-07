@@ -4,7 +4,8 @@ import {
   formatSol,
   type LeaderboardEntry,
 } from "../lib/api";
-import { shortenAddress } from "../lib/utils";
+
+import { PageHeader } from "./PageHeader";
 
 export function Leaderboard() {
   const [leaders, setLeaders] = useState<LeaderboardEntry[]>([]);
@@ -31,10 +32,10 @@ export function Leaderboard() {
 
   return (
     <div className="card">
-      <h3 className="card-title">🏆 Leaderboard</h3>
-      <p className="panel-subtitle">
-        Top players by total wagered. Updates every 30 seconds.
-      </p>
+      <PageHeader
+        title="Leaderboard"
+        subtitle="Top players by total wagered. Updates every 30 seconds."
+      />
 
       {loading ? (
         <div aria-busy="true" aria-label="Loading leaderboard">

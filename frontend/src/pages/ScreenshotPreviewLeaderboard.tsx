@@ -1,25 +1,9 @@
-import { AnimatedBackground } from "../components/AnimatedBackground";
+import { PreviewShell } from "../components/PreviewShell";
 import { Leaderboard } from "../components/Leaderboard";
 
 export function ScreenshotPreviewLeaderboard() {
   return (
-    <div className="app">
-      <AnimatedBackground />
-      <header className="header">
-        <div className="container header-inner">
-          <div className="logo">
-            <div className="logo-icon">◎</div>
-            <span>SolCasino</span>
-          </div>
-          <div className="header-right">
-            <div className="balance-pill">
-              <span className="balance-label">Balance</span>
-              <span className="balance-value">1.2450 SOL</span>
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <PreviewShell balanceSol="1.2450 SOL">
       <div className="container">
         <nav className="nav-tabs">
           <button type="button" className="nav-tab">🚀 Crash</button>
@@ -35,6 +19,6 @@ export function ScreenshotPreviewLeaderboard() {
           <Leaderboard />
         </div>
       </main>
-    </div>
+    </PreviewShell>
   );
 }

@@ -196,7 +196,7 @@ async function start(): Promise<void> {
   }
 
   httpServer.listen(config.port, () => {
-    console.log(`SolCasino backend running on port ${config.port}`);
+    console.log(`OrbitCasino backend running on port ${config.port}`);
     console.log(`Casino wallet: ${config.casinoWalletAddress}`);
     console.log(`Environment: ${config.nodeEnv}`);
     console.log(

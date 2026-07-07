@@ -1,6 +1,8 @@
-# SolCasino — Real SOL Gambling on Solana
+# OrbitCasino — Real SOL Gambling on Solana
 
 A production-ready Solana casino where users gamble **real mainnet SOL**. Built in the style of [solpump.io](https://solpump.io) and Rugs.fun.
+
+**Brand:** OrbitCasino — customize name, logo, and copy in `frontend/src/lib/brand.ts`.
 
 ## Features
 
@@ -83,6 +85,7 @@ Open http://localhost:5173 (dev) or http://localhost:3001 (production).
 | `SOLANA_RPC_URL` | Recommended | Default: `https://rpc.solanatracker.io/public` |
 | `HELIUS_RPC_URL` | Optional | `https://mainnet.helius-rpc.com/?api-key=KEY` |
 | `PHANTOM_APP_ID` | For email login | From [Phantom Portal](https://phantom.com/portal) |
+| `BRAND_NAME` | No | Auth message brand (default: `OrbitCasino`) |
 | `SERVE_FRONTEND` | Production | Set `true` to serve built React app |
 
 ### Frontend (`frontend/.env`)

@@ -1,21 +1,11 @@
-import { AnimatedBackground } from "../components/AnimatedBackground";
+import { PreviewShell } from "../components/PreviewShell";
 import { FairnessPanel } from "../components/FairnessPanel";
 import { SocketProvider } from "../hooks/useSocket";
 
 export function ScreenshotPreviewFairness() {
   return (
     <SocketProvider enabled={false}>
-      <div className="app">
-        <AnimatedBackground />
-        <header className="header">
-          <div className="container header-inner">
-            <div className="logo">
-              <div className="logo-icon">◎</div>
-              <span>SolCasino</span>
-            </div>
-          </div>
-        </header>
-
+      <PreviewShell>
         <div className="container">
           <nav className="nav-tabs">
             <button type="button" className="nav-tab">🚀 Crash</button>
@@ -31,7 +21,7 @@ export function ScreenshotPreviewFairness() {
             <FairnessPanel />
           </div>
         </main>
-      </div>
+      </PreviewShell>
     </SocketProvider>
   );
 }

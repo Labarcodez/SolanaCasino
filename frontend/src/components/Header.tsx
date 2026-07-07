@@ -3,6 +3,7 @@ import { formatSol } from "../lib/api";
 import { shortenAddress } from "../lib/utils";
 import { OnChainBadge } from "./OnChainBadge";
 import { ProfileAvatar } from "./ProfileAvatar";
+import { Logo } from "./Logo";
 
 interface HeaderProps {
   balanceSol?: number;
@@ -26,13 +27,10 @@ export function Header({
   return (
     <header className="header">
       <div className="container header-inner">
-        <div className="logo">
-          <div className="logo-icon">◎</div>
-          <span>SolCasino</span>
-          {onChainEnabled && <OnChainBadge enabled />}
-        </div>
+        <Logo size="md" />
 
         <div className="header-right">
+          {onChainEnabled && <OnChainBadge enabled />}
           {connected && balanceSol !== undefined && (
             <div className="balance-pill">
               <span className="balance-label">Balance</span>

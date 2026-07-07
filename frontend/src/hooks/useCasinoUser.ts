@@ -30,6 +30,7 @@ export function useCasinoUser() {
   const { solana, isAvailable } = useSolana();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [config, setConfig] = useState<CasinoConfig | null>(null);
+  const [configLoading, setConfigLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,7 +60,10 @@ export function useCasinoUser() {
   }, [walletAddress, isAuthenticated]);
 
   useEffect(() => {
-    fetchConfig().then(setConfig).catch(console.error);
+    fetchConfig()
+      .then(setConfig)
+      .catch(console.error)
+      .finally(() => setConfigLoading(false));
   }, []);
 
   useEffect(() => {
@@ -156,6 +160,7 @@ export function useCasinoUser() {
     walletAddress,
     profile,
     config,
+    configLoading,
     loading,
     error,
     deposit,

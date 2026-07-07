@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { ConnectButton } from "@phantom/react-sdk";
 import { PROGRAM_ID } from "../lib/api";
 import { shortenAddress } from "../lib/utils";
+import { BRAND } from "../lib/brand";
 
 interface LandingProps {
   socialLoginEnabled?: boolean;
@@ -12,48 +13,56 @@ const features = [
   {
     icon: "🚀",
     title: "Crash",
-    desc: "Ride the multiplier. Cash out before the rocket crashes. 95% RTP, provably fair on-chain.",
+    desc: "Ride the multiplier curve. Cash out before the bust. 95% RTP with on-chain settlement.",
+    color: "var(--solana-green)",
   },
   {
     icon: "🪙",
     title: "Coinflip",
     desc: "Instant 50/50 flips with commit-reveal seeds. Double your SOL in one click.",
+    color: "var(--accent-bright)",
   },
   {
     icon: "🔐",
     title: "Provably Fair",
-    desc: "Every outcome verifiable via cryptographic seeds. No hidden logic, no trust required.",
+    desc: "Every outcome verifiable on-chain. Cryptographic seeds — no trust required.",
+    color: "var(--warning)",
   },
+];
+
+const steps = [
+  { n: "01", title: "Connect", desc: "Phantom, Google, or Apple" },
+  { n: "02", title: "Deposit", desc: "SOL to vault PDA" },
+  { n: "03", title: "Play", desc: "Crash & coinflip" },
+  { n: "04", title: "Withdraw", desc: "Instant to wallet" },
 ];
 
 export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
   return (
     <div className="landing">
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        className="landing-hero"
+        initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.55 }}
       >
         <div className="landing-hero-badge">
           {onChainEnabled ? (
             <>
               <span className="on-chain-dot" />
-              Powered by Solana + Anchor
+              Anchor on-chain · Devnet
             </>
           ) : (
-            <>⚡ Instant play on Solana</>
+            <>⚡ Instant Solana gaming</>
           )}
         </div>
 
         <h1>
-          Gamble <span>Real SOL</span>
+          {BRAND.tagline.split(".")[0]}.
           <br />
-          On Solana
+          <span>{BRAND.tagline.split(".")[1]?.trim() || "Win on Solana."}</span>
         </h1>
-        <p>
-          Connect with Phantom, Google, or Apple. Deposit to the vault, play
-          crash and coinflip, and withdraw winnings instantly.
-        </p>
+        <p>{BRAND.description}</p>
 
         <div className="landing-auth">
           <ConnectButton />
@@ -62,7 +71,7 @@ export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
               <>
                 <span className="auth-method-pill">Google</span>
                 <span className="auth-method-pill">Apple</span>
-                <span className="auth-method-pill">Phantom Wallet</span>
+                <span className="auth-method-pill">Phantom</span>
               </>
             ) : (
               <span className="auth-method-pill">Phantom Extension</span>
@@ -72,17 +81,24 @@ export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
 
         {!socialLoginEnabled && (
           <p className="landing-hint">
-            Email login (Google / Apple) needs a Phantom Portal app ID. Set{" "}
-            <code>VITE_PHANTOM_APP_ID</code> to enable embedded wallets.
+            Set <code>VITE_PHANTOM_APP_ID</code> for Google & Apple login
           </p>
         )}
+      </motion.div>
 
-        {socialLoginEnabled && (
-          <p className="landing-hint success">
-            Sign in with Google or Apple for a passwordless embedded wallet, or
-            connect your existing Phantom extension.
-          </p>
-        )}
+      <motion.div
+        className="landing-steps"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.2 }}
+      >
+        {steps.map((s) => (
+          <div key={s.n} className="landing-step">
+            <span className="landing-step-n">{s.n}</span>
+            <span className="landing-step-title">{s.title}</span>
+            <span className="landing-step-desc">{s.desc}</span>
+          </div>
+        ))}
       </motion.div>
 
       <motion.div
@@ -104,10 +120,10 @@ export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
         className="landing-stats"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.3 }}
+        transition={{ delay: 0.35 }}
       >
         <div className="landing-stat">
-          <div className="landing-stat-value">95%</div>
+          <div className="landing-stat-value">{BRAND.rtp}</div>
           <div className="landing-stat-label">Crash RTP</div>
         </div>
         <div className="landing-stat">
@@ -115,8 +131,8 @@ export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
           <div className="landing-stat-label">Settlement</div>
         </div>
         <div className="landing-stat">
-          <div className="landing-stat-value">0.001</div>
-          <div className="landing-stat-label">Min bet SOL</div>
+          <div className="landing-stat-value">{BRAND.minBet}</div>
+          <div className="landing-stat-label">Min bet</div>
         </div>
       </motion.div>
 

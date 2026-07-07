@@ -1,5 +1,4 @@
-import { AnimatedBackground } from "../components/AnimatedBackground";
-import { OnChainBadge } from "../components/OnChainBadge";
+import { PreviewShell } from "../components/PreviewShell";
 import { ProfilePanel } from "../components/ProfilePanel";
 
 const MOCK_PROFILE = {
@@ -18,39 +17,27 @@ const MOCK_PROFILE = {
 
 export function ScreenshotPreviewProfile() {
   return (
-    <div className="app">
-      <AnimatedBackground />
-      <header className="header">
-        <div className="container header-inner">
-          <div className="logo">
-            <div className="logo-icon">◎</div>
-            <span>SolCasino</span>
-            <OnChainBadge enabled />
-          </div>
-          <div className="header-right">
-            <div className="balance-pill">
-              <span className="balance-label">Balance</span>
-              <span className="balance-value">1.2450 SOL</span>
-            </div>
-            <button type="button" className="profile-chip">
-              <span
-                className="profile-avatar"
-                style={{
-                  width: 28,
-                  height: 28,
-                  background: "linear-gradient(135deg, #9945ff, #14f195)",
-                  fontSize: "0.7rem",
-                }}
-              >
-                DK
-              </span>
-              <span className="profile-chip-name">DegenKing</span>
-              <span className="profile-chip-wallet">7xKp...9mNq</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
+    <PreviewShell
+      onChain
+      balanceSol="1.2450 SOL"
+      headerRight={
+        <button type="button" className="profile-chip">
+          <span
+            className="profile-avatar"
+            style={{
+              width: 28,
+              height: 28,
+              background: "linear-gradient(135deg, var(--accent), var(--solana-green))",
+              fontSize: "0.7rem",
+            }}
+          >
+            DK
+          </span>
+          <span className="profile-chip-name">DegenKing</span>
+          <span className="profile-chip-wallet">7xKp...9mNq</span>
+        </button>
+      }
+    >
       <div className="container">
         <nav className="nav-tabs">
           <button type="button" className="nav-tab">🚀 Crash</button>
@@ -63,12 +50,9 @@ export function ScreenshotPreviewProfile() {
 
       <main className="main-content">
         <div className="container game-grid">
-          <ProfilePanel
-            profile={MOCK_PROFILE}
-            onUpdated={() => undefined}
-          />
+          <ProfilePanel profile={MOCK_PROFILE} onUpdated={() => undefined} />
         </div>
       </main>
-    </div>
+    </PreviewShell>
   );
 }

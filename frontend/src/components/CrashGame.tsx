@@ -12,6 +12,7 @@ import {
   buildSettleBetTransaction,
   ensurePlayerInitialized,
 } from "../lib/anchor";
+import { PageHeader } from "./PageHeader";
 import { CrashChart } from "./CrashChart";
 import { BettingCountdown } from "./BettingCountdown";
 import { CrashFairnessBar } from "./CrashFairnessBar";
@@ -253,7 +254,10 @@ export function CrashGame({
   return (
     <div className="card card-glow crash-game-card">
       <div className="crash-header">
-        <h3 className="card-title">Crash</h3>
+        <PageHeader
+          title="Crash"
+          subtitle="Ride the multiplier · cash out before the bust"
+        />
         <div className="crash-header-actions">
           <WinFeed cashouts={recentCashouts} />
           <SoundToggle muted={muted} onToggle={toggleMute} />

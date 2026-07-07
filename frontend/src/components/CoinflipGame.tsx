@@ -11,6 +11,7 @@ import {
 import { useCasino } from "../hooks/CasinoUserProvider";
 import { useToast } from "./ui/Toast";
 import { prepareTransaction } from "../lib/utils";
+import { PageHeader } from "./PageHeader";
 import {
   buildCoinflipBetTransaction,
   ensurePlayerInitialized,
@@ -110,7 +111,11 @@ export function CoinflipGame({
 
   return (
     <div className="card card-glow">
-      <h3 className="card-title">Coinflip</h3>
+      <PageHeader
+        title="Coinflip"
+        subtitle="50/50 instant flips · commit-reveal fairness"
+        badge={onChain ? <span className="on-chain-badge"><span className="on-chain-dot" />On-Chain</span> : undefined}
+      />
 
       <div className="coinflip-container">
         <motion.div

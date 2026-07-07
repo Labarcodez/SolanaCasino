@@ -12,7 +12,9 @@ import { AnimatedBackground } from "./components/AnimatedBackground";
 import { MobileNav } from "./components/MobileNav";
 import { useCasino, CasinoUserProvider } from "./hooks/CasinoUserProvider";
 import { SocketProvider, useSocket } from "./hooks/useSocket";
-import { CASINO_WALLET } from "./lib/api";
+import { SiteFooter } from "./components/SiteFooter";
+import { BRAND } from "./lib/brand";
+import { Logo } from "./components/Logo";
 import AuthCallback from "./pages/AuthCallback";
 import { ScreenshotPreview } from "./pages/ScreenshotPreview";
 import { ProfilePanel } from "./components/ProfilePanel";
@@ -37,6 +39,7 @@ function CasinoContent() {
     walletAddress,
     profile,
     config,
+    configLoading,
     loading,
     error,
     deposit,
@@ -65,7 +68,17 @@ function CasinoContent() {
           socialLoginEnabled={config?.socialLoginEnabled}
           onChainEnabled={onChainEnabled}
         />
-        <Footer />
+        <SiteFooter />
+      </div>
+    );
+  }
+
+  if (isAuthenticated && configLoading) {
+    return (
+      <div className="app-loading">
+        <Logo size="lg" />
+        <div className="spinner" aria-hidden="true" />
+        <p>Loading {BRAND.name}...</p>
       </div>
     );
   }
@@ -80,25 +93,28 @@ function CasinoContent() {
           onChainEnabled={onChainEnabled}
         />
         <div className="auth-screen">
-          <h2>Complete your profile</h2>
-          <p>
-            Your wallet is connected
-            {authProvider === "google" || authProvider === "apple"
-              ? ` via ${authProvider === "google" ? "Google" : "Apple"}`
-              : ""}
-            . Sign a free message to create your casino profile — no SOL
-            required.
-          </p>
-          <button
-            className="btn btn-primary"
-            onClick={() => authenticate().catch(console.error)}
-            disabled={authLoading}
-          >
-            {authLoading ? "Signing..." : "Create profile & play"}
-          </button>
-          {authError && <div className="alert alert-error">{authError}</div>}
+          <div className="auth-card">
+            <Logo size="lg" className="auth-card-logo" />
+            <h2>Welcome to {BRAND.name}</h2>
+            <p>
+              Your wallet is connected
+              {authProvider === "google" || authProvider === "apple"
+                ? ` via ${authProvider === "google" ? "Google" : "Apple"}`
+                : " via Phantom"}
+              . Sign a free message to create your profile — no SOL required.
+            </p>
+            <button
+              className="btn btn-primary"
+              onClick={() => authenticate().catch(console.error)}
+              disabled={authLoading}
+              style={{ width: "100%" }}
+            >
+              {authLoading ? "Signing..." : "Create profile & play"}
+            </button>
+            {authError && <div className="alert alert-error">{authError}</div>}
+          </div>
         </div>
-        <Footer />
+        <SiteFooter />
       </div>
     );
   }
@@ -255,30 +271,8 @@ function CasinoContent() {
       </main>
 
       <MobileNav activeTab={activeTab} onTabChange={setActiveTab} />
-      <Footer />
+      <SiteFooter />
     </div>
-  );
-}
-
-function Footer() {
-  return (
-    <footer className="footer">
-      <div className="container">
-        <p>
-          SolCasino — Real SOL gambling on Solana. Provably fair games. Gamble
-          responsibly.
-        </p>
-        <p className="footer-link">
-          <a
-            href={`https://solscan.io/account/${CASINO_WALLET}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            View Casino Wallet on Solscan
-          </a>
-        </p>
-      </div>
-    </footer>
   );
 }
 

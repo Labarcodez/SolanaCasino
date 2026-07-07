@@ -30,7 +30,7 @@ export function ChatPanel() {
   return (
     <div className="card chat-panel">
       <div className="chat-header">
-        <h3 className="card-title">Trollbox</h3>
+        <h3 className="card-title">Live Chat</h3>
         <div className="chat-online">
           <span className="live-dot" />
           {connected ? `${onlineCount || 1} online` : "Connecting..."}

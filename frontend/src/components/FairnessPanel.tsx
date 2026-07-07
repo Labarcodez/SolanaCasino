@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { verifyCrashFairness } from "../lib/api";
 import { useSocket } from "../hooks/useSocket";
+import { PageHeader } from "./PageHeader";
 
 export function FairnessPanel() {
   const { crashState } = useSocket();
@@ -45,12 +46,10 @@ export function FairnessPanel() {
 
   return (
     <div className="card">
-      <h3 className="card-title">🔐 Provably Fair Verification</h3>
-      <p className="panel-subtitle">
-        Every crash round publishes a server seed hash before betting. After
-        the crash, the seed is revealed so you can verify the outcome was
-        predetermined.
-      </p>
+      <PageHeader
+        title="Provably Fair"
+        subtitle="Every crash round publishes a server seed hash before betting. After the crash, the seed is revealed so you can verify the outcome was predetermined."
+      />
 
       {crashState?.serverSeed && (
         <button

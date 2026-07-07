@@ -14,7 +14,8 @@ export interface AuthTokenPayload {
 }
 
 export function buildAuthMessage(walletAddress: string, nonce: string): string {
-  return `SolCasino wants you to sign in with your Solana account:
+  const brandName = process.env.BRAND_NAME ?? "OrbitCasino";
+  return `${brandName} wants you to sign in with your Solana account:
 ${walletAddress}
 
 Sign this message to authenticate. This does not initiate a transaction.

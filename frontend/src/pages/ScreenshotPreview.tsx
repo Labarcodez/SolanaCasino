@@ -1,9 +1,8 @@
 /**
  * Static UI preview for documentation screenshots (no wallet required).
  */
-import { AnimatedBackground } from "../components/AnimatedBackground";
+import { PreviewShell } from "../components/PreviewShell";
 import { CrashChart } from "../components/CrashChart";
-import { OnChainBadge } from "../components/OnChainBadge";
 import { BettingCountdown } from "../components/BettingCountdown";
 import { CrashFairnessBar } from "../components/CrashFairnessBar";
 
@@ -24,25 +23,7 @@ export function ScreenshotPreview() {
   const bettingEndsAt = Date.now() + 4500;
 
   return (
-    <div className="app">
-      <AnimatedBackground />
-      <header className="header">
-        <div className="container header-inner">
-          <div className="logo">
-            <div className="logo-icon">◎</div>
-            <span>SolCasino</span>
-            <OnChainBadge enabled />
-          </div>
-          <div className="header-right">
-            <div className="balance-pill">
-              <span className="balance-label">Balance</span>
-              <span className="balance-value">1.2450 SOL</span>
-            </div>
-            <div className="wallet-chip">7xKp...9mNq</div>
-          </div>
-        </div>
-      </header>
-
+    <PreviewShell onChain balanceSol="1.2450 SOL">
       <div className="container">
         <nav className="nav-tabs">
           <button type="button" className="nav-tab active">🚀 Crash</button>
@@ -62,7 +43,7 @@ export function ScreenshotPreview() {
             <div className="crash-arena-chat">
               <div className="card chat-panel">
                 <div className="chat-header">
-                  <h3 className="card-title">Trollbox</h3>
+                  <h3 className="card-title">Live Chat</h3>
                   <div className="chat-online">
                     <span className="live-dot" />
                     42 online
@@ -87,7 +68,7 @@ export function ScreenshotPreview() {
                 <div className="crash-header">
                   <h3 className="card-title">Crash</h3>
                   <div className="crash-header-actions">
-                    <span className={`phase-badge running`}>running</span>
+                    <span className="phase-badge running">running</span>
                   </div>
                 </div>
 
@@ -166,6 +147,6 @@ export function ScreenshotPreview() {
           </div>
         </div>
       </main>
-    </div>
+    </PreviewShell>
   );
 }
