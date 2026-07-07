@@ -9,7 +9,20 @@ COPY frontend/package.json ./frontend/
 RUN npm ci
 
 COPY . .
-RUN npm run build
+
+ARG VITE_PHANTOM_APP_ID=
+ARG VITE_PROGRAM_ID=Be5brMe2AvA68zEdiFKxa6KfYJdeQAeY12eWtZiC41vU
+ARG VITE_CASINO_WALLET=FMmho438Vv1Y9nov4mtfHZ4pYSZV8NfubiCeCB3bbGCb
+ARG VITE_SOLANA_RPC=https://api.devnet.solana.com
+ARG VITE_API_URL=
+
+ENV VITE_PHANTOM_APP_ID=$VITE_PHANTOM_APP_ID
+ENV VITE_PROGRAM_ID=$VITE_PROGRAM_ID
+ENV VITE_CASINO_WALLET=$VITE_CASINO_WALLET
+ENV VITE_SOLANA_RPC=$VITE_SOLANA_RPC
+ENV VITE_API_URL=$VITE_API_URL
+
+RUN npm run build:docker
 
 FROM node:22-slim AS runner
 
@@ -20,6 +33,8 @@ ENV NODE_ENV=production
 ENV SERVE_FRONTEND=true
 ENV PORT=3001
 
+RUN groupadd -r orbit && useradd -r -g orbit orbit
+
 COPY package.json package-lock.json ./
 COPY backend/package.json ./backend/
 RUN npm ci --omit=dev --workspace=backend && npm cache clean --force
@@ -28,11 +43,12 @@ COPY --from=builder /app/backend/dist ./backend/dist
 COPY --from=builder /app/frontend/dist ./frontend/dist
 COPY backend/.env.example ./backend/.env.example
 
-RUN mkdir -p /app/backend/data
+RUN mkdir -p /app/backend/data && chown -R orbit:orbit /app
 
+USER orbit
 EXPOSE 3001
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "fetch('http://localhost:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "backend/dist/index.js"]

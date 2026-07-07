@@ -1,5 +1,7 @@
 import "dotenv/config";
 import cors from "cors";
+import compression from "compression";
+import helmet from "helmet";
 import express from "express";
 import path from "node:path";
 import fs from "node:fs";
@@ -32,6 +34,7 @@ function checkSocketRateLimit(wallet: string): boolean {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
+app.set("trust proxy", 1);
 const httpServer = createServer(app);
 
 const allowedOrigins = [
@@ -49,11 +52,18 @@ const io = new Server(httpServer, {
 });
 
 app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  }),
+);
+app.use(compression());
+app.use(
   cors({
     origin: allowedOrigins,
   }),
 );
-app.use(express.json());
+app.use(express.json({ limit: "100kb" }));
 app.use("/api", apiRouter);
 app.use("/api/admin", adminRouter);
 
@@ -211,12 +221,26 @@ crashEngine.on("cashout", ({ bet, multiplier }) => {
 
 const frontendDist = path.join(__dirname, "../../frontend/dist");
 if (config.serveFrontend && fs.existsSync(frontendDist)) {
-  app.use(express.static(frontendDist));
+  app.use(
+    express.static(frontendDist, {
+      maxAge: config.nodeEnv === "production" ? "7d" : 0,
+    }),
+  );
   app.get(/^(?!\/api).*/, (_req, res) => {
     res.sendFile(path.join(frontendDist, "index.html"));
   });
   console.log(`Serving frontend from ${frontendDist}`);
 }
+
+function shutdown(signal: string): void {
+  console.log(`${signal} received — shutting down`);
+  crashEngine.destroy();
+  httpServer.close(() => process.exit(0));
+  setTimeout(() => process.exit(1), 10_000).unref();
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 
 async function start(): Promise<void> {
   const rpc = await checkRpcHealth();

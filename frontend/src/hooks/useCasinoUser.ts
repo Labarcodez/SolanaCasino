@@ -32,6 +32,7 @@ export function useCasinoUser() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [config, setConfig] = useState<CasinoConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
+  const [configError, setConfigError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,15 +61,24 @@ export function useCasinoUser() {
     }
   }, [walletAddress, isAuthenticated]);
 
-  useEffect(() => {
-    fetchConfig()
-      .then((c) => {
-        setConfig(c);
-        setSolanaCluster(c.cluster);
-      })
-      .catch(console.error)
-      .finally(() => setConfigLoading(false));
+  const loadConfig = useCallback(async () => {
+    setConfigLoading(true);
+    setConfigError(null);
+    try {
+      const c = await fetchConfig();
+      setConfig(c);
+      setSolanaCluster(c.cluster);
+    } catch (err) {
+      setConfigError(err instanceof Error ? err.message : "Failed to load config");
+      setConfig(null);
+    } finally {
+      setConfigLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadConfig();
+  }, [loadConfig]);
 
   useEffect(() => {
     if (walletAddress && isAuthenticated) {
@@ -165,6 +175,8 @@ export function useCasinoUser() {
     profile,
     config,
     configLoading,
+    configError,
+    reloadConfig: loadConfig,
     loading,
     error,
     deposit,

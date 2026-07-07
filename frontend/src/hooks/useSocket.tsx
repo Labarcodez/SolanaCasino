@@ -3,10 +3,12 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { io, Socket } from "socket.io-client";
 import { API_URL, getAuthToken } from "../lib/api";
+import { useToast } from "../components/ui/Toast";
 
 export type CrashPhase = "betting" | "running" | "crashed" | "cooldown";
 
@@ -83,6 +85,8 @@ export function SocketProvider({
   const [onlineCount, setOnlineCount] = useState(0);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [recentCashouts, setRecentCashouts] = useState<CashoutEvent[]>([]);
+  const { toast } = useToast();
+  const connectErrorShown = useRef(false);
 
   useEffect(() => {
     if (!enabled) {
@@ -99,9 +103,21 @@ export function SocketProvider({
       auth: { token },
     });
 
-    s.on("connect", () => setConnected(true));
+    s.on("connect", () => {
+      setConnected(true);
+      if (connectErrorShown.current) {
+        toast("Live connection restored", "success");
+        connectErrorShown.current = false;
+      }
+    });
     s.on("disconnect", () => setConnected(false));
-    s.on("connect_error", () => setConnected(false));
+    s.on("connect_error", () => {
+      setConnected(false);
+      if (!connectErrorShown.current) {
+        toast("Live connection lost — retrying...", "error");
+        connectErrorShown.current = true;
+      }
+    });
     s.on("crash:state", (state: CrashRoundState) => setCrashState(state));
     s.on("crash:round_start", (state: CrashRoundState) => setCrashState(state));
     s.on("crash:round_running", (state: CrashRoundState) =>
@@ -153,7 +169,7 @@ export function SocketProvider({
     return () => {
       s.disconnect();
     };
-  }, [enabled]);
+  }, [enabled, toast]);
 
   const sendChat = useCallback(
     (message: string): Promise<{ success: boolean; error?: string }> => {

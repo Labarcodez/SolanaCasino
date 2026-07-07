@@ -1,37 +1,86 @@
-import { useState } from "react";
-import { Routes, Route } from "react-router-dom";
+import { lazy, Suspense, useState } from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { Header } from "./components/Header";
 import { Landing } from "./components/Landing";
-import { CrashArena } from "./components/CrashArena";
-import { CoinflipGame } from "./components/CoinflipGame";
 import { WalletPanel } from "./components/WalletPanel";
-import { Leaderboard } from "./components/Leaderboard";
 import { BetHistoryPanel } from "./components/BetHistoryPanel";
-import { FairnessPanel } from "./components/FairnessPanel";
 import { AnimatedBackground } from "./components/AnimatedBackground";
 import { MobileNav } from "./components/MobileNav";
 import { useCasino, CasinoUserProvider } from "./hooks/CasinoUserProvider";
 import { SocketProvider, useSocket } from "./hooks/useSocket";
-import { LimboGame } from "./components/LimboGame";
-import { TournamentPanel } from "./components/TournamentPanel";
 import { TreasuryBar } from "./components/TreasuryBar";
 import { SiteFooter } from "./components/SiteFooter";
 import { BRAND } from "./lib/brand";
 import { Logo } from "./components/Logo";
-import AuthCallback from "./pages/AuthCallback";
-import { ScreenshotPreview } from "./pages/ScreenshotPreview";
 import { ProfilePanel } from "./components/ProfilePanel";
-import { ScreenshotPreviewCoinflip } from "./pages/ScreenshotPreviewCoinflip";
-import { ScreenshotPreviewProfile } from "./pages/ScreenshotPreviewProfile";
-import { ScreenshotPreviewLeaderboard } from "./pages/ScreenshotPreviewLeaderboard";
-import { ScreenshotPreviewFairness } from "./pages/ScreenshotPreviewFairness";
-import { ScreenshotPreviewAuth, ScreenshotPreviewLanding } from "./pages/ScreenshotPreviewAuth";
-import { AdminDashboard } from "./components/AdminDashboard";
 import { PauseBanner } from "./components/PauseBanner";
-import { ScreenshotPreviewLimbo } from "./pages/ScreenshotPreviewLimbo";
-import { ScreenshotPreviewTournament } from "./pages/ScreenshotPreviewTournament";
-import { ScreenshotPreviewAdmin } from "./pages/ScreenshotPreviewAdmin";
+import { ConfigErrorScreen } from "./components/ConfigErrorScreen";
+import { GameErrorBoundary } from "./components/GameErrorBoundary";
 import type { UserProfile } from "./lib/api";
+
+const CrashArena = lazy(() =>
+  import("./components/CrashArena").then((m) => ({ default: m.CrashArena })),
+);
+const CoinflipGame = lazy(() =>
+  import("./components/CoinflipGame").then((m) => ({ default: m.CoinflipGame })),
+);
+const LimboGame = lazy(() =>
+  import("./components/LimboGame").then((m) => ({ default: m.LimboGame })),
+);
+const Leaderboard = lazy(() =>
+  import("./components/Leaderboard").then((m) => ({ default: m.Leaderboard })),
+);
+const TournamentPanel = lazy(() =>
+  import("./components/TournamentPanel").then((m) => ({ default: m.TournamentPanel })),
+);
+const FairnessPanel = lazy(() =>
+  import("./components/FairnessPanel").then((m) => ({ default: m.FairnessPanel })),
+);
+const AdminDashboard = lazy(() =>
+  import("./components/AdminDashboard").then((m) => ({ default: m.AdminDashboard })),
+);
+const AuthCallback = lazy(() => import("./pages/AuthCallback"));
+
+const ScreenshotPreview = lazy(() =>
+  import("./pages/ScreenshotPreview").then((m) => ({ default: m.ScreenshotPreview })),
+);
+const ScreenshotPreviewCoinflip = lazy(() =>
+  import("./pages/ScreenshotPreviewCoinflip").then((m) => ({ default: m.ScreenshotPreviewCoinflip })),
+);
+const ScreenshotPreviewProfile = lazy(() =>
+  import("./pages/ScreenshotPreviewProfile").then((m) => ({ default: m.ScreenshotPreviewProfile })),
+);
+const ScreenshotPreviewLeaderboard = lazy(() =>
+  import("./pages/ScreenshotPreviewLeaderboard").then((m) => ({ default: m.ScreenshotPreviewLeaderboard })),
+);
+const ScreenshotPreviewFairness = lazy(() =>
+  import("./pages/ScreenshotPreviewFairness").then((m) => ({ default: m.ScreenshotPreviewFairness })),
+);
+const ScreenshotPreviewAuth = lazy(() =>
+  import("./pages/ScreenshotPreviewAuth").then((m) => ({ default: m.ScreenshotPreviewAuth })),
+);
+const ScreenshotPreviewLanding = lazy(() =>
+  import("./pages/ScreenshotPreviewAuth").then((m) => ({ default: m.ScreenshotPreviewLanding })),
+);
+const ScreenshotPreviewLimbo = lazy(() =>
+  import("./pages/ScreenshotPreviewLimbo").then((m) => ({ default: m.ScreenshotPreviewLimbo })),
+);
+const ScreenshotPreviewTournament = lazy(() =>
+  import("./pages/ScreenshotPreviewTournament").then((m) => ({ default: m.ScreenshotPreviewTournament })),
+);
+const ScreenshotPreviewAdmin = lazy(() =>
+  import("./pages/ScreenshotPreviewAdmin").then((m) => ({ default: m.ScreenshotPreviewAdmin })),
+);
+
+function TabLoader() {
+  return (
+    <div className="tab-loader" aria-busy="true">
+      <div className="spinner" />
+    </div>
+  );
+}
+
+const isDev = import.meta.env.DEV;
 
 type GameTab = "crash" | "coinflip" | "limbo" | "leaderboard" | "tournament" | "fairness" | "profile" | "admin";
 
@@ -48,6 +97,8 @@ function CasinoContent() {
     profile,
     config,
     configLoading,
+    configError,
+    reloadConfig,
     loading,
     error,
     deposit,
@@ -66,6 +117,12 @@ function CasinoContent() {
     setLocalBalance(balance);
     refresh();
   };
+
+  if (!configLoading && configError && !config) {
+    return (
+      <ConfigErrorScreen message={configError} onRetry={() => void reloadConfig()} />
+    );
+  }
 
   if (!isConnected || !walletAddress) {
     return (
@@ -234,13 +291,17 @@ function CasinoContent() {
       <main className="main-content">
         {activeTab === "crash" && config ? (
           <div className="container crash-page">
-            <CrashArena
-              balanceSol={balanceSol}
-              minBetSol={config.minBetSol}
-              maxBetSol={config.maxBetSol}
-              onChainEnabled={onChainEnabled}
-              onBalanceUpdate={handleBalanceUpdate}
-            />
+            <GameErrorBoundary label="Crash">
+              <Suspense fallback={<TabLoader />}>
+                <CrashArena
+                  balanceSol={balanceSol}
+                  minBetSol={config.minBetSol}
+                  maxBetSol={config.maxBetSol}
+                  onChainEnabled={onChainEnabled}
+                  onBalanceUpdate={handleBalanceUpdate}
+                />
+              </Suspense>
+            </GameErrorBoundary>
             <div className="crash-wallet-row">
               {profile && (
                 <WalletPanel
@@ -267,34 +328,60 @@ function CasinoContent() {
           <div className="container game-grid">
             <div>
               {activeTab === "coinflip" && config && (
-                <CoinflipGame
-                  walletAddress={walletAddress}
-                  balanceSol={balanceSol}
-                  minBetSol={config.minBetSol}
-                  maxBetSol={config.maxBetSol}
-                  onBalanceUpdate={handleBalanceUpdate}
-                />
+                <GameErrorBoundary label="Coinflip">
+                  <Suspense fallback={<TabLoader />}>
+                    <CoinflipGame
+                      walletAddress={walletAddress}
+                      balanceSol={balanceSol}
+                      minBetSol={config.minBetSol}
+                      maxBetSol={config.maxBetSol}
+                      onBalanceUpdate={handleBalanceUpdate}
+                    />
+                  </Suspense>
+                </GameErrorBoundary>
               )}
               {activeTab === "limbo" && config && (
-                <LimboGame
-                  walletAddress={walletAddress}
-                  balanceSol={balanceSol}
-                  minBetSol={config.minBetSol}
-                  maxBetSol={config.maxBetSol}
-                  limboMinTarget={config.limboMinTarget}
-                  limboMaxTarget={config.limboMaxTarget}
-                  limboHouseEdge={config.limboHouseEdge}
-                  onChainEnabled={onChainEnabled}
-                  onBalanceUpdate={handleBalanceUpdate}
-                />
+                <GameErrorBoundary label="Limbo">
+                  <Suspense fallback={<TabLoader />}>
+                    <LimboGame
+                      walletAddress={walletAddress}
+                      balanceSol={balanceSol}
+                      minBetSol={config.minBetSol}
+                      maxBetSol={config.maxBetSol}
+                      limboMinTarget={config.limboMinTarget}
+                      limboMaxTarget={config.limboMaxTarget}
+                      limboHouseEdge={config.limboHouseEdge}
+                      onChainEnabled={onChainEnabled}
+                      onBalanceUpdate={handleBalanceUpdate}
+                    />
+                  </Suspense>
+                </GameErrorBoundary>
               )}
-              {activeTab === "leaderboard" && <Leaderboard />}
-              {activeTab === "tournament" && <TournamentPanel />}
-              {activeTab === "fairness" && <FairnessPanel />}
+              {activeTab === "leaderboard" && (
+                <Suspense fallback={<TabLoader />}>
+                  <Leaderboard />
+                </Suspense>
+              )}
+              {activeTab === "tournament" && (
+                <Suspense fallback={<TabLoader />}>
+                  <TournamentPanel />
+                </Suspense>
+              )}
+              {activeTab === "fairness" && (
+                <Suspense fallback={<TabLoader />}>
+                  <FairnessPanel />
+                </Suspense>
+              )}
               {activeTab === "profile" && profile && (
                 <ProfilePanel profile={profile} onUpdated={handleProfileUpdated} />
               )}
-              {activeTab === "admin" && <AdminDashboard />}
+              {activeTab === "admin" && (
+                <GameErrorBoundary label="Admin">
+                  <Suspense fallback={<TabLoader />}>
+                    <AdminDashboard />
+                  </Suspense>
+                </GameErrorBoundary>
+              )}
             </div>
 
             <aside className="sidebar-panels">
@@ -343,26 +430,34 @@ function CasinoRoot() {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/auth/callback" element={<AuthCallback />} />
-      <Route path="/preview" element={<ScreenshotPreview />} />
-      <Route path="/preview-coinflip" element={<ScreenshotPreviewCoinflip />} />
-      <Route path="/preview-profile" element={<ScreenshotPreviewProfile />} />
-      <Route path="/preview-leaderboard" element={<ScreenshotPreviewLeaderboard />} />
-      <Route path="/preview-fairness" element={<ScreenshotPreviewFairness />} />
-      <Route path="/preview-auth" element={<ScreenshotPreviewAuth />} />
-      <Route path="/preview-landing" element={<ScreenshotPreviewLanding />} />
-      <Route path="/preview-limbo" element={<ScreenshotPreviewLimbo />} />
-      <Route path="/preview-tournament" element={<ScreenshotPreviewTournament />} />
-      <Route path="/preview-admin" element={<ScreenshotPreviewAdmin />} />
-      <Route
-        path="/*"
-        element={
-          <CasinoUserProvider>
-            <CasinoRoot />
-          </CasinoUserProvider>
-        }
-      />
-    </Routes>
+    <Suspense fallback={<TabLoader />}>
+      <Routes>
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        {isDev ? (
+          <>
+            <Route path="/preview" element={<ScreenshotPreview />} />
+            <Route path="/preview-coinflip" element={<ScreenshotPreviewCoinflip />} />
+            <Route path="/preview-profile" element={<ScreenshotPreviewProfile />} />
+            <Route path="/preview-leaderboard" element={<ScreenshotPreviewLeaderboard />} />
+            <Route path="/preview-fairness" element={<ScreenshotPreviewFairness />} />
+            <Route path="/preview-auth" element={<ScreenshotPreviewAuth />} />
+            <Route path="/preview-landing" element={<ScreenshotPreviewLanding />} />
+            <Route path="/preview-limbo" element={<ScreenshotPreviewLimbo />} />
+            <Route path="/preview-tournament" element={<ScreenshotPreviewTournament />} />
+            <Route path="/preview-admin" element={<ScreenshotPreviewAdmin />} />
+          </>
+        ) : (
+          <Route path="/preview*" element={<Navigate to="/" replace />} />
+        )}
+        <Route
+          path="/*"
+          element={
+            <CasinoUserProvider>
+              <CasinoRoot />
+            </CasinoUserProvider>
+          }
+        />
+      </Routes>
+    </Suspense>
   );
 }

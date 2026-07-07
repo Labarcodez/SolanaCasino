@@ -3,6 +3,19 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ["react", "react-dom", "react-router-dom"],
+          solana: ["@solana/web3.js"],
+          phantom: ["@phantom/react-sdk", "@phantom/browser-sdk"],
+          anchor: ["@coral-xyz/anchor"],
+          motion: ["framer-motion"],
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     proxy: {

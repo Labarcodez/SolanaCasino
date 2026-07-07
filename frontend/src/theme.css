@@ -899,6 +899,27 @@ body {
   grid-template-columns: 1fr 1fr auto;
 }
 
+.tab-loader,
+.config-error-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 200px;
+  padding: 32px;
+  text-align: center;
+}
+
+.config-error-screen h2 {
+  margin-top: 16px;
+}
+
+.config-error-screen p {
+  color: var(--text-secondary);
+  max-width: 420px;
+}
+
 .fetch-error {
   text-align: center;
   padding: 24px 16px;
