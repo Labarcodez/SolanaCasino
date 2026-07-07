@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { fetchHistory, formatSol, type BetHistory } from "../lib/api";
 import { shortenAddress } from "../lib/utils";
+import { FetchError } from "./FetchError";
 
 interface BetHistoryPanelProps {
   walletAddress: string;
@@ -9,14 +10,20 @@ interface BetHistoryPanelProps {
 export function BetHistoryPanel({ walletAddress }: BetHistoryPanelProps) {
   const [history, setHistory] = useState<BetHistory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setError(null);
     setLoading(true);
     fetchHistory(walletAddress)
       .then(setHistory)
-      .catch(console.error)
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
       .finally(() => setLoading(false));
   }, [walletAddress]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   return (
     <div className="card">
@@ -28,6 +35,8 @@ export function BetHistoryPanel({ walletAddress }: BetHistoryPanelProps) {
             <div key={i} className="skeleton skeleton-row" />
           ))}
         </div>
+      ) : error ? (
+        <FetchError message={error} onRetry={load} />
       ) : history.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">🎲</div>

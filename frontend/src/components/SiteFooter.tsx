@@ -1,5 +1,6 @@
 import { BRAND } from "../lib/brand";
 import { CASINO_WALLET } from "../lib/api";
+import { solscanAccountUrl } from "../lib/utils";
 
 export function SiteFooter() {
   return (
@@ -11,7 +12,7 @@ export function SiteFooter() {
         </div>
 
         <div className="site-footer-links">
-          <a href={`https://solscan.io/account/${CASINO_WALLET}`} target="_blank" rel="noopener noreferrer">
+          <a href={solscanAccountUrl(CASINO_WALLET)} target="_blank" rel="noopener noreferrer">
             Treasury
           </a>
           <a href={BRAND.docs} target="_blank" rel="noopener noreferrer">

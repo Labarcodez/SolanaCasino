@@ -29,7 +29,19 @@ export const config = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   serveFrontend: process.env.SERVE_FRONTEND === "true",
   adminWallet: process.env.ADMIN_WALLET ?? "",
+  corsOrigins: (process.env.CORS_ORIGINS ?? "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean),
 };
+
+if (
+  config.nodeEnv === "production" &&
+  (!process.env.JWT_SECRET ||
+    process.env.JWT_SECRET.startsWith("dev-only-change-in-production"))
+) {
+  throw new Error("JWT_SECRET must be set to a strong value in production");
+}
 
 export const LAMPORTS_PER_SOL = 1_000_000_000;
 

@@ -2,22 +2,22 @@ import { Router } from "express";
 import { db } from "../db/index.js";
 import { config, lamportsToSol } from "../config.js";
 import {
-  fetchCasinoAccount,
   isAnchorEnabled,
   setPausedOnChain,
 } from "../services/anchor.js";
 import { getIndexerStatus } from "../services/indexer.js";
 import { getTournamentLeaderboard } from "../services/tournament.js";
-import { isWithdrawalEnabled } from "../services/solana.js";
+import { isWithdrawalEnabled, sendWithdrawal } from "../services/solana.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/admin.js";
+import { isCasinoPaused, setLegacyCasinoPaused } from "../services/pause.js";
 
 export const adminRouter = Router();
 
 adminRouter.use(requireAuth, requireAdmin);
 
 adminRouter.get("/dashboard", async (_req, res) => {
-  const casino = isAnchorEnabled() ? await fetchCasinoAccount() : null;
+  const paused = await isCasinoPaused();
   const totalUsers = db
     .prepare("SELECT COUNT(*) as count FROM users")
     .get() as { count: number };
@@ -49,7 +49,7 @@ adminRouter.get("/dashboard", async (_req, res) => {
   const tournament = getTournamentLeaderboard();
 
   res.json({
-    casinoPaused: casino?.isPaused ?? false,
+    casinoPaused: paused,
     onChainEnabled: isAnchorEnabled(),
     withdrawalsEnabled: isWithdrawalEnabled(),
     totalUsers: totalUsers.count,
@@ -76,13 +76,14 @@ adminRouter.post("/pause", async (req: AuthenticatedRequest, res) => {
       return;
     }
 
-    if (!isAnchorEnabled()) {
-      res.status(400).json({ error: "On-chain mode required to pause casino" });
+    if (isAnchorEnabled()) {
+      const signature = await setPausedOnChain(paused);
+      res.json({ success: true, paused, signature });
       return;
     }
 
-    const signature = await setPausedOnChain(paused);
-    res.json({ success: true, paused, signature });
+    setLegacyCasinoPaused(paused);
+    res.json({ success: true, paused });
   } catch (err) {
     res.status(500).json({
       error: err instanceof Error ? err.message : "Failed to update pause state",
@@ -112,3 +113,52 @@ adminRouter.get("/withdrawals/pending", (_req, res) => {
     })),
   );
 });
+
+adminRouter.post(
+  "/withdrawals/:id/process",
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const withdrawal = db
+        .prepare(
+          "SELECT id, wallet_address, amount_lamports, status FROM withdrawals WHERE id = ?",
+        )
+        .get(req.params.id) as
+        | {
+            id: string;
+            wallet_address: string;
+            amount_lamports: number;
+            status: string;
+          }
+        | undefined;
+
+      if (!withdrawal || withdrawal.status !== "pending") {
+        res.status(404).json({ error: "Pending withdrawal not found" });
+        return;
+      }
+
+      if (!isWithdrawalEnabled()) {
+        res.status(400).json({ error: "Withdrawal wallet not configured" });
+        return;
+      }
+
+      const { signature } = await sendWithdrawal(
+        withdrawal.wallet_address,
+        withdrawal.amount_lamports,
+      );
+
+      db.prepare(
+        "UPDATE withdrawals SET status = 'complete', signature = ? WHERE id = ?",
+      ).run(signature, withdrawal.id);
+
+      res.json({
+        success: true,
+        signature,
+        amountSol: lamportsToSol(withdrawal.amount_lamports),
+      });
+    } catch (err) {
+      res.status(500).json({
+        error: err instanceof Error ? err.message : "Withdrawal processing failed",
+      });
+    }
+  },
+);

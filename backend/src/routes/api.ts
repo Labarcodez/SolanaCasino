@@ -31,7 +31,8 @@ import {
 } from "../services/anchor.js";
 import { getPublicProfile, updateDisplayName, upsertUserProfile, mapAuthProvider } from "../services/profile.js";
 import { createGamePrepare, revealGamePrepare, purgeExpiredPrepares } from "../services/gamePrepare.js";
-import { applyReferralOnSignup, ensureReferralCode, getAffiliateStats } from "../services/affiliate.js";
+import { applyReferralOnSignup, ensureReferralCode, getAffiliateStats, claimAffiliateCommission } from "../services/affiliate.js";
+import { isCasinoPaused } from "../services/pause.js";
 import { claimRakeback, getPendingRakebackLamports, getVipTier } from "../services/vip.js";
 import { getTournamentLeaderboard } from "../services/tournament.js";
 import { placeLimboBet, LIMBO_MIN_TARGET, LIMBO_MAX_TARGET, recordBetWithRewards } from "../services/limbo.js";
@@ -83,6 +84,7 @@ apiRouter.get("/config", async (_req, res) => {
   const pdas = getPdaAddresses();
   const onChain = isAnchorEnabled();
   const casino = onChain ? await fetchCasinoAccount() : null;
+  const paused = await isCasinoPaused();
 
   res.json({
     casinoWallet: config.casinoWalletAddress,
@@ -90,6 +92,7 @@ apiRouter.get("/config", async (_req, res) => {
     cluster: config.solanaCluster,
     onChainEnabled: onChain,
     casinoInitialized: Boolean(casino),
+    casinoPaused: paused,
     casinoPda: pdas.casinoPda,
     vaultPda: pdas.vaultPda,
     minBetSol: casino
@@ -234,6 +237,7 @@ apiRouter.get(
         referralCode: affiliate.referralCode,
         referralLink: affiliate.referralLink,
         referredCount: affiliate.referredCount,
+        pendingCommissionSol: affiliate.pendingCommissionSol,
         playerInitialized: Boolean(player),
         onChainEnabled: isAnchorEnabled(),
         memberSince: user.created_at,
@@ -807,6 +811,22 @@ apiRouter.get(
   requireAuth,
   (req: AuthenticatedRequest, res) => {
     res.json(getAffiliateStats(req.walletAddress!));
+  },
+);
+
+apiRouter.post(
+  "/affiliate/claim",
+  requireAuth,
+  betLimiter,
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const result = await claimAffiliateCommission(req.walletAddress!);
+      res.json(result);
+    } catch (err) {
+      res.status(400).json({
+        error: err instanceof Error ? err.message : "Affiliate claim failed",
+      });
+    }
   },
 );
 

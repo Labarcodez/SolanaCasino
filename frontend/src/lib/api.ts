@@ -62,6 +62,7 @@ export interface CasinoConfig {
   withdrawalsEnabled: boolean;
   socialLoginEnabled?: boolean;
   adminWallet?: string;
+  casinoPaused?: boolean;
 }
 
 export interface UserProfile {
@@ -88,6 +89,7 @@ export interface UserProfile {
   referralCode?: string;
   referralLink?: string;
   referredCount?: number;
+  pendingCommissionSol?: number;
 }
 
 export async function fetchConfig(): Promise<CasinoConfig> {
@@ -467,6 +469,27 @@ export async function fetchAdminDashboard(): Promise<AdminDashboard> {
   const res = await apiFetch("/api/admin/dashboard");
   if (!res.ok) throw new Error("Failed to load admin dashboard");
   return res.json();
+}
+
+export async function claimAffiliate(): Promise<{
+  claimedSol: number;
+  balanceSol: number | null;
+  signature?: string;
+  onChain?: boolean;
+}> {
+  const res = await apiFetch("/api/affiliate/claim", { method: "POST" });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Affiliate claim failed");
+  return data;
+}
+
+export async function processWithdrawal(withdrawalId: string): Promise<{ signature: string }> {
+  const res = await apiFetch(`/api/admin/withdrawals/${withdrawalId}/process`, {
+    method: "POST",
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to process withdrawal");
+  return data;
 }
 
 export async function setCasinoPaused(paused: boolean): Promise<{ signature?: string }> {

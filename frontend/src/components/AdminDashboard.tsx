@@ -3,8 +3,10 @@ import { useCasino } from "../hooks/CasinoUserProvider";
 import {
   fetchAdminDashboard,
   setCasinoPaused,
+  processWithdrawal,
   type AdminDashboard,
 } from "../lib/api";
+import { solscanTxUrl } from "../lib/utils";
 import { useToast } from "./ui/Toast";
 import { PageHeader } from "./PageHeader";
 
@@ -14,6 +16,7 @@ export function AdminDashboard() {
   const [data, setData] = useState<AdminDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [pausing, setPausing] = useState(false);
+  const [processingId, setProcessingId] = useState<string | null>(null);
 
   const load = async () => {
     try {
@@ -29,6 +32,22 @@ export function AdminDashboard() {
   useEffect(() => {
     void load();
   }, []);
+
+  const handleProcessWithdrawal = async (id: string) => {
+    setProcessingId(id);
+    try {
+      const result = await processWithdrawal(id);
+      toast("Withdrawal processed", "success", {
+        label: "View tx",
+        href: solscanTxUrl(result.signature),
+      });
+      await load();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Processing failed", "error");
+    } finally {
+      setProcessingId(null);
+    }
+  };
 
   const togglePause = async () => {
     if (!data) return;
@@ -107,7 +126,7 @@ export function AdminDashboard() {
             type="button"
             className={`btn ${data.casinoPaused ? "btn-success" : "btn-danger"}`}
             onClick={() => void togglePause()}
-            disabled={pausing || !data.onChainEnabled}
+            disabled={pausing}
           >
             {data.casinoPaused ? "Resume Casino" : "Pause Casino"}
           </button>
@@ -129,10 +148,17 @@ export function AdminDashboard() {
           <h4>Pending Withdrawals</h4>
           <div className="admin-table">
             {data.pendingWithdrawals.map((w) => (
-              <div key={w.id} className="admin-table-row">
+              <div key={w.id} className="admin-table-row admin-table-row-actions">
                 <span className="mono-cell">{w.walletAddress.slice(0, 8)}...</span>
                 <span>{w.amountSol.toFixed(4)} SOL</span>
-                <span className="text-muted">{new Date(w.createdAt).toLocaleString()}</span>
+                <button
+                  type="button"
+                  className="btn btn-success btn-sm"
+                  disabled={!data.withdrawalsEnabled || processingId === w.id}
+                  onClick={() => void handleProcessWithdrawal(w.id)}
+                >
+                  {processingId === w.id ? "Sending..." : "Process"}
+                </button>
               </div>
             ))}
           </div>

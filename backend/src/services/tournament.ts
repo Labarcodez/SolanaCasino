@@ -1,6 +1,74 @@
 import { db } from "../db/index.js";
 import { lamportsToSol } from "../config.js";
 import { getDisplayName } from "./profile.js";
+import { updateBalance } from "../db/index.js";
+import { v4 as uuidv4 } from "uuid";
+import { creditPlayerOnChain, isAnchorEnabled } from "./anchor.js";
+
+const PRIZE_SHARES = [0.4, 0.25, 0.15, 0.1, 0.05, 0.025, 0.015, 0.01];
+
+function getPreviousWeekId(currentWeekId: string): string | null {
+  const monday = new Date(currentWeekId);
+  if (Number.isNaN(monday.getTime())) return null;
+  monday.setUTCDate(monday.getUTCDate() - 7);
+  return monday.toISOString().slice(0, 10);
+}
+
+async function settleTournamentWeek(weekId: string): Promise<void> {
+  const week = db
+    .prepare(
+      "SELECT prize_pool_lamports, status FROM tournament_weeks WHERE id = ?",
+    )
+    .get(weekId) as
+    | { prize_pool_lamports: number; status: string }
+    | undefined;
+
+  if (!week || week.status === "settled" || week.prize_pool_lamports === 0) {
+    if (week && week.status !== "settled") {
+      db.prepare("UPDATE tournament_weeks SET status = 'settled' WHERE id = ?").run(
+        weekId,
+      );
+    }
+    return;
+  }
+
+  const entries = db
+    .prepare(
+      `SELECT wallet_address, wagered_lamports
+       FROM tournament_entries
+       WHERE week_id = ?
+       ORDER BY wagered_lamports DESC
+       LIMIT 8`,
+    )
+    .all(weekId) as Array<{
+      wallet_address: string;
+      wagered_lamports: number;
+    }>;
+
+  const pool = week.prize_pool_lamports;
+
+  for (let i = 0; i < entries.length; i++) {
+    const payout = Math.floor(pool * (PRIZE_SHARES[i] ?? 0));
+    if (payout <= 0) continue;
+
+    const wallet = entries[i].wallet_address;
+
+    if (isAnchorEnabled()) {
+      await creditPlayerOnChain(wallet, payout);
+    } else {
+      updateBalance(wallet, payout);
+    }
+
+    db.prepare(
+      `INSERT INTO tournament_payouts (id, week_id, wallet_address, amount_lamports, rank)
+       VALUES (?, ?, ?, ?, ?)`,
+    ).run(uuidv4(), weekId, wallet, payout, i + 1);
+  }
+
+  db.prepare("UPDATE tournament_weeks SET status = 'settled' WHERE id = ?").run(
+    weekId,
+  );
+}
 
 function getWeekBounds(): { weekId: string; weekStart: string; weekEnd: string } {
   const now = new Date();
@@ -28,6 +96,11 @@ export function ensureCurrentTournamentWeek(): string {
     .get(weekId);
 
   if (!existing) {
+    const previousWeekId = getPreviousWeekId(weekId);
+    if (previousWeekId) {
+      void settleTournamentWeek(previousWeekId).catch(console.error);
+    }
+
     db.prepare(
       `INSERT INTO tournament_weeks (id, week_start, week_end, prize_pool_lamports)
        VALUES (?, ?, ?, 0)`,
@@ -86,7 +159,7 @@ export function getTournamentLeaderboard(): {
       wagered_lamports: number;
     }>;
 
-  const prizeShares = [0.4, 0.25, 0.15, 0.1, 0.05, 0.025, 0.015, 0.01];
+  const prizeShares = PRIZE_SHARES;
   const pool = week.prize_pool_lamports;
 
   return {

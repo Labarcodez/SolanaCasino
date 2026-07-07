@@ -38,7 +38,21 @@ export function WalletPanel({
 
   const handleAction = async () => {
     const value = parseFloat(amount);
-    if (isNaN(value) || value <= 0) return;
+    if (isNaN(value) || value <= 0) {
+      toast("Enter a valid amount greater than 0", "error");
+      return;
+    }
+
+    const min = mode === "deposit" ? minBetSol : minWithdrawSol;
+    if (value < min) {
+      toast(`Minimum ${mode} is ${min} SOL`, "error");
+      return;
+    }
+
+    if (mode === "withdraw" && value > balanceSol) {
+      toast("Insufficient casino balance", "error");
+      return;
+    }
 
     try {
       if (mode === "deposit") {

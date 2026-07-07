@@ -27,6 +27,7 @@ import { ScreenshotPreviewLeaderboard } from "./pages/ScreenshotPreviewLeaderboa
 import { ScreenshotPreviewFairness } from "./pages/ScreenshotPreviewFairness";
 import { ScreenshotPreviewAuth, ScreenshotPreviewLanding } from "./pages/ScreenshotPreviewAuth";
 import { AdminDashboard } from "./components/AdminDashboard";
+import { PauseBanner } from "./components/PauseBanner";
 import { ScreenshotPreviewLimbo } from "./pages/ScreenshotPreviewLimbo";
 import { ScreenshotPreviewTournament } from "./pages/ScreenshotPreviewTournament";
 import { ScreenshotPreviewAdmin } from "./pages/ScreenshotPreviewAdmin";
@@ -126,12 +127,9 @@ function CasinoContent() {
     );
   }
 
-  const handleProfileUpdated = (updated: UserProfile) => {
+  const handleProfileUpdated = (_updated: UserProfile) => {
     void refresh();
     setProfileOpen(false);
-    if (updated.displayName) {
-      setActiveTab("crash");
-    }
   };
 
   return (
@@ -148,8 +146,17 @@ function CasinoContent() {
       />
 
       {profileOpen && profile && (
-        <div className="modal-overlay" onClick={() => setProfileOpen(false)} role="presentation">
-          <div onClick={(e) => e.stopPropagation()}>
+        <div
+          className="modal-overlay"
+          onClick={() => setProfileOpen(false)}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Profile"
+            onClick={(e) => e.stopPropagation()}
+          >
             <ProfilePanel
               profile={profile}
               onUpdated={handleProfileUpdated}
@@ -159,6 +166,7 @@ function CasinoContent() {
         </div>
       )}
 
+      <PauseBanner paused={config?.casinoPaused ?? false} />
       <TreasuryBar />
 
       <div className="container">
@@ -314,7 +322,11 @@ function CasinoContent() {
         )}
       </main>
 
-      <MobileNav activeTab={activeTab} onTabChange={setActiveTab} />
+      <MobileNav
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        showAdmin={Boolean(config?.adminWallet && walletAddress === config.adminWallet)}
+      />
       <SiteFooter />
     </div>
   );

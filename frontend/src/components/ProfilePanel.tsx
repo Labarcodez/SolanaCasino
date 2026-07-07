@@ -4,11 +4,13 @@ import {
   updateProfile,
   formatSol,
   claimRakeback,
+  claimAffiliate,
 } from "../lib/api";
-import { shortenAddress } from "../lib/utils";
+import { shortenAddress, solscanTxUrl } from "../lib/utils";
 import { authProviderLabel } from "../lib/avatar";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { useToast } from "./ui/Toast";
+import { useCasino } from "../hooks/CasinoUserProvider";
 
 interface ProfilePanelProps {
   profile: UserProfile;
@@ -26,9 +28,11 @@ const VIP_COLORS: Record<string, string> = {
 
 export function ProfilePanel({ profile, onUpdated, onClose }: ProfilePanelProps) {
   const { toast } = useToast();
+  const { refresh } = useCasino();
   const [displayName, setDisplayName] = useState(profile.displayName);
   const [saving, setSaving] = useState(false);
   const [claiming, setClaiming] = useState(false);
+  const [claimingAffiliate, setClaimingAffiliate] = useState(false);
 
   const handleSave = async () => {
     if (displayName.trim() === profile.displayName) return;
@@ -53,16 +57,38 @@ export function ProfilePanel({ profile, onUpdated, onClose }: ProfilePanelProps)
     setClaiming(true);
     try {
       const result = await claimRakeback();
+      await refresh();
       onUpdated({
         ...profile,
         balanceSol: result.balanceSol ?? profile.balanceSol,
         rakebackPendingSol: 0,
       });
-      toast(`Claimed ${formatSol(result.claimedSol)} SOL rakeback`, "success");
+      toast(`Claimed ${formatSol(result.claimedSol)} SOL rakeback`, "success", result.signature
+        ? { label: "View tx", href: solscanTxUrl(result.signature) }
+        : undefined);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Claim failed", "error");
     } finally {
       setClaiming(false);
+    }
+  };
+
+  const handleClaimAffiliate = async () => {
+    setClaimingAffiliate(true);
+    try {
+      const result = await claimAffiliate();
+      await refresh();
+      onUpdated({
+        ...profile,
+        balanceSol: result.balanceSol ?? profile.balanceSol,
+      });
+      toast(`Claimed ${formatSol(result.claimedSol)} SOL commission`, "success", result.signature
+        ? { label: "View tx", href: solscanTxUrl(result.signature) }
+        : undefined);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Claim failed", "error");
+    } finally {
+      setClaimingAffiliate(false);
     }
   };
 
@@ -74,6 +100,7 @@ export function ProfilePanel({ profile, onUpdated, onClose }: ProfilePanelProps)
 
   const netPnl = profile.netPnlSol ?? profile.totalWonSol - profile.totalWageredSol;
   const vipColor = VIP_COLORS[profile.vipTier ?? "none"] ?? VIP_COLORS.none;
+  const pendingAffiliate = profile.pendingCommissionSol ?? 0;
 
   return (
     <div className="card profile-panel">
@@ -95,7 +122,12 @@ export function ProfilePanel({ profile, onUpdated, onClose }: ProfilePanelProps)
           )}
         </div>
         {onClose && (
-          <button type="button" className="btn-ghost btn-sm" onClick={onClose}>
+          <button
+            type="button"
+            className="btn-ghost btn-sm"
+            onClick={onClose}
+            aria-label="Close profile"
+          >
             ✕
           </button>
         )}
@@ -118,7 +150,7 @@ export function ProfilePanel({ profile, onUpdated, onClose }: ProfilePanelProps)
         </div>
       </div>
 
-      {(profile.rakebackPendingSol ?? 0) > 0 && !profile.onChainEnabled && (
+      {(profile.rakebackPendingSol ?? 0) > 0 && (
         <div className="rakeback-claim-box">
           <div>
             <strong>{formatSol(profile.rakebackPendingSol!)} SOL</strong> rakeback pending
@@ -152,7 +184,21 @@ export function ProfilePanel({ profile, onUpdated, onClose }: ProfilePanelProps)
           </div>
           <p className="panel-hint">
             {profile.referredCount ?? 0} players referred
+            {pendingAffiliate > 0 && (
+              <> · {formatSol(pendingAffiliate)} SOL claimable</>
+            )}
           </p>
+          {pendingAffiliate >= 0.001 && (
+            <button
+              type="button"
+              className="btn btn-success btn-sm"
+              style={{ marginTop: 8 }}
+              onClick={handleClaimAffiliate}
+              disabled={claimingAffiliate}
+            >
+              {claimingAffiliate ? "Claiming..." : `Claim ${formatSol(pendingAffiliate)} SOL`}
+            </button>
+          )}
         </div>
       )}
 
@@ -169,14 +215,14 @@ export function ProfilePanel({ profile, onUpdated, onClose }: ProfilePanelProps)
         </div>
 
         <div className="input-group">
-          <label>Wallet address</label>
-          <input className="input mono-cell" value={profile.walletAddress} readOnly />
+          <label htmlFor="profile-wallet">Wallet address</label>
+          <input id="profile-wallet" className="input mono-cell" value={profile.walletAddress} readOnly />
         </div>
 
         {profile.email && (
           <div className="input-group">
-            <label>Email</label>
-            <input className="input" value={profile.email} readOnly />
+            <label htmlFor="profile-email">Email</label>
+            <input id="profile-email" className="input" value={profile.email} readOnly />
           </div>
         )}
 

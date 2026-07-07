@@ -1,21 +1,26 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { fetchTournament, type TournamentData } from "../lib/api";
 import { PageHeader } from "./PageHeader";
+import { FetchError } from "./FetchError";
 
 export function TournamentPanel() {
   const [data, setData] = useState<TournamentData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setError(null);
     fetchTournament()
       .then(setData)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-    const interval = setInterval(() => {
-      fetchTournament().then(setData).catch(console.error);
-    }, 60000);
-    return () => clearInterval(interval);
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"));
   }, []);
+
+  useEffect(() => {
+    load();
+    setLoading(false);
+    const interval = setInterval(load, 60000);
+    return () => clearInterval(interval);
+  }, [load]);
 
   const endsIn = data
     ? Math.max(0, new Date(data.weekEnd).getTime() - Date.now())
@@ -27,11 +32,13 @@ export function TournamentPanel() {
     <div className="card tournament-panel">
       <PageHeader
         title="Weekly Tournament"
-        subtitle="Top wagerers split the prize pool — 1% of all bets feeds the pool"
+        subtitle="Top wagerers split the prize pool — prizes auto-paid when the week ends"
       />
 
-      {loading ? (
+      {loading && !data && !error ? (
         <div className="skeleton skeleton-row" />
+      ) : error ? (
+        <FetchError message={error} onRetry={load} />
       ) : data ? (
         <>
           <div className="tournament-hero">

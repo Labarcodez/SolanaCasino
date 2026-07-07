@@ -1,27 +1,31 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   fetchLeaderboard,
   formatSol,
   type LeaderboardEntry,
 } from "../lib/api";
-
 import { PageHeader } from "./PageHeader";
+import { FetchError } from "./FetchError";
 
 export function Leaderboard() {
   const [leaders, setLeaders] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    setError(null);
+    setLoading(true);
+    fetchLeaderboard()
+      .then(setLeaders)
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
+      .finally(() => setLoading(false));
+  }, []);
 
   useEffect(() => {
-    const load = () =>
-      fetchLeaderboard()
-        .then(setLeaders)
-        .catch(console.error)
-        .finally(() => setLoading(false));
-
     load();
     const interval = setInterval(load, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [load]);
 
   const getRankClass = (rank: number) => {
     if (rank === 1) return "gold";
@@ -43,6 +47,8 @@ export function Leaderboard() {
             <div key={i} className="skeleton skeleton-row" />
           ))}
         </div>
+      ) : error ? (
+        <FetchError message={error} onRetry={load} />
       ) : leaders.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">🏆</div>

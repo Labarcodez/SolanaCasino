@@ -70,6 +70,27 @@ export function runMigrations(): void {
       wagered_lamports INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (week_id, wallet_address)
     );
+
+    CREATE TABLE IF NOT EXISTS affiliate_claims (
+      id TEXT PRIMARY KEY,
+      wallet_address TEXT NOT NULL,
+      amount_lamports INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS tournament_payouts (
+      id TEXT PRIMARY KEY,
+      week_id TEXT NOT NULL,
+      wallet_address TEXT NOT NULL,
+      amount_lamports INTEGER NOT NULL,
+      rank INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS app_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
   `);
 }
 

@@ -16,6 +16,18 @@ import { getOrCreateUser } from "./db/index.js";
 import { requireAuthSocket } from "./middleware/auth.js";
 import { checkRpcHealth } from "./services/solana.js";
 import { getRecentChatMessages, sendChatMessage } from "./services/chat.js";
+import { isCasinoPaused } from "./services/pause.js";
+
+const socketRateLimits = new Map<string, number>();
+const SOCKET_COOLDOWN_MS = 500;
+
+function checkSocketRateLimit(wallet: string): boolean {
+  const now = Date.now();
+  const last = socketRateLimits.get(wallet) ?? 0;
+  if (now - last < SOCKET_COOLDOWN_MS) return false;
+  socketRateLimits.set(wallet, now);
+  return true;
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -26,7 +38,8 @@ const allowedOrigins = [
   config.frontendUrl,
   "http://localhost:5173",
   "http://127.0.0.1:5173",
-];
+  ...config.corsOrigins,
+].filter((v, i, a) => a.indexOf(v) === i);
 
 const io = new Server(httpServer, {
   cors: {
@@ -66,11 +79,19 @@ io.on("connection", (socket) => {
 
   socket.on(
     "crash:bet",
-    (
+    async (
       data: { amountSol: number; autoCashout?: number },
       callback?: (response: unknown) => void,
     ) => {
       try {
+        if (await isCasinoPaused()) {
+          throw new Error("Casino is paused");
+        }
+
+        if (!checkSocketRateLimit(walletAddress)) {
+          throw new Error("Too many requests — slow down");
+        }
+
         if (
           data.amountSol < config.minBetSol ||
           data.amountSol > config.maxBetSol
@@ -110,8 +131,14 @@ io.on("connection", (socket) => {
     },
   );
 
-  socket.on("crash:cashout", (callback?: (response: unknown) => void) => {
+  socket.on("crash:cashout", async (callback?: (response: unknown) => void) => {
     try {
+      if (await isCasinoPaused()) {
+        throw new Error("Casino is paused");
+      }
+      if (!checkSocketRateLimit(walletAddress)) {
+        throw new Error("Too many requests — slow down");
+      }
       const bet = crashEngine.cashout(walletAddress);
       const user = getOrCreateUser(walletAddress);
       const response = {

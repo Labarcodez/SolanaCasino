@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import { v4 as uuidv4 } from "uuid";
-import { db } from "../db/index.js";
+import { db, updateBalance } from "../db/index.js";
+import { config, lamportsToSol, solToLamports } from "../config.js";
+import { creditPlayerOnChain, isAnchorEnabled } from "./anchor.js";
 
 const COMMISSION_RATE = 0.3; // 30% of house edge to referrer
 
@@ -118,11 +120,66 @@ export function getAffiliateStats(walletAddress: string): {
     )
     .get(walletAddress) as { total: number };
 
+  const claimed = db
+    .prepare(
+      `SELECT COALESCE(SUM(amount_lamports), 0) as total
+       FROM affiliate_claims WHERE wallet_address = ?`,
+    )
+    .get(walletAddress) as { total: number };
+
+  const pendingLamports = Math.max(0, earnings.total - claimed.total);
+  const baseUrl = config.frontendUrl.replace(/\/$/, "");
+
   return {
     referralCode: code,
-    referralLink: `https://orbitcasino.app/?ref=${code}`,
+    referralLink: `${baseUrl}/?ref=${code}`,
     referredCount: referredCount.c,
-    totalCommissionSol: earnings.total / 1e9,
-    pendingCommissionSol: earnings.total / 1e9,
+    totalCommissionSol: lamportsToSol(earnings.total),
+    pendingCommissionSol: lamportsToSol(pendingLamports),
+  };
+}
+
+export async function claimAffiliateCommission(walletAddress: string): Promise<{
+  claimedSol: number;
+  balanceSol: number | null;
+  signature?: string;
+  onChain?: boolean;
+}> {
+  const stats = getAffiliateStats(walletAddress);
+  const pendingLamports = solToLamports(stats.pendingCommissionSol);
+
+  if (pendingLamports < solToLamports(0.001)) {
+    throw new Error("Minimum affiliate claim is 0.001 SOL");
+  }
+
+  if (isAnchorEnabled()) {
+    const signature = await creditPlayerOnChain(walletAddress, pendingLamports);
+    if (!signature) {
+      throw new Error("On-chain affiliate credit failed");
+    }
+
+    db.prepare(
+      `INSERT INTO affiliate_claims (id, wallet_address, amount_lamports)
+       VALUES (?, ?, ?)`,
+    ).run(uuidv4(), walletAddress, pendingLamports);
+
+    return {
+      claimedSol: lamportsToSol(pendingLamports),
+      balanceSol: null,
+      signature,
+      onChain: true,
+    };
+  }
+
+  db.prepare(
+    `INSERT INTO affiliate_claims (id, wallet_address, amount_lamports)
+     VALUES (?, ?, ?)`,
+  ).run(uuidv4(), walletAddress, pendingLamports);
+
+  const newBalance = updateBalance(walletAddress, pendingLamports);
+
+  return {
+    claimedSol: lamportsToSol(pendingLamports),
+    balanceSol: lamportsToSol(newBalance),
   };
 }

@@ -54,6 +54,13 @@ function multiplierAtElapsedMs(elapsedMs: number): number {
   return Math.min(growth / 1000, 1000);
 }
 
+function isLegacyPausedSync(): boolean {
+  const row = db
+    .prepare("SELECT value FROM app_meta WHERE key = 'casino_paused'")
+    .get() as { value: string } | undefined;
+  return row?.value === "true";
+}
+
 export class CrashGameEngine extends EventEmitter {
   private round: CrashRoundState;
   private serverSeed = "";
@@ -159,6 +166,10 @@ export class CrashGameEngine extends EventEmitter {
   ): CrashBet {
     if (this.onChain) {
       throw new Error("Place bets on-chain via your wallet");
+    }
+
+    if (!this.onChain && isLegacyPausedSync()) {
+      throw new Error("Casino is paused");
     }
 
     if (this.round.phase !== "betting") {
