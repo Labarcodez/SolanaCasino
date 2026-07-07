@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Routes, Route } from "react-router-dom";
 import { Header } from "./components/Header";
 import { Landing } from "./components/Landing";
-import { CrashGame } from "./components/CrashGame";
+import { CrashArena } from "./components/CrashArena";
 import { CoinflipGame } from "./components/CoinflipGame";
 import { WalletPanel } from "./components/WalletPanel";
 import { Leaderboard } from "./components/Leaderboard";
@@ -139,51 +139,76 @@ function CasinoContent() {
       </div>
 
       <main className="main-content">
-        <div className="container game-grid">
-          <div>
-            {activeTab === "crash" && config && (
-              <CrashGame
-                balanceSol={balanceSol}
-                minBetSol={config.minBetSol}
-                maxBetSol={config.maxBetSol}
-                onBalanceUpdate={handleBalanceUpdate}
-              />
-            )}
-            {activeTab === "coinflip" && config && (
-              <CoinflipGame
-                walletAddress={walletAddress}
-                balanceSol={balanceSol}
-                minBetSol={config.minBetSol}
-                maxBetSol={config.maxBetSol}
-                onBalanceUpdate={handleBalanceUpdate}
-              />
-            )}
-            {activeTab === "leaderboard" && <Leaderboard />}
-            {activeTab === "fairness" && <FairnessPanel />}
+        {activeTab === "crash" && config ? (
+          <div className="container crash-page">
+            <CrashArena
+              balanceSol={balanceSol}
+              minBetSol={config.minBetSol}
+              maxBetSol={config.maxBetSol}
+              onChainEnabled={onChainEnabled}
+              onBalanceUpdate={handleBalanceUpdate}
+            />
+            <div className="crash-wallet-row">
+              {profile && (
+                <WalletPanel
+                  balanceSol={balanceSol}
+                  onChainBalanceSol={profile.onChainBalanceSol}
+                  minBetSol={config.minBetSol}
+                  minWithdrawSol={config.minWithdrawSol}
+                  withdrawalsEnabled={config.withdrawalsEnabled}
+                  onChainEnabled={onChainEnabled}
+                  loading={loading}
+                  onDeposit={async (amount) => deposit(amount)}
+                  onWithdraw={async (amount) => {
+                    const result = await withdraw(amount);
+                    handleBalanceUpdate(result.balanceSol);
+                    return result;
+                  }}
+                  error={error}
+                />
+              )}
+              <BetHistoryPanel walletAddress={walletAddress} />
+            </div>
           </div>
+        ) : (
+          <div className="container game-grid">
+            <div>
+              {activeTab === "coinflip" && config && (
+                <CoinflipGame
+                  walletAddress={walletAddress}
+                  balanceSol={balanceSol}
+                  minBetSol={config.minBetSol}
+                  maxBetSol={config.maxBetSol}
+                  onBalanceUpdate={handleBalanceUpdate}
+                />
+              )}
+              {activeTab === "leaderboard" && <Leaderboard />}
+              {activeTab === "fairness" && <FairnessPanel />}
+            </div>
 
-          <aside className="sidebar-panels">
-            {config && profile && (
-              <WalletPanel
-                balanceSol={balanceSol}
-                onChainBalanceSol={profile.onChainBalanceSol}
-                minBetSol={config.minBetSol}
-                minWithdrawSol={config.minWithdrawSol}
-                withdrawalsEnabled={config.withdrawalsEnabled}
-                onChainEnabled={onChainEnabled}
-                loading={loading}
-                onDeposit={async (amount) => deposit(amount)}
-                onWithdraw={async (amount) => {
-                  const result = await withdraw(amount);
-                  handleBalanceUpdate(result.balanceSol);
-                  return result;
-                }}
-                error={error}
-              />
-            )}
-            <BetHistoryPanel walletAddress={walletAddress} />
-          </aside>
-        </div>
+            <aside className="sidebar-panels">
+              {config && profile && (
+                <WalletPanel
+                  balanceSol={balanceSol}
+                  onChainBalanceSol={profile.onChainBalanceSol}
+                  minBetSol={config.minBetSol}
+                  minWithdrawSol={config.minWithdrawSol}
+                  withdrawalsEnabled={config.withdrawalsEnabled}
+                  onChainEnabled={onChainEnabled}
+                  loading={loading}
+                  onDeposit={async (amount) => deposit(amount)}
+                  onWithdraw={async (amount) => {
+                    const result = await withdraw(amount);
+                    handleBalanceUpdate(result.balanceSol);
+                    return result;
+                  }}
+                  error={error}
+                />
+              )}
+              <BetHistoryPanel walletAddress={walletAddress} />
+            </aside>
+          </div>
+        )}
       </main>
 
       <MobileNav activeTab={activeTab} onTabChange={setActiveTab} />
