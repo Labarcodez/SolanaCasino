@@ -11,6 +11,8 @@ import { useCasino, CasinoUserProvider } from "./hooks/CasinoUserProvider";
 import { SocketProvider, useSocket } from "./hooks/useSocket";
 import { CASINO_WALLET } from "./lib/api";
 import AuthCallback from "./pages/AuthCallback";
+import { ScreenshotPreview } from "./pages/ScreenshotPreview";
+import { ScreenshotPreviewCoinflip } from "./pages/ScreenshotPreviewCoinflip";
 
 type GameTab = "crash" | "coinflip" | "leaderboard" | "fairness";
 
@@ -205,6 +207,14 @@ function CasinoRoot() {
 export default function App() {
   if (window.location.pathname === "/auth/callback") {
     return <AuthCallback />;
+  }
+
+  if (window.location.pathname === "/preview") {
+    return <ScreenshotPreview />;
+  }
+
+  if (window.location.pathname === "/preview-coinflip") {
+    return <ScreenshotPreviewCoinflip />;
   }
 
   return (

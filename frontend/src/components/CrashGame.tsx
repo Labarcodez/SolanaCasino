@@ -1,17 +1,14 @@
 import { useState, useEffect, useRef } from "react";
-import { Transaction } from "@solana/web3.js";
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { Connection, LAMPORTS_PER_SOL, PublicKey, Transaction } from "@solana/web3.js";
 import { useCrashSubscription } from "../hooks/useSocket";
 import { useCasino } from "../hooks/CasinoUserProvider";
-import { formatSol } from "../lib/api";
+import { formatSol, SOLANA_RPC } from "../lib/api";
 import {
   buildCashoutTransaction,
   buildPlaceBetTransaction,
   buildSettleBetTransaction,
   ensurePlayerInitialized,
 } from "../lib/anchor";
-import { SOLANA_RPC } from "../lib/api";
-import { Connection, PublicKey, Transaction } from "@solana/web3.js";
 
 interface CrashGameProps {
   balanceSol: number;
