@@ -6,11 +6,18 @@ const OUT = "/opt/cursor/artifacts/screenshots";
 const BASE = process.env.SCREENSHOT_URL ?? "http://localhost:5173";
 
 const shots = [
-  { name: "01-landing-desktop", url: BASE, width: 1440, height: 900, fullPage: true },
-  { name: "02-landing-mobile", url: BASE, width: 390, height: 844, fullPage: true },
-  { name: "03-crash-game", url: `${BASE}/preview`, width: 1440, height: 900, fullPage: true },
-  { name: "04-coinflip-game", url: `${BASE}/preview-coinflip`, width: 1440, height: 900, fullPage: true },
-  { name: "05-crash-mobile", url: `${BASE}/preview`, width: 390, height: 844, fullPage: true },
+  { name: "01-landing-desktop", url: `${BASE}/preview-landing`, width: 1440, height: 900, fullPage: true },
+  { name: "02-landing-mobile", url: `${BASE}/preview-landing`, width: 390, height: 844, fullPage: true },
+  { name: "03-auth-screen", url: `${BASE}/preview-auth`, width: 1440, height: 900, fullPage: true },
+  { name: "04-crash-arena-desktop", url: `${BASE}/preview`, width: 1440, height: 900, fullPage: true },
+  { name: "05-crash-arena-mobile", url: `${BASE}/preview`, width: 390, height: 844, fullPage: true },
+  { name: "06-coinflip-desktop", url: `${BASE}/preview-coinflip`, width: 1440, height: 900, fullPage: true },
+  { name: "07-coinflip-mobile", url: `${BASE}/preview-coinflip`, width: 390, height: 844, fullPage: true },
+  { name: "08-profile-desktop", url: `${BASE}/preview-profile`, width: 1440, height: 900, fullPage: true },
+  { name: "09-profile-mobile", url: `${BASE}/preview-profile`, width: 390, height: 844, fullPage: true },
+  { name: "10-leaderboard-desktop", url: `${BASE}/preview-leaderboard`, width: 1440, height: 900, fullPage: true },
+  { name: "11-fairness-desktop", url: `${BASE}/preview-fairness`, width: 1440, height: 900, fullPage: true },
+  { name: "12-crash-arena-wide", url: `${BASE}/preview`, width: 1920, height: 1080, fullPage: false },
 ];
 
 await mkdir(OUT, { recursive: true });
@@ -24,19 +31,18 @@ for (const shot of shots) {
   });
 
   await page.goto(shot.url, { waitUntil: "networkidle", timeout: 30000 });
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(2000);
 
   const file = path.join(OUT, `${shot.name}.png`);
   await page.screenshot({
     path: file,
-    fullPage: shot.fullPage,
+    fullPage: shot.fullPage ?? true,
     type: "png",
   });
   console.log(`Saved ${file}`);
   await page.close();
 }
 
-// Production build served from backend
 const prodUrl = "http://localhost:3001";
 try {
   const res = await fetch(`${prodUrl}/api/health`);
@@ -45,9 +51,9 @@ try {
       viewport: { width: 1440, height: 900 },
       deviceScaleFactor: 2,
     });
-    await page.goto(prodUrl, { waitUntil: "networkidle", timeout: 30000 });
-    await page.waitForTimeout(1500);
-    const file = path.join(OUT, "05-production-landing.png");
+    await page.goto(`${prodUrl}/preview-landing`, { waitUntil: "networkidle", timeout: 30000 });
+    await page.waitForTimeout(2000);
+    const file = path.join(OUT, "13-production-landing.png");
     await page.screenshot({ path: file, fullPage: true, type: "png" });
     console.log(`Saved ${file}`);
     await page.close();
@@ -57,4 +63,4 @@ try {
 }
 
 await browser.close();
-console.log("Done.");
+console.log(`Done. ${shots.length + 1} screenshots in ${OUT}`);

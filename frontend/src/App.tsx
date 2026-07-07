@@ -17,6 +17,10 @@ import AuthCallback from "./pages/AuthCallback";
 import { ScreenshotPreview } from "./pages/ScreenshotPreview";
 import { ProfilePanel } from "./components/ProfilePanel";
 import { ScreenshotPreviewCoinflip } from "./pages/ScreenshotPreviewCoinflip";
+import { ScreenshotPreviewProfile } from "./pages/ScreenshotPreviewProfile";
+import { ScreenshotPreviewLeaderboard } from "./pages/ScreenshotPreviewLeaderboard";
+import { ScreenshotPreviewFairness } from "./pages/ScreenshotPreviewFairness";
+import { ScreenshotPreviewAuth, ScreenshotPreviewLanding } from "./pages/ScreenshotPreviewAuth";
 import type { UserProfile } from "./lib/api";
 
 type GameTab = "crash" | "coinflip" | "leaderboard" | "fairness" | "profile";
@@ -293,6 +297,11 @@ export default function App() {
       <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/preview" element={<ScreenshotPreview />} />
       <Route path="/preview-coinflip" element={<ScreenshotPreviewCoinflip />} />
+      <Route path="/preview-profile" element={<ScreenshotPreviewProfile />} />
+      <Route path="/preview-leaderboard" element={<ScreenshotPreviewLeaderboard />} />
+      <Route path="/preview-fairness" element={<ScreenshotPreviewFairness />} />
+      <Route path="/preview-auth" element={<ScreenshotPreviewAuth />} />
+      <Route path="/preview-landing" element={<ScreenshotPreviewLanding />} />
       <Route
         path="/*"
         element={
