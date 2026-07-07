@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
-import { API_URL } from "../lib/api";
+import { API_URL, getAuthToken } from "../lib/api";
 
 export type CrashPhase = "betting" | "running" | "crashed" | "cooldown";
 
@@ -45,18 +45,35 @@ const SocketContext = createContext<SocketContextValue>({
   connected: false,
 });
 
-export function SocketProvider({ children }: { children: React.ReactNode }) {
+export function SocketProvider({
+  children,
+  enabled,
+}: {
+  children: React.ReactNode;
+  enabled: boolean;
+}) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [crashState, setCrashState] = useState<CrashRoundState | null>(null);
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
+    if (!enabled) {
+      setSocket(null);
+      setConnected(false);
+      return;
+    }
+
+    const token = getAuthToken();
+    if (!token) return;
+
     const s = io(API_URL || window.location.origin, {
       transports: ["websocket", "polling"],
+      auth: { token },
     });
 
     s.on("connect", () => setConnected(true));
     s.on("disconnect", () => setConnected(false));
+    s.on("connect_error", () => setConnected(false));
     s.on("crash:state", (state: CrashRoundState) => setCrashState(state));
     s.on("crash:round_start", (state: CrashRoundState) => setCrashState(state));
     s.on("crash:round_running", (state: CrashRoundState) =>
@@ -87,7 +104,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     return () => {
       s.disconnect();
     };
-  }, []);
+  }, [enabled]);
 
   return (
     <SocketContext.Provider value={{ socket, crashState, connected }}>
@@ -100,12 +117,12 @@ export function useSocket() {
   return useContext(SocketContext);
 }
 
-export function useCrashSubscription(walletAddress?: string) {
+export function useCrashSubscription(enabled: boolean) {
   const { socket, crashState } = useSocket();
 
   const subscribe = useCallback(() => {
-    socket?.emit("crash:subscribe", walletAddress);
-  }, [socket, walletAddress]);
+    if (enabled) socket?.emit("crash:subscribe");
+  }, [socket, enabled]);
 
   useEffect(() => {
     subscribe();
@@ -117,13 +134,13 @@ export function useCrashSubscription(walletAddress?: string) {
       autoCashout?: number,
     ): Promise<{ success: boolean; balanceSol?: number; error?: string }> => {
       return new Promise((resolve) => {
-        if (!socket || !walletAddress) {
+        if (!socket || !enabled) {
           resolve({ success: false, error: "Not connected" });
           return;
         }
         socket.emit(
           "crash:bet",
-          { walletAddress, amountSol, autoCashout },
+          { amountSol, autoCashout },
           (response: { success: boolean; balanceSol?: number; error?: string }) => {
             resolve(response);
             subscribe();
@@ -131,7 +148,7 @@ export function useCrashSubscription(walletAddress?: string) {
         );
       });
     },
-    [socket, walletAddress, subscribe],
+    [socket, enabled, subscribe],
   );
 
   const cashout = useCallback((): Promise<{
@@ -140,20 +157,19 @@ export function useCrashSubscription(walletAddress?: string) {
     error?: string;
   }> => {
     return new Promise((resolve) => {
-      if (!socket || !walletAddress) {
+      if (!socket || !enabled) {
         resolve({ success: false, error: "Not connected" });
         return;
       }
       socket.emit(
         "crash:cashout",
-        { walletAddress },
         (response: { success: boolean; balanceSol?: number; error?: string }) => {
           resolve(response);
           subscribe();
         },
       );
     });
-  }, [socket, walletAddress, subscribe]);
+  }, [socket, enabled, subscribe]);
 
   return { crashState, placeBet, cashout, subscribe };
 }

@@ -1,7 +1,11 @@
 import { ConnectButton } from "@phantom/react-sdk";
 import { CASINO_WALLET } from "../lib/api";
 
-export function Landing() {
+interface LandingProps {
+  socialLoginEnabled?: boolean;
+}
+
+export function Landing({ socialLoginEnabled }: LandingProps) {
   return (
     <div className="landing">
       <h1>
@@ -16,6 +20,13 @@ export function Landing() {
       </p>
 
       <ConnectButton />
+
+      {!socialLoginEnabled && (
+        <p style={{ marginTop: 16, fontSize: "0.85rem", color: "var(--warning)" }}>
+          Email login (Google/Apple) requires a Phantom Portal app ID. Phantom
+          wallet extension works without it.
+        </p>
+      )}
 
       <div className="landing-features">
         <div className="feature-card">

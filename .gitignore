@@ -8,3 +8,5 @@ build/
 backend/data/
 backend/src/data/
 .vite/
+frontend/tsconfig.tsbuildinfo
+frontend/.env

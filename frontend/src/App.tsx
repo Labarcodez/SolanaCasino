@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { usePhantom } from "@phantom/react-sdk";
 import { Header } from "./components/Header";
 import { Landing } from "./components/Landing";
 import { CrashGame } from "./components/CrashGame";
@@ -7,16 +6,21 @@ import { CoinflipGame } from "./components/CoinflipGame";
 import { WalletPanel } from "./components/WalletPanel";
 import { Leaderboard } from "./components/Leaderboard";
 import { BetHistoryPanel } from "./components/BetHistoryPanel";
-import { useCasinoUser } from "./hooks/useCasinoUser";
+import { FairnessPanel } from "./components/FairnessPanel";
+import { useCasino, CasinoUserProvider } from "./hooks/CasinoUserProvider";
 import { SocketProvider, useSocket } from "./hooks/useSocket";
 import { CASINO_WALLET } from "./lib/api";
 import AuthCallback from "./pages/AuthCallback";
 
-type GameTab = "crash" | "coinflip" | "leaderboard";
+type GameTab = "crash" | "coinflip" | "leaderboard" | "fairness";
 
-function CasinoApp() {
-  const { isConnected } = usePhantom();
+function CasinoContent() {
   const {
+    isConnected,
+    isAuthenticated,
+    authLoading,
+    authError,
+    authenticate,
     walletAddress,
     profile,
     config,
@@ -25,7 +29,7 @@ function CasinoApp() {
     deposit,
     withdraw,
     refresh,
-  } = useCasinoUser();
+  } = useCasino();
   const { connected: wsConnected } = useSocket();
   const [activeTab, setActiveTab] = useState<GameTab>("crash");
   const [localBalance, setLocalBalance] = useState<number | null>(null);
@@ -41,7 +45,35 @@ function CasinoApp() {
     return (
       <div className="app">
         <Header connected={false} />
-        <Landing />
+        <Landing socialLoginEnabled={config?.socialLoginEnabled} />
+        <Footer />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="app">
+        <Header connected={true} />
+        <div className="landing" style={{ minHeight: "60vh" }}>
+          <h2 style={{ marginBottom: 16 }}>Sign in to play</h2>
+          <p style={{ color: "var(--text-secondary)", marginBottom: 24 }}>
+            Sign a message with your wallet to verify ownership. This is free and
+            does not send any SOL.
+          </p>
+          <button
+            className="btn btn-primary"
+            onClick={() => authenticate().catch(console.error)}
+            disabled={authLoading}
+          >
+            {authLoading ? "Signing..." : "Sign In with Wallet"}
+          </button>
+          {authError && (
+            <div className="alert alert-error" style={{ marginTop: 16 }}>
+              {authError}
+            </div>
+          )}
+        </div>
         <Footer />
       </div>
     );
@@ -71,6 +103,12 @@ function CasinoApp() {
           >
             🏆 Leaderboard
           </button>
+          <button
+            className={`nav-tab ${activeTab === "fairness" ? "active" : ""}`}
+            onClick={() => setActiveTab("fairness")}
+          >
+            🔐 Fairness
+          </button>
           <div
             className="live-indicator"
             style={{ marginLeft: "auto", alignSelf: "center" }}
@@ -86,14 +124,13 @@ function CasinoApp() {
           <div>
             {activeTab === "crash" && config && (
               <CrashGame
-                walletAddress={walletAddress}
                 balanceSol={balanceSol}
                 minBetSol={config.minBetSol}
                 maxBetSol={config.maxBetSol}
                 onBalanceUpdate={handleBalanceUpdate}
               />
             )}
-            {activeTab === "coinflip" && config && (
+            {activeTab === "coinflip" && config && walletAddress && (
               <CoinflipGame
                 walletAddress={walletAddress}
                 balanceSol={balanceSol}
@@ -103,6 +140,7 @@ function CasinoApp() {
               />
             )}
             {activeTab === "leaderboard" && <Leaderboard />}
+            {activeTab === "fairness" && <FairnessPanel />}
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -114,9 +152,7 @@ function CasinoApp() {
                 minWithdrawSol={config.minWithdrawSol}
                 withdrawalsEnabled={config.withdrawalsEnabled}
                 loading={loading}
-                onDeposit={async (amount) => {
-                  return deposit(amount);
-                }}
+                onDeposit={async (amount) => deposit(amount)}
                 onWithdraw={async (amount) => {
                   const result = await withdraw(amount);
                   handleBalanceUpdate(result.balanceSol);
@@ -125,7 +161,7 @@ function CasinoApp() {
                 error={error}
               />
             )}
-            <BetHistoryPanel walletAddress={walletAddress} />
+            {walletAddress && <BetHistoryPanel walletAddress={walletAddress} />}
           </div>
         </div>
       </main>
@@ -157,14 +193,23 @@ function Footer() {
   );
 }
 
+function CasinoRoot() {
+  const { isAuthenticated } = useCasino();
+  return (
+    <SocketProvider enabled={isAuthenticated}>
+      <CasinoContent />
+    </SocketProvider>
+  );
+}
+
 export default function App() {
   if (window.location.pathname === "/auth/callback") {
     return <AuthCallback />;
   }
 
   return (
-    <SocketProvider>
-      <CasinoApp />
-    </SocketProvider>
+    <CasinoUserProvider>
+      <CasinoRoot />
+    </CasinoUserProvider>
   );
 }

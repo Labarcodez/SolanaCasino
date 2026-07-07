@@ -5,7 +5,38 @@ export const CASINO_WALLET =
 export const API_URL = import.meta.env.VITE_API_URL ?? "";
 export const PHANTOM_APP_ID = import.meta.env.VITE_PHANTOM_APP_ID ?? "";
 export const SOLANA_RPC =
-  import.meta.env.VITE_SOLANA_RPC ?? "https://api.mainnet-beta.solana.com";
+  import.meta.env.VITE_SOLANA_RPC ??
+  "https://rpc.solanatracker.io/public";
+
+const AUTH_TOKEN_KEY = "solcasino_auth_token";
+
+export function getAuthToken(): string | null {
+  return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+export function setAuthToken(token: string | null): void {
+  if (token) {
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+  }
+}
+
+async function apiFetch(
+  path: string,
+  options: RequestInit = {},
+): Promise<Response> {
+  const token = getAuthToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string>),
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  return fetch(`${API_URL}${path}`, { ...options, headers });
+}
 
 export interface CasinoConfig {
   casinoWallet: string;
@@ -14,6 +45,7 @@ export interface CasinoConfig {
   minWithdrawSol: number;
   houseEdge: number;
   withdrawalsEnabled: boolean;
+  socialLoginEnabled?: boolean;
 }
 
 export interface UserProfile {
@@ -31,8 +63,36 @@ export async function fetchConfig(): Promise<CasinoConfig> {
   return res.json();
 }
 
+export async function requestAuthNonce(
+  walletAddress: string,
+): Promise<{ nonce: string; message: string }> {
+  const res = await fetch(`${API_URL}/api/auth/nonce`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ walletAddress }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to get auth nonce");
+  return data;
+}
+
+export async function verifyAuth(
+  walletAddress: string,
+  signature: string,
+  message: string,
+): Promise<{ token: string; walletAddress: string }> {
+  const res = await fetch(`${API_URL}/api/auth/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ walletAddress, signature, message }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Authentication failed");
+  return data;
+}
+
 export async function fetchUser(walletAddress: string): Promise<UserProfile> {
-  const res = await fetch(`${API_URL}/api/user/${walletAddress}`);
+  const res = await apiFetch(`/api/user/${walletAddress}`);
   if (!res.ok) throw new Error("Failed to load user");
   return res.json();
 }
@@ -41,9 +101,8 @@ export async function verifyDeposit(
   signature: string,
   walletAddress: string,
 ): Promise<{ success: boolean; amountSol: number; balanceSol: number }> {
-  const res = await fetch(`${API_URL}/api/deposit/verify`, {
+  const res = await apiFetch("/api/deposit/verify", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ signature, walletAddress }),
   });
   const data = await res.json();
@@ -54,10 +113,14 @@ export async function verifyDeposit(
 export async function withdraw(
   walletAddress: string,
   amountSol: number,
-): Promise<{ signature: string; balanceSol: number }> {
-  const res = await fetch(`${API_URL}/api/withdraw`, {
+): Promise<{
+  signature?: string;
+  balanceSol: number;
+  queued?: boolean;
+  message?: string;
+}> {
+  const res = await apiFetch("/api/withdraw", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ walletAddress, amountSol }),
   });
   const data = await res.json();
@@ -83,9 +146,8 @@ export async function playCoinflip(
   choice: "heads" | "tails",
   clientSeed?: string,
 ): Promise<CoinflipResult> {
-  const res = await fetch(`${API_URL}/api/coinflip`, {
+  const res = await apiFetch("/api/coinflip", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ walletAddress, amountSol, choice, clientSeed }),
   });
   const data = await res.json();
@@ -106,7 +168,7 @@ export interface BetHistory {
 export async function fetchHistory(
   walletAddress: string,
 ): Promise<BetHistory[]> {
-  const res = await fetch(`${API_URL}/api/history/${walletAddress}`);
+  const res = await apiFetch(`/api/history/${walletAddress}`);
   if (!res.ok) throw new Error("Failed to load history");
   return res.json();
 }
@@ -122,6 +184,21 @@ export interface LeaderboardEntry {
 export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
   const res = await fetch(`${API_URL}/api/leaderboard`);
   if (!res.ok) throw new Error("Failed to load leaderboard");
+  return res.json();
+}
+
+export async function verifyCrashFairness(params: {
+  serverSeed: string;
+  serverSeedHash: string;
+  roundId: string;
+  clientSeeds?: string[];
+  crashPoint: number;
+}): Promise<{ valid: boolean }> {
+  const res = await fetch(`${API_URL}/api/fairness/verify-crash`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
   return res.json();
 }
 

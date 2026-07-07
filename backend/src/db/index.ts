@@ -69,6 +69,12 @@ db.exec(`
     ended_at TEXT
   );
 
+  CREATE TABLE IF NOT EXISTS auth_nonces (
+    wallet_address TEXT PRIMARY KEY,
+    nonce TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+  );
+
   CREATE INDEX IF NOT EXISTS idx_bets_wallet ON bets(wallet_address);
   CREATE INDEX IF NOT EXISTS idx_bets_created ON bets(created_at);
   CREATE INDEX IF NOT EXISTS idx_deposits_wallet ON deposits(wallet_address);

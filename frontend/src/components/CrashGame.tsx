@@ -3,7 +3,6 @@ import { useCrashSubscription } from "../hooks/useSocket";
 import { formatSol } from "../lib/api";
 
 interface CrashGameProps {
-  walletAddress: string;
   balanceSol: number;
   minBetSol: number;
   maxBetSol: number;
@@ -17,13 +16,12 @@ function getHistoryClass(crashPoint: number): string {
 }
 
 export function CrashGame({
-  walletAddress,
   balanceSol,
   minBetSol,
   maxBetSol,
   onBalanceUpdate,
 }: CrashGameProps) {
-  const { crashState, placeBet, cashout } = useCrashSubscription(walletAddress);
+  const { crashState, placeBet, cashout } = useCrashSubscription(true);
   const [betAmount, setBetAmount] = useState("0.01");
   const [autoCashout, setAutoCashout] = useState("");
   const [loading, setLoading] = useState(false);

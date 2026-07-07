@@ -7,9 +7,15 @@
     "backend"
   ],
   "scripts": {
+    "setup": "bash scripts/setup.sh",
     "dev": "concurrently \"npm run dev -w backend\" \"npm run dev -w frontend\"",
     "build": "npm run build -w backend && npm run build -w frontend",
-    "start": "npm run start -w backend"
+    "start": "npm run start -w backend",
+    "start:prod": "SERVE_FRONTEND=true npm run start -w backend",
+    "test": "npm run test -w backend",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

@@ -9,7 +9,7 @@ interface WalletPanelProps {
   withdrawalsEnabled: boolean;
   loading: boolean;
   onDeposit: (amount: number) => Promise<{ amountSol: number }>;
-  onWithdraw: (amount: number) => Promise<{ signature: string }>;
+  onWithdraw: (amount: number) => Promise<{ signature?: string; queued?: boolean; message?: string }>;
   error: string | null;
 }
 
@@ -40,7 +40,9 @@ export function WalletPanel({
       } else {
         const result = await onWithdraw(value);
         setMessage(
-          `Withdrawn ${value} SOL! Tx: ${result.signature.slice(0, 8)}...`,
+          result.queued
+            ? result.message ?? "Withdrawal queued for processing"
+            : `Withdrawn ${value} SOL! Tx: ${result.signature?.slice(0, 8)}...`,
         );
       }
     } catch (err) {
@@ -76,7 +78,6 @@ export function WalletPanel({
           <button
             className={`btn btn-sm ${mode === "withdraw" ? "btn-primary" : "btn-outline"}`}
             onClick={() => setMode("withdraw")}
-            disabled={!withdrawalsEnabled}
           >
             Withdraw
           </button>
@@ -127,7 +128,8 @@ export function WalletPanel({
 
         {!withdrawalsEnabled && mode === "withdraw" && (
           <p style={{ fontSize: "0.75rem", color: "var(--warning)" }}>
-            Automated withdrawals require server configuration.
+            Instant withdrawals queue until the casino wallet key is configured.
+            Your balance will be deducted and processed manually.
           </p>
         )}
 

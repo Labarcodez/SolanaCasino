@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { AddressType } from "@phantom/browser-sdk";
-import { usePhantom, useSolana } from "@phantom/react-sdk";
 import {
   fetchUser,
   verifyDeposit,
@@ -10,45 +8,52 @@ import {
   fetchConfig,
 } from "../lib/api";
 import { buildDepositTransaction } from "../lib/solana";
+import { useAuth } from "./useAuth";
+import { useSolana } from "@phantom/react-sdk";
 
 export function useCasinoUser() {
-  const { isConnected, addresses } = usePhantom();
+  const {
+    isConnected,
+    walletAddress,
+    isAuthenticated,
+    authLoading,
+    authError,
+    authenticate,
+  } = useAuth();
   const { solana, isAvailable } = useSolana();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [config, setConfig] = useState<CasinoConfig | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const solanaAccount = addresses.find((a) => a.addressType === AddressType.solana);
-  const walletAddress = solanaAccount?.address;
-
   const refresh = useCallback(async () => {
-    if (!walletAddress) return;
+    if (!walletAddress || !isAuthenticated) return;
     try {
       const user = await fetchUser(walletAddress);
       setProfile(user);
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load profile");
     }
-  }, [walletAddress]);
+  }, [walletAddress, isAuthenticated]);
 
   useEffect(() => {
     fetchConfig().then(setConfig).catch(console.error);
   }, []);
 
   useEffect(() => {
-    if (walletAddress) {
+    if (walletAddress && isAuthenticated) {
       refresh();
       const interval = setInterval(refresh, 10000);
       return () => clearInterval(interval);
     }
     setProfile(null);
-  }, [walletAddress, refresh]);
+  }, [walletAddress, isAuthenticated, refresh]);
 
   const deposit = useCallback(
     async (amountSol: number) => {
-      if (!walletAddress || !solana || !isAvailable) {
-        throw new Error("Wallet not connected");
+      if (!walletAddress || !solana || !isAvailable || !isAuthenticated) {
+        throw new Error("Wallet not connected or not authenticated");
       }
 
       setLoading(true);
@@ -62,8 +67,6 @@ export function useCasinoUser() {
           throw new Error("No transaction signature returned");
         }
 
-        await new Promise((r) => setTimeout(r, 2000));
-
         const depositResult = await verifyDeposit(signature, walletAddress);
         await refresh();
         return { signature, ...depositResult };
@@ -75,12 +78,14 @@ export function useCasinoUser() {
         setLoading(false);
       }
     },
-    [walletAddress, solana, isAvailable, refresh],
+    [walletAddress, solana, isAvailable, isAuthenticated, refresh],
   );
 
   const withdrawFunds = useCallback(
     async (amountSol: number) => {
-      if (!walletAddress) throw new Error("Wallet not connected");
+      if (!walletAddress || !isAuthenticated) {
+        throw new Error("Wallet not connected or not authenticated");
+      }
 
       setLoading(true);
       setError(null);
@@ -96,11 +101,15 @@ export function useCasinoUser() {
         setLoading(false);
       }
     },
-    [walletAddress, refresh],
+    [walletAddress, isAuthenticated, refresh],
   );
 
   return {
     isConnected,
+    isAuthenticated,
+    authLoading,
+    authError,
+    authenticate,
     walletAddress,
     profile,
     config,

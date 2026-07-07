@@ -8,16 +8,21 @@ import { PHANTOM_APP_ID } from "./lib/api";
 
 const redirectUrl = `${window.location.origin}/auth/callback`;
 
+const providers: Array<"google" | "apple" | "injected"> = PHANTOM_APP_ID
+  ? ["google", "apple", "injected"]
+  : ["injected"];
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <PhantomProvider
       config={{
-        providers: ["google", "apple", "injected"],
-        appId: PHANTOM_APP_ID || "demo-app-id",
+        providers,
+        ...(PHANTOM_APP_ID ? { appId: PHANTOM_APP_ID } : {}),
         addressTypes: [AddressType.solana],
         authOptions: { redirectUrl },
       }}
       theme={darkTheme}
+      appName="SolCasino"
     >
       <App />
     </PhantomProvider>
