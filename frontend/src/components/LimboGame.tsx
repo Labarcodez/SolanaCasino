@@ -1,8 +1,22 @@
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { formatSol, playLimbo } from "../lib/api";
+import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import {
+  confirmLimbo,
+  fetchUser,
+  formatSol,
+  playLimbo,
+  prepareLimbo,
+  revealLimbo,
+} from "../lib/api";
+import { useCasino } from "../hooks/CasinoUserProvider";
 import { useToast } from "./ui/Toast";
 import { PageHeader } from "./PageHeader";
+import { prepareTransaction, solscanTxUrl } from "../lib/utils";
+import {
+  buildLimboBetTransaction,
+  ensurePlayerInitialized,
+} from "../lib/anchor";
 
 interface LimboGameProps {
   walletAddress: string;
@@ -29,6 +43,7 @@ export function LimboGame({
   onChainEnabled,
   onBalanceUpdate,
 }: LimboGameProps) {
+  const { signAndSendTx, refresh } = useCasino();
   const { toast } = useToast();
   const [betAmount, setBetAmount] = useState("0.01");
   const [target, setTarget] = useState("2.00");
@@ -40,6 +55,7 @@ export function LimboGame({
     serverSeed: string;
     betId: string;
     clientSeed: string;
+    signature?: string;
   } | null>(null);
 
   const targetNum = parseFloat(target);
@@ -64,32 +80,75 @@ export function LimboGame({
       toast(`Target must be between ${limboMinTarget}x and ${limboMaxTarget}x`, "error");
       return;
     }
-    if (onChainEnabled) {
-      toast("Limbo uses casino balance — available in custodial mode", "info");
-      return;
-    }
 
     setRolling(true);
     setLastResult(null);
 
     try {
-      const result = await playLimbo(walletAddress, amount, targetNum);
-      await new Promise((r) => setTimeout(r, 600));
-      setLastResult({
-        won: result.won,
-        roll: result.roll,
-        resultMultiplier: result.resultMultiplier,
-        serverSeed: result.serverSeed,
-        betId: result.betId,
-        clientSeed: result.clientSeed,
-      });
-      onBalanceUpdate(result.balanceSol);
-      toast(
-        result.won
-          ? `Hit ${targetNum.toFixed(2)}x — won ${formatSol(result.payoutSol)} SOL!`
-          : `Busted at roll ${result.roll}`,
-        result.won ? "success" : "info",
-      );
+      if (onChainEnabled) {
+        await ensurePlayerInitialized(walletAddress, signAndSendTx);
+        const prepared = await prepareLimbo(walletAddress, targetNum);
+        const revealed = await revealLimbo(walletAddress, prepared.prepareId);
+        const tx = await buildLimboBetTransaction(
+          walletAddress,
+          Math.floor(amount * LAMPORTS_PER_SOL),
+          targetNum,
+          revealed.clientSeed,
+          revealed.serverSeed,
+          revealed.serverSeedHash,
+        );
+        await prepareTransaction(walletAddress, tx);
+        const { signature } = await signAndSendTx(tx);
+
+        const result = await confirmLimbo({
+          walletAddress,
+          amountSol: amount,
+          targetMultiplier: targetNum,
+          clientSeed: revealed.clientSeed,
+          serverSeed: revealed.serverSeed,
+          signature,
+        });
+
+        await new Promise((r) => setTimeout(r, 600));
+        setLastResult({
+          won: result.won,
+          roll: result.roll,
+          resultMultiplier: result.resultMultiplier,
+          serverSeed: result.serverSeed,
+          betId: result.betId,
+          clientSeed: result.clientSeed,
+          signature,
+        });
+        await refresh();
+        const updated = await fetchUser(walletAddress);
+        onBalanceUpdate(updated.balanceSol);
+
+        toast(
+          result.won
+            ? `Hit ${targetNum.toFixed(2)}x — won ${formatSol(result.payoutSol)} SOL!`
+            : `Busted at roll ${result.roll}`,
+          result.won ? "success" : "info",
+          { label: "View tx", href: solscanTxUrl(signature) },
+        );
+      } else {
+        const result = await playLimbo(walletAddress, amount, targetNum);
+        await new Promise((r) => setTimeout(r, 600));
+        setLastResult({
+          won: result.won,
+          roll: result.roll,
+          resultMultiplier: result.resultMultiplier,
+          serverSeed: result.serverSeed,
+          betId: result.betId,
+          clientSeed: result.clientSeed,
+        });
+        onBalanceUpdate(result.balanceSol);
+        toast(
+          result.won
+            ? `Hit ${targetNum.toFixed(2)}x — won ${formatSol(result.payoutSol)} SOL!`
+            : `Busted at roll ${result.roll}`,
+          result.won ? "success" : "info",
+        );
+      }
     } catch (err) {
       toast(err instanceof Error ? err.message : "Limbo failed", "error");
     } finally {
@@ -102,6 +161,14 @@ export function LimboGame({
       <PageHeader
         title="Limbo"
         subtitle={`Pick your target · ${((1 - limboHouseEdge) * 100).toFixed(0)}% RTP · 2% house edge`}
+        badge={
+          onChainEnabled ? (
+            <span className="on-chain-badge">
+              <span className="on-chain-dot" />
+              On-Chain
+            </span>
+          ) : undefined
+        }
       />
 
       <div className="limbo-arena">

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { formatSol } from "../lib/api";
+import { solscanTxUrl } from "../lib/utils";
 import { useToast } from "./ui/Toast";
 
 interface WalletPanelProps {
@@ -43,7 +44,7 @@ export function WalletPanel({
       if (mode === "deposit") {
         const result = await onDeposit(value);
         toast(`Deposited ${formatSol(result.amountSol)} SOL`, "success", result.signature
-          ? { label: "View tx", href: `https://solscan.io/tx/${result.signature}?cluster=devnet` }
+          ? { label: "View tx", href: solscanTxUrl(result.signature) }
           : undefined);
       } else {
         const result = await onWithdraw(value);
@@ -51,7 +52,7 @@ export function WalletPanel({
           toast(result.message ?? "Withdrawal queued", "info");
         } else {
           toast(`Withdrew ${value} SOL`, "success", result.signature
-            ? { label: "View tx", href: `https://solscan.io/tx/${result.signature}?cluster=devnet` }
+            ? { label: "View tx", href: solscanTxUrl(result.signature) }
             : undefined);
         }
       }

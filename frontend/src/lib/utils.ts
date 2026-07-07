@@ -1,22 +1,29 @@
 import { Connection, PublicKey, Transaction } from "@solana/web3.js";
 import { SOLANA_RPC } from "./api";
+import { getSolanaCluster, isMainnetCluster } from "./cluster";
 
 export function shortenAddress(address: string, chars = 4): string {
   return `${address.slice(0, chars)}...${address.slice(-chars)}`;
 }
 
-export function solscanTxUrl(signature: string, cluster = "devnet"): string {
-  const base =
-    cluster === "mainnet-beta"
-      ? "https://solscan.io/tx/"
-      : `https://solscan.io/tx/${signature}?cluster=${cluster}`;
-  return cluster === "mainnet-beta" ? `${base}${signature}` : base;
+export function solscanTxUrl(
+  signature: string,
+  cluster = getSolanaCluster(),
+): string {
+  if (isMainnetCluster(cluster)) {
+    return `https://solscan.io/tx/${signature}`;
+  }
+  return `https://solscan.io/tx/${signature}?cluster=${cluster}`;
 }
 
-export function solscanAccountUrl(address: string, cluster = "devnet"): string {
-  return cluster === "mainnet-beta"
-    ? `https://solscan.io/account/${address}`
-    : `https://solscan.io/account/${address}?cluster=${cluster}`;
+export function solscanAccountUrl(
+  address: string,
+  cluster = getSolanaCluster(),
+): string {
+  if (isMainnetCluster(cluster)) {
+    return `https://solscan.io/account/${address}`;
+  }
+  return `https://solscan.io/account/${address}?cluster=${cluster}`;
 }
 
 export async function prepareTransaction(

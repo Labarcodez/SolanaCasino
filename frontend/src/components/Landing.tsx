@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { ConnectButton } from "@phantom/react-sdk";
 import { PROGRAM_ID } from "../lib/api";
-import { shortenAddress } from "../lib/utils";
+import { shortenAddress, solscanAccountUrl } from "../lib/utils";
 import { BRAND } from "../lib/brand";
 
 interface LandingProps {
@@ -145,7 +145,7 @@ export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
       <p className="landing-wallet-link">
         Program:{" "}
         <a
-          href={`https://solscan.io/account/${PROGRAM_ID.toBase58()}?cluster=devnet`}
+          href={solscanAccountUrl(PROGRAM_ID.toBase58())}
           target="_blank"
           rel="noopener noreferrer"
         >

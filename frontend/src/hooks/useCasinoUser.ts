@@ -13,6 +13,7 @@ import {
   depositOnChain,
   withdrawOnChain,
 } from "../lib/solana";
+import { setSolanaCluster } from "../lib/cluster";
 import { useAuth } from "./useAuth";
 import { useSolana } from "@phantom/react-sdk";
 
@@ -61,7 +62,10 @@ export function useCasinoUser() {
 
   useEffect(() => {
     fetchConfig()
-      .then(setConfig)
+      .then((c) => {
+        setConfig(c);
+        setSolanaCluster(c.cluster);
+      })
       .catch(console.error)
       .finally(() => setConfigLoading(false));
   }, []);

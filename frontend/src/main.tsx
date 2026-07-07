@@ -8,13 +8,18 @@ import "./index.css";
 import "./theme.css";
 import { PHANTOM_APP_ID } from "./lib/api";
 import { BRAND } from "./lib/brand";
-import { captureReferralFromUrl } from "./lib/api";
+import { captureReferralFromUrl, fetchConfig } from "./lib/api";
+import { setSolanaCluster } from "./lib/cluster";
 import { ToastProvider } from "./components/ui/Toast";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { AgeGate } from "./components/AgeGate";
 
 const redirectUrl = `${window.location.origin}/auth/callback`;
 
 captureReferralFromUrl();
+void fetchConfig()
+  .then((c) => setSolanaCluster(c.cluster))
+  .catch(() => setSolanaCluster("devnet"));
 
 const providers: Array<"google" | "apple" | "injected"> = PHANTOM_APP_ID
   ? ["google", "apple", "injected"]
@@ -25,6 +30,7 @@ createRoot(document.getElementById("root")!).render(
     <BrowserRouter>
       <ToastProvider>
         <ErrorBoundary>
+          <AgeGate />
           <PhantomProvider
             config={{
               providers,

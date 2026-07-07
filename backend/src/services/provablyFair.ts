@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { PublicKey } from "@solana/web3.js";
 
 export function generateServerSeed(): string {
   return crypto.randomBytes(32).toString("hex");
@@ -129,6 +130,47 @@ export function evaluateLimboBet(params: {
   const won = roll < winChanceBps;
   const resultMultiplier = won ? params.targetMultiplier : 0;
   return { roll, won, resultMultiplier };
+}
+
+/** On-chain limbo roll: sha256(serverSeed ‖ ownerPubkey ‖ clientSeed) mod 10000 */
+export function generateOnChainLimboRoll(
+  serverSeedHex: string,
+  walletAddress: string,
+  clientSeedHex: string,
+): number {
+  const seedBytes = Buffer.from(serverSeedHex, "hex");
+  const ownerBytes = new PublicKey(walletAddress).toBuffer();
+  const clientBytes = Buffer.from(
+    clientSeedHex.padEnd(32, "0").slice(0, 32),
+    "hex",
+  );
+  const combined = Buffer.concat([
+    seedBytes,
+    ownerBytes,
+    clientBytes.slice(0, 16),
+  ]);
+  const hash = crypto.createHash("sha256").update(combined).digest();
+  const val = hash[0]! << 8 | hash[1]!;
+  return val % 10000;
+}
+
+export function evaluateOnChainLimboBet(params: {
+  serverSeedHex: string;
+  walletAddress: string;
+  clientSeedHex: string;
+  targetMultiplier: number;
+  houseEdgeBps?: number;
+}): { roll: number; won: boolean } {
+  const roll = generateOnChainLimboRoll(
+    params.serverSeedHex,
+    params.walletAddress,
+    params.clientSeedHex,
+  );
+  const edgeBps = params.houseEdgeBps ?? 200;
+  const targetMilli = Math.floor(params.targetMultiplier * 1000);
+  const winChanceBps = Math.floor(((10000 - edgeBps) * 1000) / targetMilli);
+  const won = roll < winChanceBps;
+  return { roll, won };
 }
 
 export function verifyLimboBet(params: {

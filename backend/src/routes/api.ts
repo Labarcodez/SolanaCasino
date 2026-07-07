@@ -42,6 +42,7 @@ import {
   hashServerSeed,
   hashServerSeedBytes,
   evaluateLimboBet,
+  evaluateOnChainLimboBet,
   LIMBO_HOUSE_EDGE,
 } from "../services/provablyFair.js";
 import {
@@ -612,6 +613,13 @@ apiRouter.post(
         return;
       }
 
+      if (isAnchorEnabled()) {
+        res.status(400).json({
+          error: "Use on-chain limbo via /api/limbo/prepare",
+        });
+        return;
+      }
+
       if (!amountSol || !targetMultiplier) {
         res.status(400).json({ error: "amountSol and targetMultiplier required" });
         return;
@@ -675,6 +683,119 @@ apiRouter.post(
       metadata: { targetMultiplier },
     });
     res.json(prepared);
+  },
+);
+
+apiRouter.post(
+  "/limbo/reveal",
+  requireAuth,
+  betLimiter,
+  (req: AuthenticatedRequest, res) => {
+    const { walletAddress, prepareId } = req.body as {
+      walletAddress?: string;
+      prepareId?: string;
+    };
+    if (!walletAddress || walletAddress !== req.walletAddress || !prepareId) {
+      res.status(400).json({ error: "walletAddress and prepareId required" });
+      return;
+    }
+    try {
+      const revealed = revealGamePrepare(prepareId, walletAddress);
+      res.json({
+        serverSeed: revealed.serverSeed,
+        serverSeedHash: revealed.serverSeedHash,
+        clientSeed: revealed.clientSeed,
+        targetMultiplier: revealed.metadata?.targetMultiplier as number | undefined,
+      });
+    } catch (err) {
+      res.status(400).json({
+        error: err instanceof Error ? err.message : "Reveal failed",
+      });
+    }
+  },
+);
+
+apiRouter.post(
+  "/limbo/confirm",
+  requireAuth,
+  betLimiter,
+  (req: AuthenticatedRequest, res) => {
+    const {
+      walletAddress,
+      amountSol,
+      targetMultiplier,
+      clientSeed,
+      serverSeed,
+      signature,
+    } = req.body as {
+      walletAddress?: string;
+      amountSol?: number;
+      targetMultiplier?: number;
+      clientSeed?: string;
+      serverSeed?: string;
+      signature?: string;
+    };
+
+    if (!walletAddress || walletAddress !== req.walletAddress) {
+      res.status(403).json({ error: "Unauthorized bet" });
+      return;
+    }
+
+    if (
+      !amountSol ||
+      !targetMultiplier ||
+      !clientSeed ||
+      !serverSeed ||
+      !signature
+    ) {
+      res.status(400).json({ error: "Missing limbo confirmation fields" });
+      return;
+    }
+
+    const { roll, won } = evaluateOnChainLimboBet({
+      serverSeedHex: serverSeed,
+      walletAddress,
+      clientSeedHex: clientSeed,
+      targetMultiplier,
+    });
+
+    const amountLamports = solToLamports(amountSol);
+    const payoutLamports = won
+      ? Math.floor(amountLamports * targetMultiplier)
+      : 0;
+    const betId = uuidv4();
+
+    recordBetWithRewards({
+      id: betId,
+      walletAddress,
+      game: "limbo",
+      amountLamports,
+      payoutLamports,
+      multiplier: won ? targetMultiplier : 0,
+      result: won ? "win" : "loss",
+      metadata: {
+        targetMultiplier,
+        roll,
+        serverSeedHash: hashServerSeedBytes(serverSeed),
+        serverSeed,
+        clientSeed,
+        signature,
+        onChain: true,
+      },
+    });
+
+    res.json({
+      betId,
+      targetMultiplier,
+      roll,
+      won,
+      resultMultiplier: won ? targetMultiplier : 0,
+      payoutSol: lamportsToSol(payoutLamports),
+      signature,
+      serverSeedHash: hashServerSeedBytes(serverSeed),
+      serverSeed,
+      clientSeed,
+    });
   },
 );
 

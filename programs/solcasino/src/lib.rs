@@ -5,6 +5,7 @@ use solana_sha256_hasher::hashv;
 declare_id!("Be5brMe2AvA68zEdiFKxa6KfYJdeQAeY12eWtZiC41vU");
 
 pub const HOUSE_EDGE_BPS: u16 = 500; // 5%
+pub const LIMBO_HOUSE_EDGE_BPS: u16 = 200; // 2% — 98% RTP volume game
 pub const DEFAULT_MIN_BET: u64 = 1_000_000; // 0.001 SOL
 pub const DEFAULT_MAX_BET: u64 = 10_000_000_000; // 10 SOL
 pub const GROWTH_RATE_MILLI: u64 = 60; // 0.00006 * 1_000_000
@@ -158,6 +159,78 @@ pub mod solcasino {
             msg!("Coinflip win! Payout: {}", payout);
         } else {
             msg!("Coinflip loss");
+        }
+
+        Ok(())
+    }
+
+    pub fn limbo_bet(
+        ctx: Context<Limbo>,
+        amount: u64,
+        target_multiplier_milli: u64,
+        client_seed: [u8; 16],
+        server_seed_hash: [u8; 32],
+        server_seed: [u8; 32],
+    ) -> Result<()> {
+        require!(!ctx.accounts.casino.is_paused, CasinoError::CasinoPaused);
+        require!(
+            target_multiplier_milli >= 1_010 && target_multiplier_milli <= 1_000_000,
+            CasinoError::InvalidMultiplier
+        );
+        validate_bet_amount(&ctx.accounts.casino, amount)?;
+        require!(
+            ctx.accounts.player.balance >= amount,
+            CasinoError::InsufficientBalance
+        );
+
+        let computed_hash = sha256_bytes(&server_seed);
+        require!(
+            computed_hash == server_seed_hash,
+            CasinoError::InvalidSeedReveal
+        );
+
+        let roll = generate_limbo_roll(&server_seed, &ctx.accounts.owner.key(), &client_seed);
+        let won = limbo_roll_wins(roll, target_multiplier_milli, LIMBO_HOUSE_EDGE_BPS);
+
+        ctx.accounts.player.balance = ctx
+            .accounts
+            .player
+            .balance
+            .checked_sub(amount)
+            .ok_or(CasinoError::MathOverflow)?;
+        ctx.accounts.player.total_wagered = ctx
+            .accounts
+            .player
+            .total_wagered
+            .checked_add(amount)
+            .ok_or(CasinoError::MathOverflow)?;
+        ctx.accounts.casino.total_wagered = ctx
+            .accounts
+            .casino
+            .total_wagered
+            .checked_add(amount)
+            .ok_or(CasinoError::MathOverflow)?;
+
+        if won {
+            let payout = amount
+                .checked_mul(target_multiplier_milli)
+                .ok_or(CasinoError::MathOverflow)?
+                / 1000;
+            ctx.accounts.player.balance = ctx
+                .accounts
+                .player
+                .balance
+                .checked_add(payout)
+                .ok_or(CasinoError::MathOverflow)?;
+            ctx.accounts.player.total_won = ctx
+                .accounts
+                .player
+                .total_won
+                .checked_add(payout)
+                .ok_or(CasinoError::MathOverflow)?;
+            msg!("Limbo win! {}x payout: {}", target_multiplier_milli, payout);
+        } else {
+            msg!("Limbo loss at roll {}", roll);
         }
 
         Ok(())
@@ -449,6 +522,20 @@ pub struct Coinflip<'info> {
 }
 
 #[derive(Accounts)]
+pub struct Limbo<'info> {
+    #[account(mut, seeds = [b"casino"], bump = casino.bump)]
+    pub casino: Account<'info, Casino>,
+    #[account(
+        mut,
+        seeds = [b"player", owner.key().as_ref()],
+        bump = player.bump,
+        has_one = owner
+    )]
+    pub player: Account<'info, Player>,
+    pub owner: Signer<'info>,
+}
+
+#[derive(Accounts)]
 #[instruction(round_id: u64)]
 pub struct StartRound<'info> {
     #[account(mut, seeds = [b"casino"], bump = casino.bump)]
@@ -651,6 +738,8 @@ pub enum CasinoError {
     BetAlreadySettled,
     #[msg("Invalid seed reveal")]
     InvalidSeedReveal,
+    #[msg("Invalid limbo target multiplier")]
+    InvalidMultiplier,
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -681,6 +770,26 @@ fn generate_coinflip_result(
     data.extend_from_slice(client_seed);
     let h = sha256_bytes(&data);
     u8::from(h[0]) % 2
+}
+
+fn generate_limbo_roll(
+    server_seed: &[u8; 32],
+    owner: &Pubkey,
+    client_seed: &[u8; 16],
+) -> u16 {
+    let mut data = Vec::with_capacity(64);
+    data.extend_from_slice(server_seed);
+    data.extend_from_slice(owner.as_ref());
+    data.extend_from_slice(client_seed);
+    let h = sha256_bytes(&data);
+    let val = u16::from(h[0]) << 8 | u16::from(h[1]);
+    val % 10_000
+}
+
+fn limbo_roll_wins(roll: u16, target_multiplier_milli: u64, edge_bps: u16) -> bool {
+    let win_chance_bps =
+        (10_000u64.saturating_sub(edge_bps as u64)).saturating_mul(1000) / target_multiplier_milli;
+    (roll as u64) < win_chance_bps
 }
 
 fn hex_encode(bytes: &[u8]) -> String {

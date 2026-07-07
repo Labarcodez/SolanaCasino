@@ -348,6 +348,59 @@ export async function playLimbo(
   return data;
 }
 
+export async function prepareLimbo(
+  walletAddress: string,
+  targetMultiplier: number,
+  clientSeed?: string,
+): Promise<{
+  prepareId: string;
+  serverSeedHash: string;
+  clientSeed: string;
+}> {
+  const res = await apiFetch("/api/limbo/prepare", {
+    method: "POST",
+    body: JSON.stringify({ walletAddress, targetMultiplier, clientSeed }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to prepare limbo");
+  return data;
+}
+
+export async function revealLimbo(
+  walletAddress: string,
+  prepareId: string,
+): Promise<{
+  serverSeed: string;
+  serverSeedHash: string;
+  clientSeed: string;
+  targetMultiplier?: number;
+}> {
+  const res = await apiFetch("/api/limbo/reveal", {
+    method: "POST",
+    body: JSON.stringify({ walletAddress, prepareId }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to reveal limbo seed");
+  return data;
+}
+
+export async function confirmLimbo(params: {
+  walletAddress: string;
+  amountSol: number;
+  targetMultiplier: number;
+  clientSeed: string;
+  serverSeed: string;
+  signature: string;
+}): Promise<LimboResult> {
+  const res = await apiFetch("/api/limbo/confirm", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to confirm limbo");
+  return data;
+}
+
 export interface AffiliateStats {
   referralCode: string;
   referralLink: string;

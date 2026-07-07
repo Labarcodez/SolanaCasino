@@ -5,7 +5,7 @@ import { useCasino } from "../hooks/CasinoUserProvider";
 import { useToast } from "../components/ui/Toast";
 import { useSound } from "../hooks/useSound";
 import { formatSol } from "../lib/api";
-import { prepareTransaction } from "../lib/utils";
+import { prepareTransaction, solscanTxUrl } from "../lib/utils";
 import {
   buildCashoutTransaction,
   buildPlaceBetTransaction,
@@ -116,7 +116,7 @@ export function CrashGame({
           await refresh();
           toast("Bet settled on-chain!", "success", {
             label: "View on Solscan",
-            href: `https://solscan.io/tx/${signature}?cluster=devnet`,
+            href: solscanTxUrl(signature),
           });
         } catch (err) {
           console.error("settle_bet failed:", err);
@@ -171,7 +171,7 @@ export function CrashGame({
         play("bet");
         toast(`Bet placed: ${amount} SOL`, "success", {
           label: "View tx",
-          href: `https://solscan.io/tx/${signature}?cluster=devnet`,
+          href: solscanTxUrl(signature),
         });
       } else {
         const result = await placeBet(
@@ -229,7 +229,7 @@ export function CrashGame({
         play("cashout");
         toast(`Cashed out at ${multiplier.toFixed(2)}x!`, "success", {
           label: "View tx",
-          href: `https://solscan.io/tx/${signature}?cluster=devnet`,
+          href: solscanTxUrl(signature),
         });
       } else {
         const result = await cashout();

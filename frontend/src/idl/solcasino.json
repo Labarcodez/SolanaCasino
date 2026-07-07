@@ -448,6 +448,107 @@
       "args": []
     },
     {
+      "name": "limbo_bet",
+      "discriminator": [
+        136,
+        82,
+        152,
+        37,
+        132,
+        144,
+        90,
+        53
+      ],
+      "accounts": [
+        {
+          "name": "casino",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  115,
+                  105,
+                  110,
+                  111
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "player"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "target_multiplier_milli",
+          "type": "u64"
+        },
+        {
+          "name": "client_seed",
+          "type": {
+            "array": [
+              "u8",
+              16
+            ]
+          }
+        },
+        {
+          "name": "server_seed_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "server_seed",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "place_bet",
       "discriminator": [
         222,
@@ -1019,6 +1120,11 @@
       "code": 6014,
       "name": "InvalidSeedReveal",
       "msg": "Invalid seed reveal"
+    },
+    {
+      "code": 6015,
+      "name": "InvalidMultiplier",
+      "msg": "Invalid limbo target multiplier"
     }
   ],
   "types": [

@@ -251,6 +251,37 @@ export async function buildCoinflipBetTransaction(
     .transaction();
 }
 
+export async function buildLimboBetTransaction(
+  walletAddress: string,
+  amountLamports: number,
+  targetMultiplier: number,
+  clientSeedHex: string,
+  serverSeedHex: string,
+  serverSeedHashHex: string,
+): Promise<Transaction> {
+  const connection = getConnection();
+  const program = createReadOnlyProgram(connection);
+  const owner = new PublicKey(walletAddress);
+  const [casinoPda] = getCasinoPda();
+  const [playerPda] = getPlayerPda(owner);
+  const targetMilli = Math.floor(targetMultiplier * 1000);
+
+  return program.methods
+    .limboBet(
+      new BN(amountLamports),
+      new BN(targetMilli),
+      clientSeedToBytes16(clientSeedHex),
+      hexToBytes32(serverSeedHashHex),
+      hexToBytes32(serverSeedHex),
+    )
+    .accounts({
+      casino: casinoPda,
+      player: playerPda,
+      owner,
+    })
+    .transaction();
+}
+
 export async function ensurePlayerInitialized(
   walletAddress: string,
   signAndSend: (tx: Transaction) => Promise<{ signature: string }>,

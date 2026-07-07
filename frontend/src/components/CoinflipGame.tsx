@@ -11,7 +11,7 @@ import {
 } from "../lib/api";
 import { useCasino } from "../hooks/CasinoUserProvider";
 import { useToast } from "./ui/Toast";
-import { prepareTransaction } from "../lib/utils";
+import { prepareTransaction, solscanTxUrl } from "../lib/utils";
 import { PageHeader } from "./PageHeader";
 import {
   buildCoinflipBetTransaction,
@@ -90,7 +90,7 @@ export function CoinflipGame({
             ? `You won! Result: ${flipResult.result}`
             : `Lost — it was ${flipResult.result}`,
           flipResult.won ? "success" : "info",
-          { label: "View tx", href: `https://solscan.io/tx/${signature}?cluster=devnet` },
+          { label: "View tx", href: solscanTxUrl(signature) },
         );
       } else {
         const flipResult = await playCoinflip(walletAddress, amount, choice);
