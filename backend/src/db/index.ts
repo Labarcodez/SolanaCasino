@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type { UserRow } from "./types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.join(__dirname, "..", "..", "data");
@@ -92,32 +93,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_chat_created ON chat_messages(created_at);
 `);
 
-export function getOrCreateUser(walletAddress: string): {
-  wallet_address: string;
-  balance_lamports: number;
-  total_wagered_lamports: number;
-  total_won_lamports: number;
-  display_name: string | null;
-  email: string | null;
-  auth_provider: string;
-  created_at: string;
-  updated_at: string;
-} {
+export function getOrCreateUser(walletAddress: string): UserRow {
   const existing = db
     .prepare("SELECT * FROM users WHERE wallet_address = ?")
-    .get(walletAddress) as
-    | {
-        wallet_address: string;
-        balance_lamports: number;
-        total_wagered_lamports: number;
-        total_won_lamports: number;
-        display_name: string | null;
-        email: string | null;
-        auth_provider: string;
-        created_at: string;
-        updated_at: string;
-      }
-    | undefined;
+    .get(walletAddress) as UserRow | undefined;
 
   if (existing) return existing;
 

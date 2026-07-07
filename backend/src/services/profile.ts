@@ -1,18 +1,8 @@
 import { db } from "../db/index.js";
+import type { AuthProviderType, UserRow } from "../db/types.js";
 
-export type AuthProviderType = "wallet" | "google" | "apple" | "phantom";
-
-export interface UserProfileRow {
-  wallet_address: string;
-  balance_lamports: number;
-  total_wagered_lamports: number;
-  total_won_lamports: number;
-  display_name: string | null;
-  email: string | null;
-  auth_provider: AuthProviderType;
-  created_at: string;
-  updated_at: string;
-}
+export type { AuthProviderType };
+export type UserProfileRow = UserRow;
 
 function ensureProfileColumns(): void {
   const columns = db
