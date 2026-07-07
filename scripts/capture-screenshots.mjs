@@ -18,6 +18,10 @@ const shots = [
   { name: "10-leaderboard-desktop", url: `${BASE}/preview-leaderboard`, width: 1440, height: 900, fullPage: true },
   { name: "11-fairness-desktop", url: `${BASE}/preview-fairness`, width: 1440, height: 900, fullPage: true },
   { name: "12-crash-arena-wide", url: `${BASE}/preview`, width: 1920, height: 1080, fullPage: false },
+  { name: "13-limbo-desktop", url: `${BASE}/preview-limbo`, width: 1440, height: 900, fullPage: true },
+  { name: "14-limbo-mobile", url: `${BASE}/preview-limbo`, width: 390, height: 844, fullPage: true },
+  { name: "15-tournament-desktop", url: `${BASE}/preview-tournament`, width: 1440, height: 900, fullPage: true },
+  { name: "16-admin-desktop", url: `${BASE}/preview-admin`, width: 1440, height: 900, fullPage: true },
 ];
 
 await mkdir(OUT, { recursive: true });
@@ -53,7 +57,7 @@ try {
     });
     await page.goto(`${prodUrl}/preview-landing`, { waitUntil: "networkidle", timeout: 30000 });
     await page.waitForTimeout(2000);
-    const file = path.join(OUT, "13-production-landing.png");
+    const file = path.join(OUT, "17-production-landing.png");
     await page.screenshot({ path: file, fullPage: true, type: "png" });
     console.log(`Saved ${file}`);
     await page.close();

@@ -8,7 +8,10 @@ import { createServer } from "node:http";
 import { Server } from "socket.io";
 import { config, solToLamports, lamportsToSol } from "./config.js";
 import { apiRouter } from "./routes/api.js";
+import { adminRouter } from "./routes/admin.js";
 import { crashEngine } from "./services/crash.js";
+import { startCrashKeeper } from "./services/crashKeeper.js";
+import { startBetIndexer } from "./services/indexer.js";
 import { getOrCreateUser } from "./db/index.js";
 import { requireAuthSocket } from "./middleware/auth.js";
 import { checkRpcHealth } from "./services/solana.js";
@@ -39,6 +42,7 @@ app.use(
 );
 app.use(express.json());
 app.use("/api", apiRouter);
+app.use("/api/admin", adminRouter);
 
 function broadcastOnlineCount(): void {
   io.emit("site:online", { count: io.engine.clientsCount });
@@ -202,6 +206,8 @@ async function start(): Promise<void> {
     console.log(
       `Withdrawals: ${process.env.CASINO_WALLET_PRIVATE_KEY ? "enabled" : "queued mode"}`,
     );
+    startCrashKeeper();
+    startBetIndexer();
   });
 }
 

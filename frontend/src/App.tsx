@@ -26,9 +26,13 @@ import { ScreenshotPreviewProfile } from "./pages/ScreenshotPreviewProfile";
 import { ScreenshotPreviewLeaderboard } from "./pages/ScreenshotPreviewLeaderboard";
 import { ScreenshotPreviewFairness } from "./pages/ScreenshotPreviewFairness";
 import { ScreenshotPreviewAuth, ScreenshotPreviewLanding } from "./pages/ScreenshotPreviewAuth";
+import { AdminDashboard } from "./components/AdminDashboard";
+import { ScreenshotPreviewLimbo } from "./pages/ScreenshotPreviewLimbo";
+import { ScreenshotPreviewTournament } from "./pages/ScreenshotPreviewTournament";
+import { ScreenshotPreviewAdmin } from "./pages/ScreenshotPreviewAdmin";
 import type { UserProfile } from "./lib/api";
 
-type GameTab = "crash" | "coinflip" | "limbo" | "leaderboard" | "tournament" | "fairness" | "profile";
+type GameTab = "crash" | "coinflip" | "limbo" | "leaderboard" | "tournament" | "fairness" | "profile" | "admin";
 
 function CasinoContent() {
   const {
@@ -201,6 +205,14 @@ function CasinoContent() {
           >
             👤 Profile
           </button>
+          {config?.adminWallet && walletAddress === config.adminWallet && (
+            <button
+              className={`nav-tab ${activeTab === "admin" ? "active" : ""}`}
+              onClick={() => setActiveTab("admin")}
+            >
+              ⚙️ Admin
+            </button>
+          )}
           <div
             className="live-indicator"
             style={{ marginLeft: "auto", alignSelf: "center" }}
@@ -274,6 +286,7 @@ function CasinoContent() {
               {activeTab === "profile" && profile && (
                 <ProfilePanel profile={profile} onUpdated={handleProfileUpdated} />
               )}
+              {activeTab === "admin" && <AdminDashboard />}
             </div>
 
             <aside className="sidebar-panels">
@@ -327,6 +340,9 @@ export default function App() {
       <Route path="/preview-fairness" element={<ScreenshotPreviewFairness />} />
       <Route path="/preview-auth" element={<ScreenshotPreviewAuth />} />
       <Route path="/preview-landing" element={<ScreenshotPreviewLanding />} />
+      <Route path="/preview-limbo" element={<ScreenshotPreviewLimbo />} />
+      <Route path="/preview-tournament" element={<ScreenshotPreviewTournament />} />
+      <Route path="/preview-admin" element={<ScreenshotPreviewAdmin />} />
       <Route
         path="/*"
         element={

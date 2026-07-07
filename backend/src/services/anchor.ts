@@ -211,6 +211,65 @@ export async function settleBetOnChain(
     .rpc();
 }
 
+export async function authorityCashoutOnChain(
+  roundId: number,
+  playerWallet: string,
+): Promise<string | null> {
+  const program = getProgram();
+  if (!program) return null;
+
+  const owner = new PublicKey(playerWallet);
+  const [casinoPda] = getCasinoPda();
+  const [roundPda] = getRoundPda(roundId);
+  const [betPda] = getBetPda(roundPda, owner);
+
+  return program.methods
+    .authorityCashout()
+    .accounts({
+      casino: casinoPda,
+      round: roundPda,
+      bet: betPda,
+      authority: program.provider.publicKey!,
+    })
+    .rpc();
+}
+
+export async function setPausedOnChain(paused: boolean): Promise<string | null> {
+  const program = getProgram();
+  if (!program) return null;
+
+  const [casinoPda] = getCasinoPda();
+
+  return program.methods
+    .setPaused(paused)
+    .accounts({
+      casino: casinoPda,
+      authority: program.provider.publicKey!,
+    })
+    .rpc();
+}
+
+export async function creditPlayerOnChain(
+  playerWallet: string,
+  amountLamports: number,
+): Promise<string | null> {
+  const program = getProgram();
+  if (!program) return null;
+
+  const owner = new PublicKey(playerWallet);
+  const [casinoPda] = getCasinoPda();
+  const [playerPda] = getPlayerPda(owner);
+
+  return program.methods
+    .creditPlayer(new BN(amountLamports))
+    .accounts({
+      casino: casinoPda,
+      player: playerPda,
+      authority: program.provider.publicKey!,
+    })
+    .rpc();
+}
+
 export function getPdaAddresses() {
   const [casinoPda, casinoBump] = getCasinoPda();
   const [vaultPda, vaultBump] = getVaultPda();

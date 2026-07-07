@@ -28,6 +28,7 @@ export const config = {
   minWithdrawSol: parseFloat(process.env.MIN_WITHDRAW_SOL ?? "0.01"),
   nodeEnv: process.env.NODE_ENV ?? "development",
   serveFrontend: process.env.SERVE_FRONTEND === "true",
+  adminWallet: process.env.ADMIN_WALLET ?? "",
 };
 
 export const LAMPORTS_PER_SOL = 1_000_000_000;

@@ -4,7 +4,7 @@ import { useCrashSubscription, useSocket } from "../hooks/useSocket";
 import { useCasino } from "../hooks/CasinoUserProvider";
 import { useToast } from "../components/ui/Toast";
 import { useSound } from "../hooks/useSound";
-import { formatSol } from "../lib/api";
+import { formatSol, confirmCrashBet } from "../lib/api";
 import { prepareTransaction, solscanTxUrl } from "../lib/utils";
 import {
   buildCashoutTransaction,
@@ -150,7 +150,7 @@ export function CrashGame({
     setLoading(true);
     try {
       const autoCashout =
-        autoCashoutEnabled && !onChain
+        autoCashoutEnabled
           ? parseFloat(autoCashoutValue)
           : undefined;
 
@@ -163,10 +163,18 @@ export function CrashGame({
           walletAddress,
           roundId,
           Math.floor(amount * LAMPORTS_PER_SOL),
+          autoCashout && autoCashout >= 1.01 ? autoCashout : undefined,
         );
         await prepareTransaction(walletAddress, tx);
         const { signature } = await signAndSendTx(tx);
         setOnChainBetActive(true);
+        await confirmCrashBet({
+          walletAddress,
+          roundId,
+          amountSol: amount,
+          autoCashout: autoCashout && autoCashout >= 1.01 ? autoCashout : undefined,
+          signature,
+        });
         await refresh();
         play("bet");
         toast(`Bet placed: ${amount} SOL`, "success", {

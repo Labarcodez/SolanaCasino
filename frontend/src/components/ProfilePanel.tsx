@@ -53,7 +53,11 @@ export function ProfilePanel({ profile, onUpdated, onClose }: ProfilePanelProps)
     setClaiming(true);
     try {
       const result = await claimRakeback();
-      onUpdated({ ...profile, balanceSol: result.balanceSol, rakebackPendingSol: 0 });
+      onUpdated({
+        ...profile,
+        balanceSol: result.balanceSol ?? profile.balanceSol,
+        rakebackPendingSol: 0,
+      });
       toast(`Claimed ${formatSol(result.claimedSol)} SOL rakeback`, "success");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Claim failed", "error");

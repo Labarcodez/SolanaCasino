@@ -61,6 +61,7 @@ export interface CasinoConfig {
   limboMaxTarget?: number;
   withdrawalsEnabled: boolean;
   socialLoginEnabled?: boolean;
+  adminWallet?: string;
 }
 
 export interface UserProfile {
@@ -417,11 +418,64 @@ export async function fetchAffiliateStats(): Promise<AffiliateStats> {
 
 export async function claimRakeback(): Promise<{
   claimedSol: number;
-  balanceSol: number;
+  balanceSol: number | null;
+  signature?: string;
+  onChain?: boolean;
 }> {
   const res = await apiFetch("/api/rakeback/claim", { method: "POST" });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? "Rakeback claim failed");
+  return data;
+}
+
+export async function confirmCrashBet(params: {
+  walletAddress: string;
+  roundId: number;
+  amountSol: number;
+  autoCashout?: number;
+  signature: string;
+}): Promise<{ betId: string; roundId: number; signature: string }> {
+  const res = await apiFetch("/api/crash/confirm", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to confirm crash bet");
+  return data;
+}
+
+export interface AdminDashboard {
+  casinoPaused: boolean;
+  onChainEnabled: boolean;
+  withdrawalsEnabled: boolean;
+  totalUsers: number;
+  totalBets: number;
+  handle24hSol: number;
+  grossRevenue24hSol: number;
+  pendingWithdrawals: Array<{
+    id: string;
+    walletAddress: string;
+    amountSol: number;
+    createdAt: string;
+  }>;
+  tournamentPrizePoolSol: number;
+  indexer: { enabled: boolean; lastSignature: string | null; indexedBets: number };
+  adminWallet: string;
+}
+
+export async function fetchAdminDashboard(): Promise<AdminDashboard> {
+  const res = await apiFetch("/api/admin/dashboard");
+  if (!res.ok) throw new Error("Failed to load admin dashboard");
+  return res.json();
+}
+
+export async function setCasinoPaused(paused: boolean): Promise<{ signature?: string }> {
+  const res = await apiFetch("/api/admin/pause", {
+    method: "POST",
+    body: JSON.stringify({ paused }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to update pause state");
   return data;
 }
 

@@ -158,6 +158,7 @@ export async function buildPlaceBetTransaction(
   walletAddress: string,
   roundId: number,
   amountLamports: number,
+  autoCashoutMultiplier?: number,
 ): Promise<Transaction> {
   const connection = getConnection();
   const program = createReadOnlyProgram(connection);
@@ -167,8 +168,13 @@ export async function buildPlaceBetTransaction(
   const [roundPda] = getRoundPda(roundId);
   const [betPda] = getBetPda(roundPda, owner);
 
+  const autoCashoutMilli =
+    autoCashoutMultiplier && autoCashoutMultiplier >= 1.01
+      ? Math.floor(autoCashoutMultiplier * 1000)
+      : 0;
+
   return program.methods
-    .placeBet(new BN(amountLamports))
+    .placeBet(new BN(amountLamports), new BN(autoCashoutMilli))
     .accounts({
       casino: casinoPda,
       player: playerPda,

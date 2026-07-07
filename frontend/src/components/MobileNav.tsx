@@ -1,4 +1,4 @@
-type GameTab = "crash" | "coinflip" | "limbo" | "leaderboard" | "tournament" | "fairness" | "profile";
+type GameTab = "crash" | "coinflip" | "limbo" | "leaderboard" | "tournament" | "fairness" | "profile" | "admin";
 
 interface MobileNavProps {
   activeTab: GameTab;

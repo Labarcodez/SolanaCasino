@@ -25,16 +25,16 @@ export function AutoCashoutControl({
             type="checkbox"
             checked={enabled}
             onChange={(e) => onEnabledChange(e.target.checked)}
-            disabled={disabled || onChain}
+            disabled={disabled}
           />
           <span>Auto cashout</span>
         </label>
         {onChain && (
-          <span className="auto-cashout-hint">Manual only on-chain</span>
+          <span className="auto-cashout-hint">Keeper executes on-chain</span>
         )}
       </div>
 
-      {enabled && !onChain && (
+      {enabled && (
         <>
           <div className="input-group" style={{ marginTop: 8 }}>
             <label>Target multiplier</label>

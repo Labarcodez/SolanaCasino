@@ -267,7 +267,11 @@ pub mod solcasino {
         Ok(())
     }
 
-    pub fn place_bet(ctx: Context<PlaceBet>, amount: u64) -> Result<()> {
+    pub fn place_bet(
+        ctx: Context<PlaceBet>,
+        amount: u64,
+        auto_cashout_multiplier_milli: u64,
+    ) -> Result<()> {
         require!(!ctx.accounts.casino.is_paused, CasinoError::CasinoPaused);
         validate_bet_amount(&ctx.accounts.casino, amount)?;
         require!(
@@ -278,6 +282,13 @@ pub mod solcasino {
             ctx.accounts.player.balance >= amount,
             CasinoError::InsufficientBalance
         );
+        if auto_cashout_multiplier_milli > 0 {
+            require!(
+                auto_cashout_multiplier_milli >= 1_010
+                    && auto_cashout_multiplier_milli <= 1_000_000,
+                CasinoError::InvalidMultiplier
+            );
+        }
 
         ctx.accounts.player.balance = ctx
             .accounts
@@ -302,6 +313,7 @@ pub mod solcasino {
         bet.round_id = ctx.accounts.round.id;
         bet.player = ctx.accounts.owner.key();
         bet.amount = amount;
+        bet.auto_cashout_multiplier_milli = auto_cashout_multiplier_milli;
         bet.cashed_out = false;
         bet.cashout_multiplier_milli = 0;
         bet.settled = false;
@@ -381,6 +393,63 @@ pub mod solcasino {
             ctx.accounts.round.id,
             crash_point_milli as f64 / 1000.0
         );
+        Ok(())
+    }
+
+    pub fn set_paused(ctx: Context<SetPaused>, paused: bool) -> Result<()> {
+        require!(
+            ctx.accounts.authority.key() == ctx.accounts.casino.authority,
+            CasinoError::Unauthorized
+        );
+        ctx.accounts.casino.is_paused = paused;
+        msg!("Casino paused: {}", paused);
+        Ok(())
+    }
+
+    pub fn authority_cashout(ctx: Context<AuthorityCashout>) -> Result<()> {
+        require!(
+            ctx.accounts.authority.key() == ctx.accounts.casino.authority,
+            CasinoError::Unauthorized
+        );
+        require!(
+            ctx.accounts.round.status == RoundStatus::Running as u8,
+            CasinoError::RoundNotRunning
+        );
+        require!(!ctx.accounts.bet.cashed_out, CasinoError::AlreadyCashedOut);
+        require!(!ctx.accounts.bet.settled, CasinoError::BetAlreadySettled);
+
+        let clock = Clock::get()?;
+        let elapsed_ms = (clock.unix_timestamp - ctx.accounts.round.running_since)
+            .max(0) as u64
+            * 1000;
+        let current_multiplier_milli = multiplier_at_elapsed(elapsed_ms);
+
+        ctx.accounts.bet.cashed_out = true;
+        ctx.accounts.bet.cashout_multiplier_milli = current_multiplier_milli;
+
+        msg!(
+            "Authority cashout at {}x for {}",
+            current_multiplier_milli as f64 / 1000.0,
+            ctx.accounts.bet.player
+        );
+        Ok(())
+    }
+
+    pub fn credit_player(ctx: Context<CreditPlayer>, amount: u64) -> Result<()> {
+        require!(
+            ctx.accounts.authority.key() == ctx.accounts.casino.authority,
+            CasinoError::Unauthorized
+        );
+        require!(amount > 0, CasinoError::InvalidAmount);
+
+        ctx.accounts.player.balance = ctx
+            .accounts
+            .player
+            .balance
+            .checked_add(amount)
+            .ok_or(CasinoError::MathOverflow)?;
+
+        msg!("Credited {} lamports to player", amount);
         Ok(())
     }
 
@@ -627,6 +696,49 @@ pub struct FinalizeRound<'info> {
 }
 
 #[derive(Accounts)]
+pub struct SetPaused<'info> {
+    #[account(
+        mut,
+        seeds = [b"casino"],
+        bump = casino.bump,
+        has_one = authority @ CasinoError::Unauthorized
+    )]
+    pub casino: Account<'info, Casino>,
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct AuthorityCashout<'info> {
+    #[account(seeds = [b"casino"], bump = casino.bump)]
+    pub casino: Account<'info, Casino>,
+    #[account(
+        seeds = [b"round", round.id.to_le_bytes().as_ref()],
+        bump = round.bump
+    )]
+    pub round: Account<'info, Round>,
+    #[account(
+        mut,
+        seeds = [b"bet", round.key().as_ref(), bet.player.as_ref()],
+        bump = bet.bump
+    )]
+    pub bet: Account<'info, Bet>,
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct CreditPlayer<'info> {
+    #[account(seeds = [b"casino"], bump = casino.bump)]
+    pub casino: Account<'info, Casino>,
+    #[account(
+        mut,
+        seeds = [b"player", player.owner.as_ref()],
+        bump = player.bump
+    )]
+    pub player: Account<'info, Player>,
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
 pub struct SettleBet<'info> {
     #[account(
         seeds = [b"round", round.id.to_le_bytes().as_ref()],
@@ -693,6 +805,7 @@ pub struct Bet {
     pub round_id: u64,
     pub player: Pubkey,
     pub amount: u64,
+    pub auto_cashout_multiplier_milli: u64,
     pub cashed_out: bool,
     pub cashout_multiplier_milli: u64,
     pub settled: bool,

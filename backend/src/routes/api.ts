@@ -27,6 +27,7 @@ import {
   fetchPlayerAccount,
   getPdaAddresses,
   isAnchorEnabled,
+  creditPlayerOnChain,
 } from "../services/anchor.js";
 import { getPublicProfile, updateDisplayName, upsertUserProfile, mapAuthProvider } from "../services/profile.js";
 import { createGamePrepare, revealGamePrepare, purgeExpiredPrepares } from "../services/gamePrepare.js";
@@ -34,6 +35,7 @@ import { applyReferralOnSignup, ensureReferralCode, getAffiliateStats } from "..
 import { claimRakeback, getPendingRakebackLamports, getVipTier } from "../services/vip.js";
 import { getTournamentLeaderboard } from "../services/tournament.js";
 import { placeLimboBet, LIMBO_MIN_TARGET, LIMBO_MAX_TARGET, recordBetWithRewards } from "../services/limbo.js";
+import { registerOnChainCrashBet } from "../services/crashKeeper.js";
 import {
   verifyCrashPoint,
   generateCoinflipResult,
@@ -103,6 +105,7 @@ apiRouter.get("/config", async (_req, res) => {
     limboMaxTarget: LIMBO_MAX_TARGET,
     withdrawalsEnabled: onChain || isWithdrawalEnabled(),
     socialLoginEnabled: Boolean(process.env.PHANTOM_APP_ID),
+    adminWallet: config.adminWallet || undefined,
     rpcEndpoints: getRpcEndpoints().map((url) =>
       url.includes("api-key") ? url.replace(/api-key=[^&]+/, "api-key=***") : url,
     ),
@@ -811,19 +814,110 @@ apiRouter.post(
   "/rakeback/claim",
   requireAuth,
   betLimiter,
-  (req: AuthenticatedRequest, res) => {
+  async (req: AuthenticatedRequest, res) => {
     try {
+      const walletAddress = req.walletAddress!;
+      const pending = getPendingRakebackLamports(walletAddress);
+
       if (isAnchorEnabled()) {
-        res.status(400).json({ error: "Rakeback claim available in custodial mode only" });
+        if (pending < solToLamports(0.001)) {
+          res.status(400).json({ error: "Minimum rakeback claim is 0.001 SOL" });
+          return;
+        }
+
+        const vip = getVipTier(walletAddress);
+        db.prepare(
+          "UPDATE users SET rakeback_pending_lamports = 0 WHERE wallet_address = ?",
+        ).run(walletAddress);
+
+        const signature = await creditPlayerOnChain(walletAddress, pending);
+        if (!signature) {
+          db.prepare(
+            "UPDATE users SET rakeback_pending_lamports = rakeback_pending_lamports + ? WHERE wallet_address = ?",
+          ).run(pending, walletAddress);
+          res.status(500).json({ error: "On-chain rakeback credit failed" });
+          return;
+        }
+
+        db.prepare(
+          `INSERT INTO rakeback_claims (id, wallet_address, amount_lamports, vip_tier)
+           VALUES (?, ?, ?, ?)`,
+        ).run(uuidv4(), walletAddress, pending, vip.tier);
+
+        res.json({
+          claimedSol: lamportsToSol(pending),
+          balanceSol: null,
+          signature,
+          onChain: true,
+        });
         return;
       }
-      const result = claimRakeback(req.walletAddress!);
+
+      const result = claimRakeback(walletAddress);
       res.json(result);
     } catch (err) {
       res.status(400).json({
         error: err instanceof Error ? err.message : "Claim failed",
       });
     }
+  },
+);
+
+apiRouter.post(
+  "/crash/confirm",
+  requireAuth,
+  betLimiter,
+  (req: AuthenticatedRequest, res) => {
+    const {
+      walletAddress,
+      roundId,
+      amountSol,
+      autoCashout,
+      signature,
+    } = req.body as {
+      walletAddress?: string;
+      roundId?: number;
+      amountSol?: number;
+      autoCashout?: number;
+      signature?: string;
+    };
+
+    if (!walletAddress || walletAddress !== req.walletAddress) {
+      res.status(403).json({ error: "Unauthorized bet" });
+      return;
+    }
+
+    if (!roundId || !amountSol || !signature) {
+      res.status(400).json({ error: "roundId, amountSol, and signature required" });
+      return;
+    }
+
+    registerOnChainCrashBet({
+      roundId,
+      walletAddress,
+      autoCashoutMultiplier: autoCashout,
+    });
+
+    const amountLamports = solToLamports(amountSol);
+    const betId = uuidv4();
+
+    recordBetWithRewards({
+      id: betId,
+      walletAddress,
+      game: "crash",
+      amountLamports,
+      payoutLamports: 0,
+      multiplier: 0,
+      result: "pending",
+      metadata: {
+        roundId,
+        autoCashout,
+        signature,
+        onChain: true,
+      },
+    });
+
+    res.json({ betId, roundId, signature });
   },
 );
 
