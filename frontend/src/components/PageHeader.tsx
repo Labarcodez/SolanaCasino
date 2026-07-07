@@ -1,5 +1,3 @@
-import { BRAND } from "../lib/brand";
-
 export function PageHeader({
   title,
   subtitle,
@@ -11,13 +9,11 @@ export function PageHeader({
 }) {
   return (
     <div className="page-header">
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <h2 className="card-title" style={{ margin: 0 }}>{title}</h2>
+      <div className="page-header-row">
+        <h2 className="card-title">{title}</h2>
         {badge}
       </div>
       {subtitle && <p>{subtitle}</p>}
     </div>
   );
 }
-
-export { BRAND };

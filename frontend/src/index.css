@@ -15,10 +15,10 @@
   --text-primary: #f0f2f8;
   --text-secondary: #8b92a8;
   --text-muted: #5c6378;
-  --accent: #9945ff;
-  --accent-glow: rgba(153, 69, 255, 0.3);
-  --solana-green: #14f195;
-  --solana-green-glow: rgba(20, 241, 149, 0.25);
+  --accent: #8b5cf6;
+  --accent-glow: rgba(139, 92, 246, 0.3);
+  --solana-green: #00ffa3;
+  --solana-green-glow: rgba(0, 255, 163, 0.25);
   --danger: #ff4757;
   --danger-glow: rgba(255, 71, 87, 0.25);
   --warning: #ffa502;
@@ -307,8 +307,8 @@ a {
   text-align: center;
   padding: 48px 24px;
   background:
-    radial-gradient(ellipse at 50% 0%, rgba(153, 69, 255, 0.12) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 80%, rgba(20, 241, 149, 0.08) 0%, transparent 50%);
+    radial-gradient(ellipse at 50% 0%, rgba(139, 92, 246, 0.12) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 80%, rgba(0, 255, 163, 0.08) 0%, transparent 50%);
 }
 
 .landing h1 {
@@ -449,11 +449,11 @@ a {
 }
 
 .phase-badge.betting {
-  background: rgba(153, 69, 255, 0.15);
+  background: rgba(139, 92, 246, 0.15);
   color: var(--accent);
 }
 .phase-badge.running {
-  background: rgba(20, 241, 149, 0.15);
+  background: rgba(0, 255, 163, 0.15);
   color: var(--solana-green);
 }
 .phase-badge.crashed {
@@ -517,7 +517,7 @@ a {
 
 .choice-btn.selected {
   border-color: var(--accent);
-  background: rgba(153, 69, 255, 0.15);
+  background: rgba(139, 92, 246, 0.15);
 }
 
 .choice-btn:hover {
@@ -777,7 +777,7 @@ a {
   inset: -1px;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(135deg, rgba(153, 69, 255, 0.3), transparent 50%, rgba(20, 241, 149, 0.2));
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), transparent 50%, rgba(0, 255, 163, 0.2));
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
@@ -833,8 +833,8 @@ input:focus-visible,
   letter-spacing: 0.05em;
   padding: 4px 10px;
   border-radius: 100px;
-  background: rgba(20, 241, 149, 0.1);
-  border: 1px solid rgba(20, 241, 149, 0.25);
+  background: rgba(0, 255, 163, 0.1);
+  border: 1px solid rgba(0, 255, 163, 0.25);
   color: var(--solana-green);
 }
 
@@ -870,7 +870,7 @@ input:focus-visible,
 
 .btn-secondary:hover:not(:disabled) {
   border-color: var(--accent);
-  background: rgba(153, 69, 255, 0.08);
+  background: rgba(139, 92, 246, 0.08);
 }
 
 /* Crash chart */
@@ -990,7 +990,7 @@ input:focus-visible,
 
 .toast-success .toast-icon { background: rgba(46, 213, 115, 0.2); color: var(--success); }
 .toast-error .toast-icon { background: rgba(255, 71, 87, 0.2); color: var(--danger); }
-.toast-info .toast-icon { background: rgba(153, 69, 255, 0.2); color: var(--accent); }
+.toast-info .toast-icon { background: rgba(139, 92, 246, 0.2); color: var(--accent); }
 
 .toast-body p {
   font-size: 0.875rem;
@@ -1047,7 +1047,7 @@ input:focus-visible,
 
 .mobile-nav-item.active {
   color: var(--accent);
-  background: rgba(153, 69, 255, 0.1);
+  background: rgba(139, 92, 246, 0.1);
 }
 
 .mobile-nav-icon {
@@ -1068,8 +1068,8 @@ input:focus-visible,
   gap: 8px;
   padding: 8px 16px;
   border-radius: 100px;
-  background: rgba(153, 69, 255, 0.1);
-  border: 1px solid rgba(153, 69, 255, 0.25);
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.25);
   font-size: 0.8rem;
   font-weight: 500;
   color: var(--accent);
@@ -1109,7 +1109,7 @@ input:focus-visible,
 
 .feature-card:hover {
   transform: translateY(-4px);
-  border-color: rgba(153, 69, 255, 0.3);
+  border-color: rgba(139, 92, 246, 0.3);
 }
 
 .feature-icon {

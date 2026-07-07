@@ -9,9 +9,11 @@ import { MobileNav } from "./components/MobileNav";
 import { useCasino, CasinoUserProvider } from "./hooks/CasinoUserProvider";
 import { SocketProvider, useSocket } from "./hooks/useSocket";
 import { TreasuryBar } from "./components/TreasuryBar";
+import { LiveActivityMarquee } from "./components/LiveActivityMarquee";
 import { SiteFooter } from "./components/SiteFooter";
 import { BRAND } from "./lib/brand";
 import { Logo } from "./components/Logo";
+import { GameIcon } from "./components/icons/GameIcons";
 import { ProfilePanel } from "./components/ProfilePanel";
 import { PauseBanner } from "./components/PauseBanner";
 import { ConfigErrorScreen } from "./components/ConfigErrorScreen";
@@ -129,6 +131,7 @@ function CasinoContent() {
       <div className="app">
         <AnimatedBackground />
         <Header connected={false} onChainEnabled={onChainEnabled} />
+        <LiveActivityMarquee />
         <Landing
           socialLoginEnabled={config?.socialLoginEnabled}
           onChainEnabled={onChainEnabled}
@@ -212,6 +215,7 @@ function CasinoContent() {
             role="dialog"
             aria-modal="true"
             aria-label="Profile"
+            className="modal card profile-modal"
             onClick={(e) => e.stopPropagation()}
           >
             <ProfilePanel
@@ -224,6 +228,7 @@ function CasinoContent() {
       )}
 
       <PauseBanner paused={config?.casinoPaused ?? false} />
+      <LiveActivityMarquee />
       <TreasuryBar />
 
       <div className="container">
@@ -232,50 +237,58 @@ function CasinoContent() {
             className={`nav-tab ${activeTab === "crash" ? "active" : ""}`}
             onClick={() => setActiveTab("crash")}
           >
-            🚀 Crash
+            <GameIcon id="crash" size={16} className="nav-tab-icon" />
+            Crash
           </button>
           <button
             className={`nav-tab ${activeTab === "coinflip" ? "active" : ""}`}
             onClick={() => setActiveTab("coinflip")}
           >
-            🪙 Coinflip
+            <GameIcon id="coinflip" size={16} className="nav-tab-icon" />
+            Coinflip
           </button>
           <button
             className={`nav-tab ${activeTab === "limbo" ? "active" : ""}`}
             onClick={() => setActiveTab("limbo")}
           >
-            🎯 Limbo
+            <GameIcon id="limbo" size={16} className="nav-tab-icon" />
+            Limbo
           </button>
           <button
             className={`nav-tab ${activeTab === "leaderboard" ? "active" : ""}`}
             onClick={() => setActiveTab("leaderboard")}
           >
-            🏆 Leaderboard
+            <GameIcon id="leaderboard" size={16} className="nav-tab-icon" />
+            Leaderboard
           </button>
           <button
             className={`nav-tab ${activeTab === "tournament" ? "active" : ""}`}
             onClick={() => setActiveTab("tournament")}
           >
-            ⚔️ Tournament
+            <GameIcon id="tournament" size={16} className="nav-tab-icon" />
+            Tournament
           </button>
           <button
             className={`nav-tab ${activeTab === "fairness" ? "active" : ""}`}
             onClick={() => setActiveTab("fairness")}
           >
-            🔐 Fairness
+            <GameIcon id="fairness" size={16} className="nav-tab-icon" />
+            Fairness
           </button>
           <button
             className={`nav-tab ${activeTab === "profile" ? "active" : ""}`}
             onClick={() => setActiveTab("profile")}
           >
-            👤 Profile
+            <GameIcon id="profile" size={16} className="nav-tab-icon" />
+            Profile
           </button>
           {config?.adminWallet && walletAddress === config.adminWallet && (
             <button
               className={`nav-tab ${activeTab === "admin" ? "active" : ""}`}
               onClick={() => setActiveTab("admin")}
             >
-              ⚙️ Admin
+              <GameIcon id="admin" size={16} className="nav-tab-icon" />
+              Admin
             </button>
           )}
           <div

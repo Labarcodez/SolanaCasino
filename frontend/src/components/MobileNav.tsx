@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { GameIcon, type GameIconId } from "./icons/GameIcons";
 
 type GameTab = "crash" | "coinflip" | "limbo" | "leaderboard" | "tournament" | "fairness" | "profile" | "admin";
 
@@ -8,18 +9,18 @@ interface MobileNavProps {
   showAdmin?: boolean;
 }
 
-const PRIMARY_TABS: { id: GameTab; label: string; icon: string }[] = [
-  { id: "crash", label: "Crash", icon: "🚀" },
-  { id: "limbo", label: "Limbo", icon: "🎯" },
-  { id: "coinflip", label: "Flip", icon: "🪙" },
-  { id: "tournament", label: "Race", icon: "⚔️" },
-  { id: "profile", label: "Profile", icon: "👤" },
+const PRIMARY_TABS: { id: GameTab; label: string; icon: GameIconId }[] = [
+  { id: "crash", label: "Crash", icon: "crash" },
+  { id: "limbo", label: "Limbo", icon: "limbo" },
+  { id: "coinflip", label: "Flip", icon: "coinflip" },
+  { id: "tournament", label: "Race", icon: "tournament" },
+  { id: "profile", label: "Profile", icon: "profile" },
 ];
 
-const MORE_TABS: { id: GameTab; label: string; icon: string; adminOnly?: boolean }[] = [
-  { id: "leaderboard", label: "Leaderboard", icon: "🏆" },
-  { id: "fairness", label: "Fairness", icon: "🔐" },
-  { id: "admin", label: "Admin", icon: "⚙️", adminOnly: true },
+const MORE_TABS: { id: GameTab; label: string; icon: GameIconId; adminOnly?: boolean }[] = [
+  { id: "leaderboard", label: "Leaderboard", icon: "leaderboard" },
+  { id: "fairness", label: "Fairness", icon: "fairness" },
+  { id: "admin", label: "Admin", icon: "admin", adminOnly: true },
 ];
 
 export function MobileNav({ activeTab, onTabChange, showAdmin }: MobileNavProps) {
@@ -50,7 +51,7 @@ export function MobileNav({ activeTab, onTabChange, showAdmin }: MobileNavProps)
                 setMoreOpen(false);
               }}
             >
-              <span aria-hidden="true">{tab.icon}</span>
+              <GameIcon id={tab.icon} size={18} />
               {tab.label}
             </button>
           ))}
@@ -66,7 +67,9 @@ export function MobileNav({ activeTab, onTabChange, showAdmin }: MobileNavProps)
             onClick={() => onTabChange(tab.id)}
             aria-current={activeTab === tab.id ? "page" : undefined}
           >
-            <span className="mobile-nav-icon" aria-hidden="true">{tab.icon}</span>
+            <span className="mobile-nav-icon" aria-hidden="true">
+              <GameIcon id={tab.icon} size={20} />
+            </span>
             <span className="mobile-nav-label">{tab.label}</span>
           </button>
         ))}

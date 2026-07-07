@@ -1014,6 +1014,36 @@ apiRouter.get("/leaderboard", (_req, res) => {
   );
 });
 
+apiRouter.get("/recent-wins", (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT b.wallet_address, b.game, b.payout_lamports, b.amount_lamports, b.multiplier, u.display_name
+       FROM bets b
+       LEFT JOIN users u ON u.wallet_address = b.wallet_address
+       WHERE b.result = 'win' AND b.payout_lamports > b.amount_lamports
+       ORDER BY b.created_at DESC LIMIT 24`,
+    )
+    .all() as Array<{
+      wallet_address: string;
+      game: string;
+      payout_lamports: number;
+      amount_lamports: number;
+      multiplier: number | null;
+      display_name: string | null;
+    }>;
+
+  res.json(
+    rows.map((r) => ({
+      walletAddress: r.wallet_address,
+      displayName: r.display_name ?? undefined,
+      game: r.game,
+      payoutSol: lamportsToSol(r.payout_lamports),
+      amountSol: lamportsToSol(r.amount_lamports),
+      multiplier: r.multiplier ?? undefined,
+    })),
+  );
+});
+
 apiRouter.get("/casino/stats", async (_req, res) => {
   const casinoBalance = await getCasinoWalletBalance();
   const totalUsers = db

@@ -304,6 +304,21 @@ export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
   return res.json();
 }
 
+export interface RecentWin {
+  walletAddress: string;
+  displayName?: string;
+  game: string;
+  payoutSol: number;
+  amountSol: number;
+  multiplier?: number;
+}
+
+export async function fetchRecentWins(): Promise<RecentWin[]> {
+  const res = await fetch(`${API_URL}/api/recent-wins`);
+  if (!res.ok) throw new Error("Failed to load recent wins");
+  return res.json();
+}
+
 export async function verifyCrashFairness(params: {
   serverSeed: string;
   serverSeedHash: string;

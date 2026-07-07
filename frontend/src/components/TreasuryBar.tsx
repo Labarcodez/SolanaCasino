@@ -28,22 +28,22 @@ export function TreasuryBar() {
       <div className="container treasury-bar-inner">
         {stats ? (
           <>
-            <span className="treasury-stat">
+            <span className="treasury-stat-pill treasury-stat-pill--accent">
               <strong>{stats.handle24hSol.toFixed(2)}</strong> SOL 24h volume
             </span>
-            <span className="treasury-divider">·</span>
-            <span className="treasury-stat">
-              <strong>{stats.tournamentPrizePoolSol.toFixed(3)}</strong> SOL tournament pool
+            <span className="treasury-stat-pill treasury-stat-pill--violet">
+              <strong>{stats.tournamentPrizePoolSol.toFixed(3)}</strong> tournament pool
             </span>
-            <span className="treasury-divider">·</span>
-            <span className="treasury-stat">
+            <span className="treasury-stat-pill">
               <strong>{stats.totalUsers}</strong> players
             </span>
-            <span className="treasury-divider">·</span>
-            <span className="treasury-stat treasury-brand">{BRAND.name} · Provably fair</span>
+            <span className="treasury-stat-pill">
+              <strong>{stats.totalBets.toLocaleString()}</strong> total bets
+            </span>
+            <span className="treasury-stat-pill treasury-brand">{BRAND.shortName} · Provably fair</span>
           </>
         ) : (
-          <span className="treasury-stat">Loading live stats...</span>
+          <span className="treasury-stat-pill">Loading live stats...</span>
         )}
       </div>
     </div>

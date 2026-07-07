@@ -2,37 +2,42 @@ import { motion } from "framer-motion";
 import { ConnectButton } from "@phantom/react-sdk";
 import { PROGRAM_ID } from "../lib/api";
 import { shortenAddress, solscanAccountUrl } from "../lib/utils";
-import { BRAND } from "../lib/brand";
+import { BRAND, GAMES, TRUST_BADGES } from "../lib/brand";
+import { CrashIcon, CoinflipIcon, LimboIcon, FairnessIcon } from "./icons/GameIcons";
 
 interface LandingProps {
   socialLoginEnabled?: boolean;
   onChainEnabled?: boolean;
 }
 
+const FEATURE_ICONS = {
+  crash: CrashIcon,
+  limbo: LimboIcon,
+  coinflip: CoinflipIcon,
+  shield: FairnessIcon,
+} as const;
+
+const ACCENT_CLASS: Record<string, string> = {
+  green: "feature-card--green",
+  violet: "feature-card--violet",
+  gold: "feature-card--gold",
+  shield: "feature-card--shield",
+};
+
 const features = [
+  ...GAMES.map((g) => ({
+    icon: g.id as keyof typeof FEATURE_ICONS,
+    title: g.name,
+    desc: g.desc,
+    accent: ACCENT_CLASS[g.accent] ?? "feature-card--violet",
+    rtp: `${g.rtp} RTP`,
+  })),
   {
-    icon: "🚀",
-    title: "Crash",
-    desc: "Ride the multiplier curve. Cash out before the bust. 95% RTP with on-chain settlement.",
-    color: "var(--solana-green)",
-  },
-  {
-    icon: "🎯",
-    title: "Limbo",
-    desc: "Set your target multiplier and roll. 98% RTP grinder game with instant results.",
-    color: "var(--accent-bright)",
-  },
-  {
-    icon: "🪙",
-    title: "Coinflip",
-    desc: "Instant 50/50 flips with commit-reveal seeds. Double your SOL in one click.",
-    color: "var(--warning)",
-  },
-  {
-    icon: "🔐",
+    icon: "shield" as const,
     title: "Provably Fair",
     desc: "Every outcome verifiable on-chain. Cryptographic seeds — no trust required.",
-    color: "var(--solana-green)",
+    accent: "feature-card--shield",
+    rtp: "Verifiable",
   },
 ];
 
@@ -44,6 +49,8 @@ const steps = [
 ];
 
 export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
+  const taglineParts = BRAND.tagline.split(".");
+
   return (
     <div className="landing">
       <motion.div
@@ -64,9 +71,9 @@ export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
         </div>
 
         <h1>
-          {BRAND.tagline.split(".")[0]}.
+          {taglineParts[0]}.
           <br />
-          <span>{BRAND.tagline.split(".")[1]?.trim() || "Win on Solana."}</span>
+          <span>{taglineParts[1]?.trim() || "Win on Solana."}</span>
         </h1>
         <p>{BRAND.description}</p>
 
@@ -90,6 +97,15 @@ export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
             Set <code>VITE_PHANTOM_APP_ID</code> for Google & Apple login
           </p>
         )}
+
+        <div className="landing-trust-strip">
+          {TRUST_BADGES.map((b) => (
+            <span key={b.label} className="trust-badge">
+              <span className="trust-badge-dot" />
+              {b.label}
+            </span>
+          ))}
+        </div>
       </motion.div>
 
       <motion.div
@@ -113,13 +129,19 @@ export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.15 }}
       >
-        {features.map((f) => (
-          <div key={f.title} className="feature-card card-glow">
-            <div className="feature-icon">{f.icon}</div>
-            <h3>{f.title}</h3>
-            <p>{f.desc}</p>
-          </div>
-        ))}
+        {features.map((f) => {
+          const Icon = FEATURE_ICONS[f.icon];
+          return (
+            <div key={f.title} className={`feature-card card-glow ${f.accent}`}>
+              <div className="feature-icon-wrap">
+                <Icon size={22} />
+              </div>
+              <h3>{f.title}</h3>
+              <p>{f.desc}</p>
+              <span className="feature-rtp">{f.rtp}</span>
+            </div>
+          );
+        })}
       </motion.div>
 
       <motion.div
@@ -131,6 +153,10 @@ export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
         <div className="landing-stat">
           <div className="landing-stat-value">{BRAND.rtp}</div>
           <div className="landing-stat-label">Crash RTP</div>
+        </div>
+        <div className="landing-stat">
+          <div className="landing-stat-value">98%</div>
+          <div className="landing-stat-label">Limbo RTP</div>
         </div>
         <div className="landing-stat">
           <div className="landing-stat-value">&lt;1s</div>

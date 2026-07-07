@@ -66,11 +66,11 @@ export function CrashChart({ multiplier, phase, crashPoint }: CrashChartProps) {
         if (pts.length > 1) {
           const gradient = ctx.createLinearGradient(0, 0, w, 0);
           if (phase === "crashed") {
-            gradient.addColorStop(0, "rgba(255, 71, 87, 0.8)");
-            gradient.addColorStop(1, "rgba(255, 71, 87, 0.2)");
+            gradient.addColorStop(0, "rgba(255, 59, 92, 0.85)");
+            gradient.addColorStop(1, "rgba(255, 59, 92, 0.2)");
           } else {
-            gradient.addColorStop(0, "rgba(20, 241, 149, 0.9)");
-            gradient.addColorStop(1, "rgba(153, 69, 255, 0.4)");
+            gradient.addColorStop(0, "rgba(0, 255, 163, 0.9)");
+            gradient.addColorStop(1, "rgba(139, 92, 246, 0.45)");
           }
 
           ctx.beginPath();
@@ -85,8 +85,8 @@ export function CrashChart({ multiplier, phase, crashPoint }: CrashChartProps) {
           ctx.lineCap = "round";
           ctx.shadowColor =
             phase === "crashed"
-              ? "rgba(255, 71, 87, 0.6)"
-              : "rgba(20, 241, 149, 0.5)";
+              ? "rgba(255, 59, 92, 0.6)"
+              : "rgba(0, 255, 163, 0.5)";
           ctx.shadowBlur = 12;
           ctx.stroke();
           ctx.shadowBlur = 0;
@@ -100,8 +100,8 @@ export function CrashChart({ multiplier, phase, crashPoint }: CrashChartProps) {
           fillGrad.addColorStop(
             0,
             phase === "crashed"
-              ? "rgba(255, 71, 87, 0.15)"
-              : "rgba(20, 241, 149, 0.12)",
+              ? "rgba(255, 59, 92, 0.15)"
+              : "rgba(0, 255, 163, 0.12)",
           );
           fillGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
           ctx.fillStyle = fillGrad;
