@@ -9,6 +9,7 @@ export function FairnessPanel() {
   const [roundId, setRoundId] = useState("");
   const [crashPoint, setCrashPoint] = useState("");
   const [result, setResult] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
 
   const fillFromLastRound = () => {
     if (!crashState?.serverSeed) return;
@@ -20,6 +21,7 @@ export function FairnessPanel() {
 
   const handleVerify = async () => {
     setResult(null);
+    setVerifying(true);
     try {
       const res = await verifyCrashFairness({
         serverSeed,
@@ -29,66 +31,102 @@ export function FairnessPanel() {
       });
       setResult(
         res.valid
-          ? "✅ Verified — crash point is provably fair"
-          : "❌ Verification failed — seeds do not match crash point",
+          ? "Verified — crash point is provably fair"
+          : "Verification failed — seeds do not match crash point",
       );
     } catch {
-      setResult("❌ Verification error");
+      setResult("Verification error — check your inputs");
+    } finally {
+      setVerifying(false);
     }
   };
+
+  const verified = result?.startsWith("Verified");
 
   return (
     <div className="card">
       <h3 className="card-title">🔐 Provably Fair Verification</h3>
-      <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", marginBottom: 20 }}>
-        Every crash round publishes a server seed hash before betting. After the
-        round crashes, the server seed is revealed. You can verify the outcome was
-        predetermined and fair.
+      <p className="panel-subtitle">
+        Every crash round publishes a server seed hash before betting. After
+        the crash, the seed is revealed so you can verify the outcome was
+        predetermined.
       </p>
 
       {crashState?.serverSeed && (
-        <button className="btn btn-outline btn-sm" onClick={fillFromLastRound} style={{ marginBottom: 16 }}>
+        <button
+          type="button"
+          className="btn btn-outline btn-sm"
+          onClick={fillFromLastRound}
+          style={{ marginBottom: 16 }}
+        >
           Fill from last crashed round
         </button>
       )}
 
       <div className="bet-controls">
         <div className="input-group">
-          <label>Round ID</label>
-          <input className="input" value={roundId} onChange={(e) => setRoundId(e.target.value)} />
+          <label htmlFor="fairness-round-id">Round ID</label>
+          <input
+            id="fairness-round-id"
+            className="input"
+            value={roundId}
+            onChange={(e) => setRoundId(e.target.value)}
+          />
         </div>
         <div className="input-group">
-          <label>Server Seed Hash (published before round)</label>
-          <input className="input" value={serverSeedHash} onChange={(e) => setServerSeedHash(e.target.value)} />
+          <label htmlFor="fairness-hash">Server Seed Hash (pre-round)</label>
+          <input
+            id="fairness-hash"
+            className="input"
+            value={serverSeedHash}
+            onChange={(e) => setServerSeedHash(e.target.value)}
+          />
         </div>
         <div className="input-group">
-          <label>Server Seed (revealed after crash)</label>
-          <input className="input" value={serverSeed} onChange={(e) => setServerSeed(e.target.value)} />
+          <label htmlFor="fairness-seed">Server Seed (post-crash)</label>
+          <input
+            id="fairness-seed"
+            className="input"
+            value={serverSeed}
+            onChange={(e) => setServerSeed(e.target.value)}
+          />
         </div>
         <div className="input-group">
-          <label>Crash Point</label>
-          <input className="input" type="number" step="0.01" value={crashPoint} onChange={(e) => setCrashPoint(e.target.value)} />
+          <label htmlFor="fairness-crash">Crash Point</label>
+          <input
+            id="fairness-crash"
+            className="input"
+            type="number"
+            step="0.01"
+            value={crashPoint}
+            onChange={(e) => setCrashPoint(e.target.value)}
+          />
         </div>
 
-        <button className="btn btn-primary" onClick={handleVerify}>
-          Verify Round
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={handleVerify}
+          disabled={verifying}
+        >
+          {verifying ? "Verifying..." : "Verify Round"}
         </button>
 
         {result && (
-          <div className={`alert ${result.startsWith("✅") ? "alert-success" : "alert-error"}`}>
+          <div
+            className={`alert ${verified ? "alert-success" : "alert-error"}`}
+            role="status"
+          >
+            {verified ? "✅ " : "❌ "}
             {result}
           </div>
         )}
       </div>
 
       {crashState && (
-        <div style={{ marginTop: 24, padding: 16, background: "var(--bg-primary)", borderRadius: 8 }}>
-          <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: 8 }}>
-            Current round hash (betting/running):
-          </p>
-          <code style={{ fontSize: "0.75rem", wordBreak: "break-all" }}>
-            {crashState.serverSeedHash}
-          </code>
+        <div className="fairness-live-box">
+          <p className="fairness-live-label">Current round hash</p>
+          <div className="fairness-seed-box">{crashState.serverSeedHash}</div>
         </div>
       )}
     </div>

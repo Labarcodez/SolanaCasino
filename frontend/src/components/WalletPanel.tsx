@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { formatSol } from "../lib/api";
+import { useToast } from "./ui/Toast";
 
 interface WalletPanelProps {
   balanceSol: number;
@@ -7,9 +8,14 @@ interface WalletPanelProps {
   minBetSol: number;
   minWithdrawSol: number;
   withdrawalsEnabled: boolean;
+  onChainEnabled?: boolean;
   loading: boolean;
-  onDeposit: (amount: number) => Promise<{ amountSol: number }>;
-  onWithdraw: (amount: number) => Promise<{ signature?: string; queued?: boolean; message?: string }>;
+  onDeposit: (amount: number) => Promise<{ amountSol: number; signature?: string }>;
+  onWithdraw: (amount: number) => Promise<{
+    signature?: string;
+    queued?: boolean;
+    message?: string;
+  }>;
   error: string | null;
 }
 
@@ -19,63 +25,69 @@ export function WalletPanel({
   minBetSol,
   minWithdrawSol,
   withdrawalsEnabled,
+  onChainEnabled,
   loading,
   onDeposit,
   onWithdraw,
   error,
 }: WalletPanelProps) {
+  const { toast } = useToast();
   const [amount, setAmount] = useState("0.1");
   const [mode, setMode] = useState<"deposit" | "withdraw">("deposit");
-  const [message, setMessage] = useState<string | null>(null);
 
   const handleAction = async () => {
     const value = parseFloat(amount);
     if (isNaN(value) || value <= 0) return;
 
-    setMessage(null);
     try {
       if (mode === "deposit") {
         const result = await onDeposit(value);
-        setMessage(`Deposited ${formatSol(result.amountSol)} SOL successfully!`);
+        toast(`Deposited ${formatSol(result.amountSol)} SOL`, "success", result.signature
+          ? { label: "View tx", href: `https://solscan.io/tx/${result.signature}?cluster=devnet` }
+          : undefined);
       } else {
         const result = await onWithdraw(value);
-        setMessage(
-          result.queued
-            ? result.message ?? "Withdrawal queued for processing"
-            : `Withdrawn ${value} SOL! Tx: ${result.signature?.slice(0, 8)}...`,
-        );
+        if (result.queued) {
+          toast(result.message ?? "Withdrawal queued", "info");
+        } else {
+          toast(`Withdrew ${value} SOL`, "success", result.signature
+            ? { label: "View tx", href: `https://solscan.io/tx/${result.signature}?cluster=devnet` }
+            : undefined);
+        }
       }
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Transaction failed");
+      toast(err instanceof Error ? err.message : "Transaction failed", "error");
     }
   };
 
   return (
     <div className="card wallet-panel">
-      <h3 className="card-title">💰 Wallet</h3>
+      <h3 className="card-title">Wallet</h3>
 
       <div className="wallet-stats">
         <div className="stat-box">
-          <div className="label">Casino Balance</div>
+          <div className="label">Casino</div>
           <div className="value" style={{ color: "var(--solana-green)" }}>
-            {formatSol(balanceSol)} SOL
+            {formatSol(balanceSol)}
           </div>
         </div>
         <div className="stat-box">
-          <div className="label">On-Chain</div>
-          <div className="value">{formatSol(onChainBalanceSol)} SOL</div>
+          <div className="label">Wallet SOL</div>
+          <div className="value">{formatSol(onChainBalanceSol)}</div>
         </div>
       </div>
 
       <div className="actions">
-        <div style={{ display: "flex", gap: 8 }}>
+        <div className="wallet-mode-toggle">
           <button
+            type="button"
             className={`btn btn-sm ${mode === "deposit" ? "btn-primary" : "btn-outline"}`}
             onClick={() => setMode("deposit")}
           >
             Deposit
           </button>
           <button
+            type="button"
             className={`btn btn-sm ${mode === "withdraw" ? "btn-primary" : "btn-outline"}`}
             onClick={() => setMode("withdraw")}
           >
@@ -99,6 +111,7 @@ export function WalletPanel({
           {["0.01", "0.05", "0.1", "0.5", "1"].map((preset) => (
             <button
               key={preset}
+              type="button"
               className="preset-btn"
               onClick={() => setAmount(preset)}
             >
@@ -108,39 +121,29 @@ export function WalletPanel({
         </div>
 
         <button
-          className={`btn ${mode === "deposit" ? "btn-success" : "btn-primary"} btn-sm`}
+          type="button"
+          className={`btn ${mode === "deposit" ? "btn-success" : "btn-secondary"}`}
           onClick={handleAction}
           disabled={loading}
         >
           {loading
-            ? "Processing..."
+            ? "Confirm in wallet..."
             : mode === "deposit"
               ? "Deposit SOL"
               : "Withdraw SOL"}
         </button>
 
-        {mode === "deposit" && (
-          <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-            You'll sign a real SOL transfer to the casino wallet on Solana
-            mainnet.
-          </p>
-        )}
+        <p className="wallet-hint">
+          {onChainEnabled
+            ? "On-chain mode: funds go to the vault PDA via Anchor program."
+            : "You'll sign a SOL transfer to the casino wallet."}
+        </p>
 
         {!withdrawalsEnabled && mode === "withdraw" && (
-          <p style={{ fontSize: "0.75rem", color: "var(--warning)" }}>
-            Instant withdrawals queue until the casino wallet key is configured.
-            Your balance will be deducted and processed manually.
-          </p>
+          <p className="wallet-hint warning">Withdrawals queue until authority key is configured.</p>
         )}
 
         {error && <div className="alert alert-error">{error}</div>}
-        {message && (
-          <div
-            className={`alert ${message.includes("success") || message.includes("Deposited") || message.includes("Withdrawn") ? "alert-success" : "alert-error"}`}
-          >
-            {message}
-          </div>
-        )}
       </div>
     </div>
   );

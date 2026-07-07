@@ -1,14 +1,16 @@
 import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { usePhantom } from "@phantom/react-sdk";
 
 export default function AuthCallback() {
   const { isConnected } = usePhantom();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (isConnected) {
-      window.location.href = "/";
+      navigate("/", { replace: true });
     }
-  }, [isConnected]);
+  }, [isConnected, navigate]);
 
   return (
     <div

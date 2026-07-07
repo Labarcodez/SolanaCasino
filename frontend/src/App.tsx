@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Routes, Route } from "react-router-dom";
 import { Header } from "./components/Header";
 import { Landing } from "./components/Landing";
 import { CrashGame } from "./components/CrashGame";
@@ -7,6 +8,8 @@ import { WalletPanel } from "./components/WalletPanel";
 import { Leaderboard } from "./components/Leaderboard";
 import { BetHistoryPanel } from "./components/BetHistoryPanel";
 import { FairnessPanel } from "./components/FairnessPanel";
+import { AnimatedBackground } from "./components/AnimatedBackground";
+import { MobileNav } from "./components/MobileNav";
 import { useCasino, CasinoUserProvider } from "./hooks/CasinoUserProvider";
 import { SocketProvider, useSocket } from "./hooks/useSocket";
 import { CASINO_WALLET } from "./lib/api";
@@ -23,6 +26,7 @@ function CasinoContent() {
     authLoading,
     authError,
     authenticate,
+    signOut,
     walletAddress,
     profile,
     config,
@@ -37,6 +41,7 @@ function CasinoContent() {
   const [localBalance, setLocalBalance] = useState<number | null>(null);
 
   const balanceSol = localBalance ?? profile?.balanceSol ?? 0;
+  const onChainEnabled = config?.onChainEnabled ?? false;
 
   const handleBalanceUpdate = (balance: number) => {
     setLocalBalance(balance);
@@ -46,8 +51,12 @@ function CasinoContent() {
   if (!isConnected || !walletAddress) {
     return (
       <div className="app">
-        <Header connected={false} />
-        <Landing socialLoginEnabled={config?.socialLoginEnabled} />
+        <AnimatedBackground />
+        <Header connected={false} onChainEnabled={onChainEnabled} />
+        <Landing
+          socialLoginEnabled={config?.socialLoginEnabled}
+          onChainEnabled={onChainEnabled}
+        />
         <Footer />
       </div>
     );
@@ -56,10 +65,15 @@ function CasinoContent() {
   if (!isAuthenticated) {
     return (
       <div className="app">
-        <Header connected={true} />
-        <div className="landing" style={{ minHeight: "60vh" }}>
-          <h2 style={{ marginBottom: 16 }}>Sign in to play</h2>
-          <p style={{ color: "var(--text-secondary)", marginBottom: 24 }}>
+        <AnimatedBackground />
+        <Header
+          connected
+          walletAddress={walletAddress}
+          onChainEnabled={onChainEnabled}
+        />
+        <div className="auth-screen">
+          <h2>Sign in to play</h2>
+          <p>
             Sign a message with your wallet to verify ownership. This is free and
             does not send any SOL.
           </p>
@@ -70,11 +84,7 @@ function CasinoContent() {
           >
             {authLoading ? "Signing..." : "Sign In with Wallet"}
           </button>
-          {authError && (
-            <div className="alert alert-error" style={{ marginTop: 16 }}>
-              {authError}
-            </div>
-          )}
+          {authError && <div className="alert alert-error">{authError}</div>}
         </div>
         <Footer />
       </div>
@@ -83,10 +93,17 @@ function CasinoContent() {
 
   return (
     <div className="app">
-      <Header balanceSol={balanceSol} connected={true} />
+      <AnimatedBackground />
+      <Header
+        balanceSol={balanceSol}
+        connected
+        walletAddress={walletAddress}
+        onChainEnabled={onChainEnabled}
+        onSignOut={signOut}
+      />
 
       <div className="container">
-        <nav className="nav-tabs">
+        <nav className="nav-tabs" aria-label="Game tabs">
           <button
             className={`nav-tab ${activeTab === "crash" ? "active" : ""}`}
             onClick={() => setActiveTab("crash")}
@@ -132,7 +149,7 @@ function CasinoContent() {
                 onBalanceUpdate={handleBalanceUpdate}
               />
             )}
-            {activeTab === "coinflip" && config && walletAddress && (
+            {activeTab === "coinflip" && config && (
               <CoinflipGame
                 walletAddress={walletAddress}
                 balanceSol={balanceSol}
@@ -145,7 +162,7 @@ function CasinoContent() {
             {activeTab === "fairness" && <FairnessPanel />}
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          <aside className="sidebar-panels">
             {config && profile && (
               <WalletPanel
                 balanceSol={balanceSol}
@@ -153,6 +170,7 @@ function CasinoContent() {
                 minBetSol={config.minBetSol}
                 minWithdrawSol={config.minWithdrawSol}
                 withdrawalsEnabled={config.withdrawalsEnabled}
+                onChainEnabled={onChainEnabled}
                 loading={loading}
                 onDeposit={async (amount) => deposit(amount)}
                 onWithdraw={async (amount) => {
@@ -163,11 +181,12 @@ function CasinoContent() {
                 error={error}
               />
             )}
-            {walletAddress && <BetHistoryPanel walletAddress={walletAddress} />}
-          </div>
+            <BetHistoryPanel walletAddress={walletAddress} />
+          </aside>
         </div>
       </main>
 
+      <MobileNav activeTab={activeTab} onTabChange={setActiveTab} />
       <Footer />
     </div>
   );
@@ -178,10 +197,10 @@ function Footer() {
     <footer className="footer">
       <div className="container">
         <p>
-          SolCasino — Real SOL gambling on Solana mainnet. Provably fair games.
-          Gamble responsibly.
+          SolCasino — Real SOL gambling on Solana. Provably fair games. Gamble
+          responsibly.
         </p>
-        <p style={{ marginTop: 8 }}>
+        <p className="footer-link">
           <a
             href={`https://solscan.io/account/${CASINO_WALLET}`}
             target="_blank"
@@ -205,21 +224,19 @@ function CasinoRoot() {
 }
 
 export default function App() {
-  if (window.location.pathname === "/auth/callback") {
-    return <AuthCallback />;
-  }
-
-  if (window.location.pathname === "/preview") {
-    return <ScreenshotPreview />;
-  }
-
-  if (window.location.pathname === "/preview-coinflip") {
-    return <ScreenshotPreviewCoinflip />;
-  }
-
   return (
-    <CasinoUserProvider>
-      <CasinoRoot />
-    </CasinoUserProvider>
+    <Routes>
+      <Route path="/auth/callback" element={<AuthCallback />} />
+      <Route path="/preview" element={<ScreenshotPreview />} />
+      <Route path="/preview-coinflip" element={<ScreenshotPreviewCoinflip />} />
+      <Route
+        path="/*"
+        element={
+          <CasinoUserProvider>
+            <CasinoRoot />
+          </CasinoUserProvider>
+        }
+      />
+    </Routes>
   );
 }

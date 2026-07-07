@@ -24,6 +24,7 @@ export function useCasinoUser() {
     authLoading,
     authError,
     authenticate,
+    signOut,
   } = useAuth();
   const { solana, isAvailable } = useSolana();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -149,6 +150,7 @@ export function useCasinoUser() {
     authLoading,
     authError,
     authenticate,
+    signOut,
     walletAddress,
     profile,
     config,

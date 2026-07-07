@@ -1,65 +1,113 @@
+import { motion } from "framer-motion";
 import { ConnectButton } from "@phantom/react-sdk";
-import { CASINO_WALLET } from "../lib/api";
+import { PROGRAM_ID } from "../lib/api";
+import { shortenAddress } from "../lib/utils";
 
 interface LandingProps {
   socialLoginEnabled?: boolean;
+  onChainEnabled?: boolean;
 }
 
-export function Landing({ socialLoginEnabled }: LandingProps) {
+const features = [
+  {
+    icon: "🚀",
+    title: "Crash",
+    desc: "Ride the multiplier. Cash out before the rocket crashes. 95% RTP, provably fair on-chain.",
+  },
+  {
+    icon: "🪙",
+    title: "Coinflip",
+    desc: "Instant 50/50 flips with commit-reveal seeds. Double your SOL in one click.",
+  },
+  {
+    icon: "🔐",
+    title: "Provably Fair",
+    desc: "Every outcome verifiable via cryptographic seeds. No hidden logic, no trust required.",
+  },
+];
+
+export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
   return (
     <div className="landing">
-      <h1>
-        Gamble <span>Real SOL</span>
-        <br />
-        On Solana
-      </h1>
-      <p>
-        Provably fair crash and coinflip games. Sign in with your Phantom wallet
-        or Google/Apple email. Deposit real SOL, play, and withdraw your
-        winnings instantly.
-      </p>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <div className="landing-hero-badge">
+          {onChainEnabled ? (
+            <>
+              <span className="on-chain-dot" />
+              Powered by Solana + Anchor
+            </>
+          ) : (
+            <>⚡ Instant play on Solana</>
+          )}
+        </div>
 
-      <ConnectButton />
-
-      {!socialLoginEnabled && (
-        <p style={{ marginTop: 16, fontSize: "0.85rem", color: "var(--warning)" }}>
-          Email login (Google/Apple) requires a Phantom Portal app ID. Phantom
-          wallet extension works without it.
+        <h1>
+          Gamble <span>Real SOL</span>
+          <br />
+          On Solana
+        </h1>
+        <p>
+          Non-custodial crash and coinflip built for crypto natives. Connect
+          Phantom, deposit to the vault PDA, and withdraw winnings instantly.
         </p>
-      )}
 
-      <div className="landing-features">
-        <div className="feature-card">
-          <h3>🚀 Crash Game</h3>
-          <p>
-            Watch the multiplier climb. Cash out before the crash to lock in
-            your winnings. Provably fair with 95% RTP.
-          </p>
-        </div>
-        <div className="feature-card">
-          <h3>🪙 Coinflip</h3>
-          <p>
-            Classic 50/50 coinflip with instant results. Pick heads or tails and
-            double your SOL.
-          </p>
-        </div>
-        <div className="feature-card">
-          <h3>🔐 Provably Fair</h3>
-          <p>
-            Every round uses cryptographic seeds you can verify. Transparent
-            outcomes, no hidden tricks.
-          </p>
-        </div>
-      </div>
+        <ConnectButton />
 
-      <p style={{ marginTop: 48, fontSize: "0.8rem", color: "var(--text-muted)" }}>
-        Casino wallet:{" "}
+        {!socialLoginEnabled && (
+          <p className="landing-hint">
+            Phantom extension works out of the box. Email login needs a Portal
+            app ID.
+          </p>
+        )}
+      </motion.div>
+
+      <motion.div
+        className="landing-features"
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.15 }}
+      >
+        {features.map((f) => (
+          <div key={f.title} className="feature-card card-glow">
+            <div className="feature-icon">{f.icon}</div>
+            <h3>{f.title}</h3>
+            <p>{f.desc}</p>
+          </div>
+        ))}
+      </motion.div>
+
+      <motion.div
+        className="landing-stats"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.3 }}
+      >
+        <div className="landing-stat">
+          <div className="landing-stat-value">95%</div>
+          <div className="landing-stat-label">Crash RTP</div>
+        </div>
+        <div className="landing-stat">
+          <div className="landing-stat-value">&lt;1s</div>
+          <div className="landing-stat-label">Settlement</div>
+        </div>
+        <div className="landing-stat">
+          <div className="landing-stat-value">0.001</div>
+          <div className="landing-stat-label">Min bet SOL</div>
+        </div>
+      </motion.div>
+
+      <p className="landing-wallet-link">
+        Program:{" "}
         <a
-          href={`https://solscan.io/account/${CASINO_WALLET}`}
+          href={`https://solscan.io/account/${PROGRAM_ID.toBase58()}?cluster=devnet`}
           target="_blank"
           rel="noopener noreferrer"
         >
-          {CASINO_WALLET.slice(0, 8)}...{CASINO_WALLET.slice(-8)}
+          {shortenAddress(PROGRAM_ID.toBase58(), 6)}
         </a>
       </p>
     </div>
