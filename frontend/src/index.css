@@ -1346,3 +1346,474 @@ input:focus-visible,
 .footer-link {
   margin-top: 8px;
 }
+
+/* ─── Premium Crash Arena (solpump / rugs.fun parity) ─────────────────────── */
+
+.crash-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.crash-arena {
+  display: grid;
+  grid-template-columns: 280px 1fr 280px;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 1200px) {
+  .crash-arena {
+    grid-template-columns: 1fr;
+  }
+  .crash-arena-chat {
+    order: 3;
+  }
+  .crash-arena-bets {
+    order: 2;
+  }
+  .crash-arena-main {
+    order: 1;
+  }
+}
+
+.crash-arena-chat,
+.crash-arena-bets {
+  min-height: 520px;
+}
+
+.crash-arena-main {
+  min-width: 0;
+}
+
+.crash-game-card {
+  position: relative;
+}
+
+.crash-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.crash-wallet-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .crash-wallet-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Betting countdown */
+.betting-countdown {
+  margin-bottom: 12px;
+}
+
+.betting-countdown-bar {
+  height: 4px;
+  background: var(--bg-elevated);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.betting-countdown-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--solana-green));
+  transition: width 0.05s linear;
+}
+
+.betting-countdown-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.betting-countdown-label strong {
+  color: var(--solana-green);
+  font-family: var(--font-mono);
+}
+
+/* Crash fairness inline bar */
+.crash-fairness-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+  padding: 10px 14px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+}
+
+.crash-fairness-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.crash-fairness-label {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+}
+
+.crash-fairness-value {
+  color: var(--text-secondary);
+}
+
+.crash-fairness-verify {
+  margin-left: auto;
+}
+
+/* Auto cashout */
+.auto-cashout {
+  padding: 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.auto-cashout-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.auto-cashout-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.auto-cashout-toggle input {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+}
+
+.auto-cashout-hint {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* Live bets panel */
+.live-bets-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: 640px;
+}
+
+.live-bets-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.live-bets-header .card-title {
+  margin-bottom: 0;
+}
+
+.live-bets-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.live-bets-pot {
+  font-family: var(--font-mono);
+  color: var(--solana-green);
+  font-weight: 600;
+}
+
+.live-bets-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.live-bet-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  transition: background var(--transition-fast);
+}
+
+.live-bet-row.cashed-out {
+  background: rgba(46, 213, 115, 0.06);
+  border: 1px solid rgba(46, 213, 115, 0.15);
+}
+
+.live-bet-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.live-bet-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--solana-green));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.live-bet-amount {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+.live-bet-playing {
+  color: var(--solana-green);
+  animation: pulse 1s infinite;
+}
+
+/* Chat panel */
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: 640px;
+}
+
+.chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.chat-header .card-title {
+  margin-bottom: 0;
+}
+
+.chat-online {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0;
+  min-height: 200px;
+}
+
+.chat-message {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.chat-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.chat-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.chat-author {
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.chat-text {
+  font-size: 0.85rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.chat-input-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.chat-input {
+  flex: 1;
+  font-size: 0.875rem;
+}
+
+.chat-error {
+  font-size: 0.75rem;
+  color: var(--danger);
+  margin-top: 4px;
+}
+
+/* Win feed */
+.win-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 200px;
+}
+
+.win-feed-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  padding: 4px 8px;
+  background: rgba(46, 213, 115, 0.1);
+  border-radius: 100px;
+  border: 1px solid rgba(46, 213, 115, 0.2);
+}
+
+.win-feed-player {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.win-feed-mult {
+  color: var(--solana-green);
+  font-weight: 700;
+}
+
+.win-feed-payout {
+  color: var(--success);
+  font-family: var(--font-mono);
+}
+
+/* Sound toggle */
+.sound-toggle {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 1rem;
+  line-height: 1;
+  transition: border-color var(--transition-fast);
+}
+
+.sound-toggle:hover {
+  border-color: var(--accent);
+}
+
+/* Crash shake on bust */
+@keyframes crash-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+
+.crash-shake {
+  animation: crash-shake 0.4s ease-out;
+}
+
+/* History pills as buttons */
+.history-pill {
+  cursor: pointer;
+  transition: transform var(--transition-fast), border-color var(--transition-fast);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.history-pill:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 24px;
+}
+
+.modal {
+  width: 100%;
+  max-width: 420px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.modal-header h3 {
+  margin: 0;
+}
+
+.round-detail-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+}
+
+.round-detail-stat .label {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.round-detail-stat .value {
+  font-family: var(--font-mono);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.text-warning {
+  color: var(--warning);
+}

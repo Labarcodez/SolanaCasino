@@ -12,6 +12,7 @@ import { crashEngine } from "./services/crash.js";
 import { getOrCreateUser } from "./db/index.js";
 import { requireAuthSocket } from "./middleware/auth.js";
 import { checkRpcHealth } from "./services/solana.js";
+import { getRecentChatMessages, sendChatMessage } from "./services/chat.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -39,11 +40,21 @@ app.use(
 app.use(express.json());
 app.use("/api", apiRouter);
 
+function broadcastOnlineCount(): void {
+  io.emit("site:online", { count: io.engine.clientsCount });
+}
+
 io.use(requireAuthSocket);
 
 io.on("connection", (socket) => {
   const walletAddress = socket.data.walletAddress as string;
   socket.emit("crash:state", crashEngine.getFullStateForWallet(walletAddress));
+  socket.emit("chat:history", getRecentChatMessages());
+  broadcastOnlineCount();
+
+  socket.on("disconnect", () => {
+    setTimeout(broadcastOnlineCount, 100);
+  });
 
   socket.on("crash:subscribe", () => {
     socket.emit("crash:state", crashEngine.getFullStateForWallet(walletAddress));
@@ -79,10 +90,12 @@ io.on("connection", (socket) => {
           balanceSol: lamportsToSol(user.balance_lamports),
         };
         callback?.(response);
+        io.emit("crash:state", crashEngine.getState());
         io.emit("crash:bet_placed", {
           walletAddress:
             walletAddress.slice(0, 4) + "..." + walletAddress.slice(-4),
           amountSol: data.amountSol,
+          autoCashout: data.autoCashout,
         });
       } catch (err) {
         callback?.({
@@ -103,6 +116,7 @@ io.on("connection", (socket) => {
         balanceSol: lamportsToSol(user.balance_lamports),
       };
       callback?.(response);
+      io.emit("crash:state", crashEngine.getState());
       io.emit("crash:player_cashout", {
         walletAddress:
           walletAddress.slice(0, 4) + "..." + walletAddress.slice(-4),
@@ -116,6 +130,22 @@ io.on("connection", (socket) => {
       });
     }
   });
+
+  socket.on(
+    "chat:send",
+    (data: { message: string }, callback?: (response: unknown) => void) => {
+      try {
+        const msg = sendChatMessage(walletAddress, data.message);
+        io.emit("chat:message", msg);
+        callback?.({ success: true, message: msg });
+      } catch (err) {
+        callback?.({
+          success: false,
+          error: err instanceof Error ? err.message : "Failed to send message",
+        });
+      }
+    },
+  );
 });
 
 crashEngine.on("round_start", (state) => {
@@ -136,6 +166,16 @@ crashEngine.on("crash", (data) => {
 
 crashEngine.on("bet_placed", () => {
   io.emit("crash:state", crashEngine.getState());
+});
+
+crashEngine.on("cashout", ({ bet, multiplier }) => {
+  io.emit("crash:state", crashEngine.getState());
+  io.emit("crash:player_cashout", {
+    walletAddress:
+      bet.walletAddress.slice(0, 4) + "..." + bet.walletAddress.slice(-4),
+    multiplier,
+    payoutSol: lamportsToSol(bet.payoutLamports),
+  });
 });
 
 const frontendDist = path.join(__dirname, "../../frontend/dist");

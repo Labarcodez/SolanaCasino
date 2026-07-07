@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { useCrashSubscription } from "../hooks/useSocket";
+import { useCrashSubscription, useSocket } from "../hooks/useSocket";
 import { useCasino } from "../hooks/CasinoUserProvider";
 import { useToast } from "../components/ui/Toast";
+import { useSound } from "../hooks/useSound";
 import { formatSol } from "../lib/api";
 import { prepareTransaction } from "../lib/utils";
 import {
@@ -12,6 +13,12 @@ import {
   ensurePlayerInitialized,
 } from "../lib/anchor";
 import { CrashChart } from "./CrashChart";
+import { BettingCountdown } from "./BettingCountdown";
+import { CrashFairnessBar } from "./CrashFairnessBar";
+import { AutoCashoutControl } from "./AutoCashoutControl";
+import { CrashHistoryModal } from "./CrashHistoryModal";
+import { SoundToggle } from "./SoundToggle";
+import { WinFeed } from "./WinFeed";
 
 interface CrashGameProps {
   balanceSol: number;
@@ -27,13 +34,25 @@ export function CrashGame({
   onBalanceUpdate,
 }: CrashGameProps) {
   const { crashState, placeBet, cashout } = useCrashSubscription(true);
+  const { recentCashouts } = useSocket();
   const { config, walletAddress, signAndSendTx, refresh } = useCasino();
   const { toast } = useToast();
+  const { muted, toggleMute, play } = useSound();
+
   const [betAmount, setBetAmount] = useState("0.01");
   const [loading, setLoading] = useState(false);
   const [onChainBetActive, setOnChainBetActive] = useState(false);
   const [onChainCashedOut, setOnChainCashedOut] = useState(false);
+  const [autoCashoutEnabled, setAutoCashoutEnabled] = useState(false);
+  const [autoCashoutValue, setAutoCashoutValue] = useState("2");
+  const [pendingBet, setPendingBet] = useState<number | null>(null);
+  const [selectedRound, setSelectedRound] = useState<{
+    roundId: string;
+    crashPoint: number;
+  } | null>(null);
   const settledRoundRef = useRef<string | null>(null);
+  const lastPhaseRef = useRef<string>("betting");
+  const lastTickRef = useRef(0);
 
   const phase = crashState?.phase ?? "betting";
   const multiplier = crashState?.multiplier ?? 1.0;
@@ -42,12 +61,38 @@ export function CrashGame({
   const hasActiveBet = onChain ? onChainBetActive && !onChainCashedOut : !!myBet;
 
   useEffect(() => {
-    if (phase === "betting") {
+    if (phase === "betting" && lastPhaseRef.current !== "betting") {
       setOnChainBetActive(false);
       setOnChainCashedOut(false);
       settledRoundRef.current = null;
     }
-  }, [phase, crashState?.id]);
+    if (phase === "crashed" && lastPhaseRef.current !== "crashed") {
+      play("crash");
+    }
+    if (phase === "running" && lastPhaseRef.current === "betting") {
+      play("bet");
+    }
+    lastPhaseRef.current = phase;
+  }, [phase, play]);
+
+  useEffect(() => {
+    if (phase === "running") {
+      const tick = Math.floor(multiplier * 10);
+      if (tick !== lastTickRef.current && tick % 5 === 0) {
+        play("tick");
+        lastTickRef.current = tick;
+      }
+    }
+  }, [multiplier, phase, play]);
+
+  useEffect(() => {
+    if (phase === "betting" && pendingBet !== null && !hasActiveBet) {
+      const amount = pendingBet;
+      setPendingBet(null);
+      void placeBetInternal(amount);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, pendingBet, hasActiveBet]);
 
   useEffect(() => {
     if (
@@ -80,17 +125,34 @@ export function CrashGame({
         }
       })();
     }
-  }, [phase, onChain, onChainBetActive, walletAddress, crashState?.id, signAndSendTx, refresh, toast]);
+  }, [
+    phase,
+    onChain,
+    onChainBetActive,
+    walletAddress,
+    crashState?.id,
+    signAndSendTx,
+    refresh,
+    toast,
+  ]);
 
-  const handleBet = async () => {
-    const amount = parseFloat(betAmount);
-    if (isNaN(amount) || amount < minBetSol || amount > maxBetSol) {
-      toast(`Bet must be between ${minBetSol} and ${maxBetSol} SOL`, "error");
-      return;
-    }
+  const adjustBet = (factor: number) => {
+    const current = parseFloat(betAmount) || minBetSol;
+    const next = Math.min(
+      maxBetSol,
+      Math.max(minBetSol, Math.round(current * factor * 1000) / 1000),
+    );
+    setBetAmount(String(next));
+  };
 
+  const placeBetInternal = async (amount: number) => {
     setLoading(true);
     try {
+      const autoCashout =
+        autoCashoutEnabled && !onChain
+          ? parseFloat(autoCashoutValue)
+          : undefined;
+
       if (onChain && walletAddress) {
         await ensurePlayerInitialized(walletAddress, signAndSendTx);
         const roundId = Number(crashState?.id ?? 0);
@@ -105,15 +167,25 @@ export function CrashGame({
         const { signature } = await signAndSendTx(tx);
         setOnChainBetActive(true);
         await refresh();
+        play("bet");
         toast(`Bet placed: ${amount} SOL`, "success", {
           label: "View tx",
           href: `https://solscan.io/tx/${signature}?cluster=devnet`,
         });
       } else {
-        const result = await placeBet(amount);
+        const result = await placeBet(
+          amount,
+          autoCashout && autoCashout >= 1.01 ? autoCashout : undefined,
+        );
         if (result.success && result.balanceSol !== undefined) {
           onBalanceUpdate(result.balanceSol);
-          toast(`Bet placed: ${amount} SOL`, "success");
+          play("bet");
+          toast(
+            autoCashout
+              ? `Bet placed with auto @ ${autoCashout}x`
+              : `Bet placed: ${amount} SOL`,
+            "success",
+          );
         } else {
           toast(result.error ?? "Bet failed", "error");
         }
@@ -123,6 +195,22 @@ export function CrashGame({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleBet = async () => {
+    const amount = parseFloat(betAmount);
+    if (isNaN(amount) || amount < minBetSol || amount > maxBetSol) {
+      toast(`Bet must be between ${minBetSol} and ${maxBetSol} SOL`, "error");
+      return;
+    }
+
+    if (phase !== "betting") {
+      setPendingBet(amount);
+      toast("Bet queued for next round", "info");
+      return;
+    }
+
+    await placeBetInternal(amount);
   };
 
   const handleCashout = async () => {
@@ -137,6 +225,7 @@ export function CrashGame({
         const { signature } = await signAndSendTx(tx);
         setOnChainCashedOut(true);
         await refresh();
+        play("cashout");
         toast(`Cashed out at ${multiplier.toFixed(2)}x!`, "success", {
           label: "View tx",
           href: `https://solscan.io/tx/${signature}?cluster=devnet`,
@@ -145,7 +234,9 @@ export function CrashGame({
         const result = await cashout();
         if (result.success && result.balanceSol !== undefined) {
           onBalanceUpdate(result.balanceSol);
-          toast("Cashed out successfully!", "success");
+          play("cashout");
+          play("win");
+          toast(`Cashed out at ${multiplier.toFixed(2)}x!`, "success");
         } else {
           toast(result.error ?? "Cashout failed", "error");
         }
@@ -157,39 +248,57 @@ export function CrashGame({
     }
   };
 
+  const canBet = !hasActiveBet && phase !== "crashed";
+
   return (
-    <div className="card card-glow">
+    <div className="card card-glow crash-game-card">
       <div className="crash-header">
         <h3 className="card-title">Crash</h3>
-        <span className={`phase-badge ${phase}`}>{phase}</span>
+        <div className="crash-header-actions">
+          <WinFeed cashouts={recentCashouts} />
+          <SoundToggle muted={muted} onToggle={toggleMute} />
+          <span className={`phase-badge ${phase}`}>{phase}</span>
+        </div>
       </div>
 
       {crashState?.history && crashState.history.length > 0 && (
         <div className="crash-history">
-          {crashState.history.slice(0, 14).map((h) => (
-            <span
+          {crashState.history.slice(0, 16).map((h) => (
+            <button
               key={h.roundId}
+              type="button"
               className={`history-pill ${
                 h.crashPoint < 1.5 ? "low" : h.crashPoint < 3 ? "mid" : "high"
               }`}
+              onClick={() => setSelectedRound(h)}
             >
               {h.crashPoint.toFixed(2)}x
-            </span>
+            </button>
           ))}
         </div>
       )}
 
-      <CrashChart
-        multiplier={multiplier}
+      <BettingCountdown
         phase={phase}
-        crashPoint={crashState?.crashPoint}
+        bettingEndsAt={crashState?.bettingEndsAt}
+        startedAt={crashState?.startedAt}
       />
 
-      {phase === "crashed" && crashState?.serverSeed && (
-        <p className="crash-fairness-hint">
-          Seed revealed — verify in the Fairness tab
-        </p>
-      )}
+      <div className={phase === "crashed" ? "crash-shake" : ""}>
+        <CrashChart
+          multiplier={multiplier}
+          phase={phase}
+          crashPoint={crashState?.crashPoint}
+        />
+      </div>
+
+      <CrashFairnessBar
+        roundId={crashState?.id}
+        serverSeedHash={crashState?.serverSeedHash}
+        serverSeed={crashState?.serverSeed}
+        crashPoint={crashState?.crashPoint}
+        phase={phase}
+      />
 
       <div className="bet-controls">
         <div className="input-group">
@@ -202,7 +311,7 @@ export function CrashGame({
             max={maxBetSol}
             value={betAmount}
             onChange={(e) => setBetAmount(e.target.value)}
-            disabled={phase !== "betting" || hasActiveBet}
+            disabled={hasActiveBet}
           />
         </div>
 
@@ -213,7 +322,7 @@ export function CrashGame({
               type="button"
               className="preset-btn"
               onClick={() => setBetAmount(preset)}
-              disabled={phase !== "betting" || hasActiveBet}
+              disabled={hasActiveBet}
             >
               {preset}
             </button>
@@ -221,21 +330,52 @@ export function CrashGame({
           <button
             type="button"
             className="preset-btn"
+            onClick={() => adjustBet(0.5)}
+            disabled={hasActiveBet}
+          >
+            ½
+          </button>
+          <button
+            type="button"
+            className="preset-btn"
+            onClick={() => adjustBet(2)}
+            disabled={hasActiveBet}
+          >
+            2×
+          </button>
+          <button
+            type="button"
+            className="preset-btn"
             onClick={() => setBetAmount(String(Math.min(balanceSol, maxBetSol)))}
-            disabled={phase !== "betting" || hasActiveBet}
+            disabled={hasActiveBet}
           >
             Max
           </button>
         </div>
+
+        <AutoCashoutControl
+          enabled={autoCashoutEnabled}
+          value={autoCashoutValue}
+          onEnabledChange={setAutoCashoutEnabled}
+          onValueChange={setAutoCashoutValue}
+          disabled={hasActiveBet}
+          onChain={onChain}
+        />
 
         <div className="bet-actions">
           <button
             type="button"
             className="btn btn-primary"
             onClick={handleBet}
-            disabled={loading || phase !== "betting" || hasActiveBet}
+            disabled={loading || hasActiveBet || !canBet}
           >
-            {hasActiveBet ? "Bet locked in" : "Place bet"}
+            {hasActiveBet
+              ? "Bet locked in"
+              : pendingBet !== null
+                ? "Queued for next round"
+                : phase !== "betting"
+                  ? "Bet next round"
+                  : "Place bet"}
           </button>
           <button
             type="button"
@@ -249,6 +389,11 @@ export function CrashGame({
           </button>
         </div>
       </div>
+
+      <CrashHistoryModal
+        round={selectedRound}
+        onClose={() => setSelectedRound(null)}
+      />
     </div>
   );
 }

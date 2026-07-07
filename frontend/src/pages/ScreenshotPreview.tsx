@@ -4,8 +4,25 @@
 import { AnimatedBackground } from "../components/AnimatedBackground";
 import { CrashChart } from "../components/CrashChart";
 import { OnChainBadge } from "../components/OnChainBadge";
+import { BettingCountdown } from "../components/BettingCountdown";
+import { CrashFairnessBar } from "../components/CrashFairnessBar";
+
+const MOCK_BETS = [
+  { id: "1", wallet: "7xKp...9mNq", amount: "0.05", status: "2.45x", won: true },
+  { id: "2", wallet: "Ab3c...xY9z", amount: "0.10", status: "●", won: false },
+  { id: "3", wallet: "Fm2h...4kLp", amount: "0.02", status: "—", won: false },
+  { id: "4", wallet: "Qw8r...nT5v", amount: "0.25", status: "1.82x", won: true },
+];
+
+const MOCK_CHAT = [
+  { id: "1", user: "7xKp...9mNq", text: "lets gooo 🚀" },
+  { id: "2", user: "Ab3c...xY9z", text: "cashed at 3x nice" },
+  { id: "3", user: "Fm2h...4kLp", text: "next round im all in" },
+];
 
 export function ScreenshotPreview() {
+  const bettingEndsAt = Date.now() + 4500;
+
   return (
     <div className="app">
       <AnimatedBackground />
@@ -28,127 +45,125 @@ export function ScreenshotPreview() {
 
       <div className="container">
         <nav className="nav-tabs">
-          <button type="button" className="nav-tab active">
-            🚀 Crash
-          </button>
-          <button type="button" className="nav-tab">
-            🪙 Coinflip
-          </button>
-          <button type="button" className="nav-tab">
-            🏆 Leaderboard
-          </button>
-          <button type="button" className="nav-tab">
-            🔐 Fairness
-          </button>
-          <div
-            className="live-indicator"
-            style={{ marginLeft: "auto", alignSelf: "center" }}
-          >
+          <button type="button" className="nav-tab active">🚀 Crash</button>
+          <button type="button" className="nav-tab">🪙 Coinflip</button>
+          <button type="button" className="nav-tab">🏆 Leaderboard</button>
+          <button type="button" className="nav-tab">🔐 Fairness</button>
+          <div className="live-indicator" style={{ marginLeft: "auto", alignSelf: "center" }}>
             <div className="live-dot" />
-            Live
+            Live · 42 online
           </div>
         </nav>
       </div>
 
       <main className="main-content">
-        <div className="container game-grid">
-          <div className="card">
-            <div className="crash-header">
-              <h3 className="card-title">🚀 Crash</h3>
-              <span className="phase-badge running">running</span>
+        <div className="container crash-page">
+          <div className="crash-arena">
+            <div className="crash-arena-chat">
+              <div className="card chat-panel">
+                <div className="chat-header">
+                  <h3 className="card-title">Trollbox</h3>
+                  <div className="chat-online">
+                    <span className="live-dot" />
+                    42 online
+                  </div>
+                </div>
+                <div className="chat-messages">
+                  {MOCK_CHAT.map((m) => (
+                    <div key={m.id} className="chat-message">
+                      <span className="chat-avatar">{m.user.slice(0, 1)}</span>
+                      <div className="chat-bubble">
+                        <span className="chat-author">{m.user}</span>
+                        <span className="chat-text">{m.text}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            <div className="crash-history">
-              {["1.24x", "3.87x", "1.00x", "2.15x", "5.42x", "1.33x"].map((h) => (
-                <span
-                  key={h}
-                  className={`history-pill ${
-                    parseFloat(h) < 1.5
-                      ? "low"
-                      : parseFloat(h) < 3
-                        ? "mid"
-                        : "high"
-                  }`}
-                >
-                  {h}
-                </span>
-              ))}
+            <div className="crash-arena-main">
+              <div className="card card-glow crash-game-card">
+                <div className="crash-header">
+                  <h3 className="card-title">Crash</h3>
+                  <div className="crash-header-actions">
+                    <span className={`phase-badge running`}>running</span>
+                  </div>
+                </div>
+
+                <div className="crash-history">
+                  {["1.24x", "3.87x", "1.00x", "2.15x", "5.42x", "1.33x", "12.4x"].map((h) => (
+                    <span
+                      key={h}
+                      className={`history-pill ${
+                        parseFloat(h) < 1.5 ? "low" : parseFloat(h) < 3 ? "mid" : "high"
+                      }`}
+                    >
+                      {h}
+                    </span>
+                  ))}
+                </div>
+
+                <BettingCountdown phase="running" bettingEndsAt={bettingEndsAt} />
+
+                <CrashChart multiplier={2.45} phase="running" />
+
+                <CrashFairnessBar
+                  roundId="12847"
+                  serverSeedHash="a3f8c91e2b4d6f7a8c9e0d1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+                  phase="running"
+                />
+
+                <div className="bet-controls">
+                  <div className="auto-cashout">
+                    <div className="auto-cashout-header">
+                      <label className="auto-cashout-toggle">
+                        <input type="checkbox" checked readOnly />
+                        <span>Auto cashout @ 2.00x</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div className="bet-actions">
+                    <button type="button" className="btn btn-primary" disabled>
+                      Bet locked in
+                    </button>
+                    <button type="button" className="btn btn-success">
+                      Cash out @ 2.45x
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <CrashChart multiplier={2.45} phase="running" />
-
-            <div className="bet-controls" style={{ marginTop: 24 }}>
-              <div className="input-group">
-                <label>Bet Amount (SOL) — Balance: 1.2450</label>
-                <input className="input" type="text" value="0.05" readOnly />
-              </div>
-              <div className="bet-amount-presets">
-                {["0.01", "0.05", "0.1", "0.5"].map((p) => (
-                  <button key={p} type="button" className="preset-btn">
-                    {p}
-                  </button>
-                ))}
-              </div>
-              <div className="bet-actions">
-                <button type="button" className="btn btn-primary" disabled>
-                  Bet Placed
-                </button>
-                <button type="button" className="btn btn-success">
-                  Cash Out @ 2.45x
-                </button>
+            <div className="crash-arena-bets">
+              <div className="card live-bets-panel">
+                <div className="live-bets-header">
+                  <h3 className="card-title">Live Bets</h3>
+                  <div className="live-bets-stats">
+                    <span>4 players</span>
+                    <span className="live-bets-pot">0.4200 SOL</span>
+                  </div>
+                </div>
+                <div className="live-bets-list">
+                  {MOCK_BETS.map((b) => (
+                    <div
+                      key={b.id}
+                      className={`live-bet-row ${b.won ? "cashed-out" : ""}`}
+                    >
+                      <div className="live-bet-player">
+                        <span className="live-bet-avatar">{b.wallet.slice(0, 1)}</span>
+                        <span className="mono-cell">{b.wallet}</span>
+                      </div>
+                      <div className="live-bet-amount">{b.amount} SOL</div>
+                      <div className="live-bet-status">
+                        <span className={b.won ? "text-success" : ""}>{b.status}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
-
-          <aside className="sidebar-panels">
-            <div className="card wallet-panel">
-              <h3 className="card-title">Wallet</h3>
-              <div className="wallet-stats">
-                <div className="stat-box">
-                  <div className="label">Casino</div>
-                  <div className="value" style={{ color: "var(--solana-green)" }}>
-                    1.2450
-                  </div>
-                </div>
-                <div className="stat-box">
-                  <div className="label">Wallet SOL</div>
-                  <div className="value">2.5000</div>
-                </div>
-              </div>
-              <div className="wallet-mode-toggle">
-                <button type="button" className="btn btn-sm btn-primary">
-                  Deposit
-                </button>
-                <button type="button" className="btn btn-sm btn-outline">
-                  Withdraw
-                </button>
-              </div>
-              <p className="wallet-hint">
-                On-chain mode: funds go to the vault PDA via Anchor program.
-              </p>
-            </div>
-
-            <div className="card">
-              <h3 className="card-title">📜 Your Bets</h3>
-              <div className="history-list">
-                {[
-                  { game: "crash", amount: "0.05", payout: "0.12", win: true },
-                  { game: "coinflip", amount: "0.01", payout: "0", win: false },
-                  { game: "crash", amount: "0.10", payout: "0", win: false },
-                ].map((b, i) => (
-                  <div key={i} className="history-item">
-                    <span>
-                      {b.game === "crash" ? "🚀" : "🪙"} {b.game}
-                    </span>
-                    <span>{b.amount} SOL</span>
-                    <span className={b.win ? "text-success" : "text-danger"}>
-                      {b.win ? `+${b.payout}` : `-${b.amount}`}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </aside>
         </div>
       </main>
     </div>

@@ -78,6 +78,15 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_bets_wallet ON bets(wallet_address);
   CREATE INDEX IF NOT EXISTS idx_bets_created ON bets(created_at);
   CREATE INDEX IF NOT EXISTS idx_deposits_wallet ON deposits(wallet_address);
+
+  CREATE TABLE IF NOT EXISTS chat_messages (
+    id TEXT PRIMARY KEY,
+    wallet_address TEXT NOT NULL,
+    message TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_chat_created ON chat_messages(created_at);
 `);
 
 export function getOrCreateUser(walletAddress: string): {

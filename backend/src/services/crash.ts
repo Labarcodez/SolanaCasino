@@ -40,6 +40,7 @@ export interface CrashRoundState {
   elapsedMs: number;
   history: { roundId: string; crashPoint: number }[];
   onChainEnabled: boolean;
+  bettingEndsAt: number;
 }
 
 const BETTING_DURATION_MS = 8000;
@@ -123,6 +124,7 @@ export class CrashGameEngine extends EventEmitter {
       elapsedMs: 0,
       history: [...this.history],
       onChainEnabled: this.onChain,
+      bettingEndsAt: Date.now() + BETTING_DURATION_MS,
     };
   }
 
