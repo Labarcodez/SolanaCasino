@@ -8,6 +8,42 @@ export function hashServerSeed(serverSeed: string): string {
   return crypto.createHash("sha256").update(serverSeed).digest("hex");
 }
 
+/** SHA-256 of raw 32-byte seed — matches on-chain `finalize_round` commitment. */
+export function hashServerSeedBytes(serverSeedHex: string): string {
+  return crypto
+    .createHash("sha256")
+    .update(Buffer.from(serverSeedHex, "hex"))
+    .digest("hex");
+}
+
+/** On-chain crash point (no client seeds, numeric round id). */
+export function generateOnChainCrashPoint(
+  serverSeedHex: string,
+  roundId: number,
+): number {
+  const combined = `${serverSeedHex}:${roundId}`;
+  const hash = crypto.createHash("sha256").update(combined).digest("hex");
+  const h = parseInt(hash.slice(0, 13), 16);
+  const e = Math.pow(2, 52);
+  if (h % 33 === 0) return 1.0;
+  const result = Math.floor((100 * e - h) / (e - h)) / 100;
+  return Math.max(1.0, Math.min(result, 1000000));
+}
+
+/** On-chain coinflip: sha256(serverSeed ‖ owner ‖ clientSeed) */
+export function generateOnChainCoinflipResult(
+  serverSeedHex: string,
+  ownerBase58: string,
+  clientSeedHex: string,
+): "heads" | "tails" {
+  const ownerBytes = Buffer.from(ownerBase58);
+  const seedBytes = Buffer.from(serverSeedHex, "hex");
+  const clientBytes = Buffer.from(clientSeedHex, "hex");
+  const combined = Buffer.concat([seedBytes, ownerBytes, clientBytes]);
+  const hash = crypto.createHash("sha256").update(combined).digest("hex");
+  return parseInt(hash.slice(0, 2), 16) % 2 === 0 ? "heads" : "tails";
+}
+
 /**
  * Provably fair crash point generation (95% RTP / 5% house edge).
  * Uses server seed + round id + client seeds combined.

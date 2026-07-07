@@ -10,3 +10,9 @@ backend/src/data/
 .vite/
 frontend/tsconfig.tsbuildinfo
 frontend/.env
+
+# Anchor / Rust — commit Cargo.lock, ignore build artifacts
+target/
+**/*.rs.bk
+.anchor/
+

@@ -1,12 +1,18 @@
+import { PublicKey } from "@solana/web3.js";
+
 export const CASINO_WALLET =
   import.meta.env.VITE_CASINO_WALLET ??
   "FMmho438Vv1Y9nov4mtfHZ4pYSZV8NfubiCeCB3bbGCb";
 
+export const PROGRAM_ID = new PublicKey(
+  import.meta.env.VITE_PROGRAM_ID ??
+    "Be5brMe2AvA68zEdiFKxa6KfYJdeQAeY12eWtZiC41vU",
+);
+
 export const API_URL = import.meta.env.VITE_API_URL ?? "";
 export const PHANTOM_APP_ID = import.meta.env.VITE_PHANTOM_APP_ID ?? "";
 export const SOLANA_RPC =
-  import.meta.env.VITE_SOLANA_RPC ??
-  "https://rpc.solanatracker.io/public";
+  import.meta.env.VITE_SOLANA_RPC ?? "https://api.devnet.solana.com";
 
 const AUTH_TOKEN_KEY = "solcasino_auth_token";
 
@@ -40,6 +46,12 @@ async function apiFetch(
 
 export interface CasinoConfig {
   casinoWallet: string;
+  programId: string;
+  cluster: string;
+  onChainEnabled: boolean;
+  casinoInitialized: boolean;
+  casinoPda: string;
+  vaultPda: string;
   minBetSol: number;
   maxBetSol: number;
   minWithdrawSol: number;
@@ -55,6 +67,8 @@ export interface UserProfile {
   onChainBalanceSol: number;
   totalWageredSol: number;
   totalWonSol: number;
+  playerInitialized?: boolean;
+  onChainEnabled?: boolean;
 }
 
 export async function fetchConfig(): Promise<CasinoConfig> {
@@ -138,6 +152,40 @@ export interface CoinflipResult {
   serverSeedHash: string;
   serverSeed: string;
   clientSeed: string;
+}
+
+export async function prepareCoinflip(
+  walletAddress: string,
+): Promise<{
+  serverSeed: string;
+  serverSeedHash: string;
+  clientSeed: string;
+  predictedResult: "heads" | "tails";
+}> {
+  const res = await apiFetch("/api/coinflip/prepare", {
+    method: "POST",
+    body: JSON.stringify({ walletAddress }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to prepare coinflip");
+  return data;
+}
+
+export async function confirmCoinflip(params: {
+  walletAddress: string;
+  amountSol: number;
+  choice: "heads" | "tails";
+  clientSeed: string;
+  serverSeed: string;
+  signature: string;
+}): Promise<CoinflipResult> {
+  const res = await apiFetch("/api/coinflip/confirm", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to confirm coinflip");
+  return data;
 }
 
 export async function playCoinflip(

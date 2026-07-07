@@ -2,7 +2,7 @@ import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { PublicKey } from "@solana/web3.js";
 import { v4 as uuidv4 } from "uuid";
-import { db, getOrCreateUser, updateBalance } from "../db/index.js";
+import { db, getOrCreateUser, updateBalance, recordBet } from "../db/index.js";
 import { config, lamportsToSol, solToLamports } from "../config.js";
 import {
   getCasinoWalletBalance,
@@ -23,9 +23,18 @@ import {
   verifyWalletSignature,
 } from "../services/auth.js";
 import {
+  fetchCasinoAccount,
+  fetchPlayerAccount,
+  getPdaAddresses,
+  isAnchorEnabled,
+} from "../services/anchor.js";
+import {
   verifyCrashPoint,
   generateCoinflipResult,
+  generateOnChainCoinflipResult,
+  generateServerSeed,
   hashServerSeed,
+  hashServerSeedBytes,
 } from "../services/provablyFair.js";
 import {
   requireAuth,
@@ -59,14 +68,28 @@ apiRouter.get("/health", async (_req, res) => {
   });
 });
 
-apiRouter.get("/config", (_req, res) => {
+apiRouter.get("/config", async (_req, res) => {
+  const pdas = getPdaAddresses();
+  const onChain = isAnchorEnabled();
+  const casino = onChain ? await fetchCasinoAccount() : null;
+
   res.json({
     casinoWallet: config.casinoWalletAddress,
-    minBetSol: config.minBetSol,
-    maxBetSol: config.maxBetSol,
+    programId: config.programId,
+    cluster: config.solanaCluster,
+    onChainEnabled: onChain,
+    casinoInitialized: Boolean(casino),
+    casinoPda: pdas.casinoPda,
+    vaultPda: pdas.vaultPda,
+    minBetSol: casino
+      ? lamportsToSol(casino.minBetLamports)
+      : config.minBetSol,
+    maxBetSol: casino
+      ? lamportsToSol(casino.maxBetLamports)
+      : config.maxBetSol,
     minWithdrawSol: config.minWithdrawSol,
-    houseEdge: config.houseEdge,
-    withdrawalsEnabled: isWithdrawalEnabled(),
+    houseEdge: casino ? casino.houseEdgeBps / 10000 : config.houseEdge,
+    withdrawalsEnabled: onChain || isWithdrawalEnabled(),
     socialLoginEnabled: Boolean(process.env.PHANTOM_APP_ID),
     rpcEndpoints: getRpcEndpoints().map((url) =>
       url.includes("api-key") ? url.replace(/api-key=[^&]+/, "api-key=***") : url,
@@ -137,14 +160,29 @@ apiRouter.get(
       const walletAddress = req.walletAddress!;
       const user = getOrCreateUser(walletAddress);
       const onChainBalance = await getWalletBalance(walletAddress);
+      const player = isAnchorEnabled()
+        ? await fetchPlayerAccount(walletAddress)
+        : null;
+
+      const balanceLamports = player
+        ? player.balanceLamports
+        : user.balance_lamports;
+      const totalWagered = player
+        ? player.totalWageredLamports
+        : user.total_wagered_lamports;
+      const totalWon = player
+        ? player.totalWonLamports
+        : user.total_won_lamports;
 
       res.json({
         walletAddress: user.wallet_address,
-        balanceSol: lamportsToSol(user.balance_lamports),
-        balanceLamports: user.balance_lamports,
+        balanceSol: lamportsToSol(balanceLamports),
+        balanceLamports,
         onChainBalanceSol: lamportsToSol(onChainBalance),
-        totalWageredSol: lamportsToSol(user.total_wagered_lamports),
-        totalWonSol: lamportsToSol(user.total_won_lamports),
+        totalWageredSol: lamportsToSol(totalWagered),
+        totalWonSol: lamportsToSol(totalWon),
+        playerInitialized: Boolean(player),
+        onChainEnabled: isAnchorEnabled(),
       });
     } catch (err) {
       res.status(500).json({
@@ -294,6 +332,104 @@ apiRouter.post(
 );
 
 apiRouter.post(
+  "/coinflip/prepare",
+  requireAuth,
+  betLimiter,
+  (req: AuthenticatedRequest, res) => {
+    const { walletAddress } = req.body as { walletAddress?: string };
+    if (!walletAddress || walletAddress !== req.walletAddress) {
+      res.status(403).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const serverSeed = generateServerSeed();
+    const serverSeedHash = hashServerSeedBytes(serverSeed);
+    const clientSeed = uuidv4().replace(/-/g, "").slice(0, 32);
+    const predicted = generateOnChainCoinflipResult(
+      serverSeed,
+      walletAddress,
+      clientSeed,
+    );
+
+    res.json({
+      serverSeed,
+      serverSeedHash,
+      clientSeed,
+      predictedResult: predicted,
+    });
+  },
+);
+
+apiRouter.post(
+  "/coinflip/confirm",
+  requireAuth,
+  betLimiter,
+  (req: AuthenticatedRequest, res) => {
+    const {
+      walletAddress,
+      amountSol,
+      choice,
+      clientSeed,
+      serverSeed,
+      signature,
+    } = req.body as {
+      walletAddress?: string;
+      amountSol?: number;
+      choice?: "heads" | "tails";
+      clientSeed?: string;
+      serverSeed?: string;
+      signature?: string;
+    };
+
+    if (!walletAddress || walletAddress !== req.walletAddress) {
+      res.status(403).json({ error: "Unauthorized bet" });
+      return;
+    }
+
+    if (!amountSol || !choice || !clientSeed || !serverSeed || !signature) {
+      res.status(400).json({ error: "Missing coinflip confirmation fields" });
+      return;
+    }
+
+    const result = generateOnChainCoinflipResult(
+      serverSeed,
+      walletAddress,
+      clientSeed,
+    );
+    const won = result === choice;
+    const betId = uuidv4();
+
+    recordBet({
+      id: betId,
+      walletAddress,
+      game: "coinflip",
+      amountLamports: solToLamports(amountSol),
+      payoutLamports: 0,
+      multiplier: won ? 2 * (1 - config.houseEdge) : 0,
+      result: won ? "win" : "loss",
+      metadata: {
+        choice,
+        flipResult: result,
+        serverSeedHash: hashServerSeedBytes(serverSeed),
+        serverSeed,
+        clientSeed,
+        signature,
+        onChain: true,
+      },
+    });
+
+    res.json({
+      betId,
+      choice,
+      result,
+      won,
+      signature,
+      serverSeedHash: hashServerSeedBytes(serverSeed),
+    });
+  },
+);
+
+apiRouter.post(
   "/coinflip",
   requireAuth,
   betLimiter,
@@ -308,6 +444,13 @@ apiRouter.post(
 
       if (!walletAddress || walletAddress !== req.walletAddress) {
         res.status(403).json({ error: "Unauthorized bet" });
+        return;
+      }
+
+      if (isAnchorEnabled()) {
+        res.status(400).json({
+          error: "Use on-chain coinflip via /api/coinflip/prepare",
+        });
         return;
       }
 

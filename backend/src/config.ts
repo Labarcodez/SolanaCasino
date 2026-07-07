@@ -3,9 +3,17 @@ export const config = {
   solanaRpcUrl:
     process.env.SOLANA_RPC_URL ??
     process.env.HELIUS_RPC_URL ??
-    "https://rpc.solanatracker.io/public",
+    "https://api.devnet.solana.com",
   solanaRpcFallback:
     process.env.SOLANA_RPC_FALLBACK ?? "https://api.mainnet-beta.solana.com",
+  solanaCluster: process.env.SOLANA_CLUSTER ?? "devnet",
+  programId:
+    process.env.PROGRAM_ID ??
+    "Be5brMe2AvA68zEdiFKxa6KfYJdeQAeY12eWtZiC41vU",
+  programAuthorityPrivateKey:
+    process.env.PROGRAM_AUTHORITY_PRIVATE_KEY ??
+    process.env.CASINO_WALLET_PRIVATE_KEY ??
+    "",
   casinoWalletAddress:
     process.env.CASINO_WALLET_ADDRESS ??
     "FMmho438Vv1Y9nov4mtfHZ4pYSZV8NfubiCeCB3bbGCb",

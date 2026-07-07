@@ -3,10 +3,18 @@ import { v4 as uuidv4 } from "uuid";
 import { db, recordBet, updateBalance } from "../db/index.js";
 import {
   generateCrashPoint,
+  generateOnChainCrashPoint,
   generateServerSeed,
   hashServerSeed,
+  hashServerSeedBytes,
 } from "./provablyFair.js";
 import { config } from "../config.js";
+import {
+  finalizeRoundOnChain,
+  isAnchorEnabled,
+  startRoundOnChain,
+  startRunningOnChain,
+} from "./anchor.js";
 
 export type CrashPhase = "betting" | "running" | "crashed" | "cooldown";
 
@@ -31,26 +39,48 @@ export interface CrashRoundState {
   startedAt: number;
   elapsedMs: number;
   history: { roundId: string; crashPoint: number }[];
+  onChainEnabled: boolean;
 }
 
 const BETTING_DURATION_MS = 8000;
 const COOLDOWN_DURATION_MS = 3000;
 const TICK_MS = 50;
-const GROWTH_RATE = 0.00006;
+const GROWTH_RATE_MILLI = 60;
+
+function multiplierAtElapsedMs(elapsedMs: number): number {
+  const growth = 1000 + (GROWTH_RATE_MILLI * elapsedMs) / 1000;
+  return Math.min(growth / 1000, 1000);
+}
 
 export class CrashGameEngine extends EventEmitter {
   private round: CrashRoundState;
-  private serverSeed: string = "";
+  private serverSeed = "";
   private tickInterval: ReturnType<typeof setInterval> | null = null;
   private phaseTimeout: ReturnType<typeof setTimeout> | null = null;
   private startTime = 0;
   private history: { roundId: string; crashPoint: number }[] = [];
+  private roundCounter = 0;
+  private onChain = isAnchorEnabled();
 
   constructor() {
     super();
     this.round = this.createNewRound();
     this.loadHistory();
+    void this.bootstrapOnChain();
     this.startBettingPhase();
+  }
+
+  private async bootstrapOnChain(): Promise<void> {
+    if (!this.onChain) return;
+    try {
+      const { fetchCasinoAccount } = await import("./anchor.js");
+      const casino = await fetchCasinoAccount();
+      if (casino) {
+        this.roundCounter = casino.roundCounter;
+      }
+    } catch (err) {
+      console.warn("Anchor bootstrap skipped:", err);
+    }
   }
 
   private loadHistory(): void {
@@ -68,16 +98,22 @@ export class CrashGameEngine extends EventEmitter {
 
   private createNewRound(): CrashRoundState {
     this.serverSeed = generateServerSeed();
-    const id = uuidv4();
-    const serverSeedHash = hashServerSeed(this.serverSeed);
-    const crashPoint = generateCrashPoint(this.serverSeed, id, []);
+    const nextId = this.onChain
+      ? String(this.roundCounter + 1)
+      : uuidv4();
+    const serverSeedHash = this.onChain
+      ? hashServerSeedBytes(this.serverSeed)
+      : hashServerSeed(this.serverSeed);
+    const crashPoint = this.onChain
+      ? generateOnChainCrashPoint(this.serverSeed, Number(nextId))
+      : generateCrashPoint(this.serverSeed, nextId, []);
 
     db.prepare(
       "INSERT INTO crash_rounds (id, server_seed_hash, crash_point, status) VALUES (?, ?, ?, 'betting')",
-    ).run(id, serverSeedHash, crashPoint);
+    ).run(nextId, serverSeedHash, crashPoint);
 
     return {
-      id,
+      id: nextId,
       phase: "betting",
       serverSeedHash,
       crashPoint,
@@ -86,6 +122,7 @@ export class CrashGameEngine extends EventEmitter {
       startedAt: Date.now(),
       elapsedMs: 0,
       history: [...this.history],
+      onChainEnabled: this.onChain,
     };
   }
 
@@ -94,10 +131,12 @@ export class CrashGameEngine extends EventEmitter {
       ...this.round,
       bets: this.round.bets.map((b) => ({
         ...b,
-        walletAddress: b.walletAddress.slice(0, 4) + "..." + b.walletAddress.slice(-4),
+        walletAddress:
+          b.walletAddress.slice(0, 4) + "..." + b.walletAddress.slice(-4),
       })),
       serverSeed: this.round.phase === "crashed" ? this.serverSeed : undefined,
       history: this.history,
+      onChainEnabled: this.onChain,
     };
   }
 
@@ -115,6 +154,10 @@ export class CrashGameEngine extends EventEmitter {
     amountLamports: number,
     autoCashout?: number,
   ): CrashBet {
+    if (this.onChain) {
+      throw new Error("Place bets on-chain via your wallet");
+    }
+
     if (this.round.phase !== "betting") {
       throw new Error("Betting is closed for this round");
     }
@@ -151,6 +194,10 @@ export class CrashGameEngine extends EventEmitter {
   }
 
   cashout(walletAddress: string): CrashBet {
+    if (this.onChain) {
+      throw new Error("Cash out on-chain via your wallet");
+    }
+
     if (this.round.phase !== "running") {
       throw new Error("Can only cash out during active round");
     }
@@ -197,17 +244,33 @@ export class CrashGameEngine extends EventEmitter {
     this.round.phase = "betting";
     this.round.history = [...this.history];
 
+    if (this.onChain) {
+      const roundId = Number(this.round.id);
+      void startRoundOnChain(roundId, this.round.serverSeedHash).catch((err) => {
+        console.error("start_round on-chain failed:", err);
+      });
+    }
+
     this.emit("round_start", this.getState());
 
     this.phaseTimeout = setTimeout(() => {
-      this.startRunningPhase();
+      void this.startRunningPhase();
     }, BETTING_DURATION_MS);
   }
 
-  private startRunningPhase(): void {
+  private async startRunningPhase(): Promise<void> {
     this.round.phase = "running";
     this.round.multiplier = 1.0;
     this.startTime = Date.now();
+
+    if (this.onChain) {
+      try {
+        await startRunningOnChain(Number(this.round.id));
+      } catch (err) {
+        console.error("start_running on-chain failed:", err);
+      }
+    }
+
     this.emit("round_running", this.getState());
 
     this.tickInterval = setInterval(() => {
@@ -218,21 +281,24 @@ export class CrashGameEngine extends EventEmitter {
   private tick(): void {
     const elapsed = Date.now() - this.startTime;
     this.round.elapsedMs = elapsed;
-    this.round.multiplier =
-      Math.floor(Math.pow(Math.E, GROWTH_RATE * elapsed) * 100) / 100;
+    this.round.multiplier = this.onChain
+      ? multiplierAtElapsedMs(elapsed)
+      : Math.floor(Math.pow(Math.E, 0.00006 * elapsed) * 100) / 100;
 
-    for (const bet of this.round.bets) {
-      if (
-        !bet.cashedOut &&
-        bet.autoCashout &&
-        this.round.multiplier >= bet.autoCashout
-      ) {
-        this.processCashout(bet, bet.autoCashout);
+    if (!this.onChain) {
+      for (const bet of this.round.bets) {
+        if (
+          !bet.cashedOut &&
+          bet.autoCashout &&
+          this.round.multiplier >= bet.autoCashout
+        ) {
+          this.processCashout(bet, bet.autoCashout);
+        }
       }
     }
 
     if (this.round.multiplier >= this.round.crashPoint) {
-      this.crash();
+      void this.crash();
       return;
     }
 
@@ -242,28 +308,36 @@ export class CrashGameEngine extends EventEmitter {
     });
   }
 
-  private crash(): void {
+  private async crash(): Promise<void> {
     this.clearTimers();
     this.round.phase = "crashed";
     this.round.multiplier = this.round.crashPoint;
 
-    for (const bet of this.round.bets) {
-      if (!bet.cashedOut) {
-        bet.cashedOut = false;
-        recordBet({
-          id: bet.id,
-          walletAddress: bet.walletAddress,
-          game: "crash",
-          amountLamports: bet.amountLamports,
-          payoutLamports: 0,
-          multiplier: this.round.crashPoint,
-          result: "loss",
-          metadata: {
-            roundId: this.round.id,
-            crashPoint: this.round.crashPoint,
-            serverSeedHash: this.round.serverSeedHash,
-          },
-        });
+    if (this.onChain) {
+      try {
+        await finalizeRoundOnChain(Number(this.round.id), this.serverSeed);
+        this.roundCounter = Number(this.round.id);
+      } catch (err) {
+        console.error("finalize_round on-chain failed:", err);
+      }
+    } else {
+      for (const bet of this.round.bets) {
+        if (!bet.cashedOut) {
+          recordBet({
+            id: bet.id,
+            walletAddress: bet.walletAddress,
+            game: "crash",
+            amountLamports: bet.amountLamports,
+            payoutLamports: 0,
+            multiplier: this.round.crashPoint,
+            result: "loss",
+            metadata: {
+              roundId: this.round.id,
+              crashPoint: this.round.crashPoint,
+              serverSeedHash: this.round.serverSeedHash,
+            },
+          });
+        }
       }
     }
 
@@ -282,6 +356,7 @@ export class CrashGameEngine extends EventEmitter {
       serverSeed: this.serverSeed,
       serverSeedHash: this.round.serverSeedHash,
       roundId: this.round.id,
+      onChainEnabled: this.onChain,
     });
 
     this.round.phase = "cooldown";

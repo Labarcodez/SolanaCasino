@@ -3,9 +3,16 @@ import {
   LAMPORTS_PER_SOL,
   PublicKey,
   SystemProgram,
+  Transaction,
   TransactionMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
+import {
+  buildDepositTransaction as buildAnchorDeposit,
+  buildWithdrawTransaction,
+  ensurePlayerInitialized,
+  fetchPlayerBalance,
+} from "./anchor";
 import { CASINO_WALLET, SOLANA_RPC } from "./api";
 
 export async function buildDepositTransaction(
@@ -28,4 +35,53 @@ export async function buildDepositTransaction(
   }).compileToV0Message();
 
   return new VersionedTransaction(message);
+}
+
+async function prepareTransaction(
+  walletAddress: string,
+  tx: Transaction,
+): Promise<Transaction> {
+  const connection = new Connection(SOLANA_RPC, "confirmed");
+  const { blockhash } = await connection.getLatestBlockhash();
+  tx.recentBlockhash = blockhash;
+  tx.feePayer = new PublicKey(walletAddress);
+  return tx;
+}
+
+export async function depositOnChain(
+  walletAddress: string,
+  amountSol: number,
+  signAndSend: (tx: Transaction) => Promise<{ signature: string }>,
+): Promise<{ signature: string; balanceSol: number }> {
+  await ensurePlayerInitialized(walletAddress, signAndSend);
+
+  const amountLamports = Math.floor(amountSol * LAMPORTS_PER_SOL);
+  const tx = await buildAnchorDeposit(walletAddress, amountLamports);
+  await prepareTransaction(walletAddress, tx);
+
+  const { signature } = await signAndSend(tx);
+  const { balanceLamports } = await fetchPlayerBalance(walletAddress);
+
+  return {
+    signature,
+    balanceSol: balanceLamports / LAMPORTS_PER_SOL,
+  };
+}
+
+export async function withdrawOnChain(
+  walletAddress: string,
+  amountSol: number,
+  signAndSend: (tx: Transaction) => Promise<{ signature: string }>,
+): Promise<{ signature: string; balanceSol: number }> {
+  const amountLamports = Math.floor(amountSol * LAMPORTS_PER_SOL);
+  const tx = await buildWithdrawTransaction(walletAddress, amountLamports);
+  await prepareTransaction(walletAddress, tx);
+
+  const { signature } = await signAndSend(tx);
+  const { balanceLamports } = await fetchPlayerBalance(walletAddress);
+
+  return {
+    signature,
+    balanceSol: balanceLamports / LAMPORTS_PER_SOL,
+  };
 }

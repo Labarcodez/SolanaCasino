@@ -1,6 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { Transaction } from "@solana/web3.js";
+import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useCrashSubscription } from "../hooks/useSocket";
+import { useCasino } from "../hooks/CasinoUserProvider";
 import { formatSol } from "../lib/api";
+import {
+  buildCashoutTransaction,
+  buildPlaceBetTransaction,
+  buildSettleBetTransaction,
+  ensurePlayerInitialized,
+} from "../lib/anchor";
+import { SOLANA_RPC } from "../lib/api";
+import { Connection, PublicKey, Transaction } from "@solana/web3.js";
 
 interface CrashGameProps {
   balanceSol: number;
@@ -15,6 +26,17 @@ function getHistoryClass(crashPoint: number): string {
   return "high";
 }
 
+async function prepareTx(
+  walletAddress: string,
+  tx: Transaction,
+): Promise<Transaction> {
+  const connection = new Connection(SOLANA_RPC, "confirmed");
+  const { blockhash } = await connection.getLatestBlockhash();
+  tx.recentBlockhash = blockhash;
+  tx.feePayer = new PublicKey(walletAddress);
+  return tx;
+}
+
 export function CrashGame({
   balanceSol,
   minBetSol,
@@ -22,17 +44,59 @@ export function CrashGame({
   onBalanceUpdate,
 }: CrashGameProps) {
   const { crashState, placeBet, cashout } = useCrashSubscription(true);
+  const { config, walletAddress, signAndSendTx, refresh } = useCasino();
   const [betAmount, setBetAmount] = useState("0.01");
   const [autoCashout, setAutoCashout] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [onChainBetActive, setOnChainBetActive] = useState(false);
+  const [onChainCashedOut, setOnChainCashedOut] = useState(false);
 
   const phase = crashState?.phase ?? "betting";
   const multiplier = crashState?.multiplier ?? 1.0;
+  const onChain = config?.onChainEnabled ?? false;
   const myBet = crashState?.myBets?.find((b) => !b.cashedOut);
-  const hasActiveBet = !!myBet;
+  const hasActiveBet = onChain ? onChainBetActive && !onChainCashedOut : !!myBet;
 
   const rocketBottom = Math.min(20 + (multiplier - 1) * 15, 75);
+
+  const settledRoundRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (phase === "betting") {
+      setOnChainBetActive(false);
+      setOnChainCashedOut(false);
+      settledRoundRef.current = null;
+    }
+  }, [phase, crashState?.id]);
+
+  useEffect(() => {
+    if (
+      onChain &&
+      phase === "crashed" &&
+      onChainBetActive &&
+      walletAddress &&
+      crashState?.id &&
+      settledRoundRef.current !== crashState.id
+    ) {
+      settledRoundRef.current = crashState.id;
+      void (async () => {
+        try {
+          const tx = await buildSettleBetTransaction(
+            walletAddress,
+            Number(crashState.id),
+          );
+          await prepareTx(walletAddress, tx);
+          await signAndSendTx(tx);
+          await refresh();
+        } catch (err) {
+          console.error("settle_bet failed:", err);
+        } finally {
+          setOnChainBetActive(false);
+        }
+      })();
+    }
+  }, [phase, onChain, onChainBetActive, walletAddress, crashState?.id, signAndSendTx, refresh]);
 
   const handleBet = async () => {
     const amount = parseFloat(betAmount);
@@ -44,13 +108,30 @@ export function CrashGame({
     setLoading(true);
     setMessage(null);
     try {
-      const auto = autoCashout ? parseFloat(autoCashout) : undefined;
-      const result = await placeBet(amount, auto);
-      if (result.success && result.balanceSol !== undefined) {
-        onBalanceUpdate(result.balanceSol);
-        setMessage(`Bet placed: ${amount} SOL`);
+      if (onChain && walletAddress) {
+        await ensurePlayerInitialized(walletAddress, signAndSendTx);
+        const roundId = Number(crashState?.id ?? 0);
+        if (!roundId) throw new Error("Round not ready");
+
+        const tx = await buildPlaceBetTransaction(
+          walletAddress,
+          roundId,
+          Math.floor(amount * LAMPORTS_PER_SOL),
+        );
+        await prepareTx(walletAddress, tx);
+        await signAndSendTx(tx);
+        setOnChainBetActive(true);
+        setMessage(`On-chain bet placed: ${amount} SOL`);
+        await refresh();
       } else {
-        setMessage(result.error ?? "Bet failed");
+        const auto = autoCashout ? parseFloat(autoCashout) : undefined;
+        const result = await placeBet(amount, auto);
+        if (result.success && result.balanceSol !== undefined) {
+          onBalanceUpdate(result.balanceSol);
+          setMessage(`Bet placed: ${amount} SOL`);
+        } else {
+          setMessage(result.error ?? "Bet failed");
+        }
       }
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Bet failed");
@@ -63,12 +144,24 @@ export function CrashGame({
     setLoading(true);
     setMessage(null);
     try {
-      const result = await cashout();
-      if (result.success && result.balanceSol !== undefined) {
-        onBalanceUpdate(result.balanceSol);
-        setMessage("Cashed out successfully!");
+      if (onChain && walletAddress && crashState?.id) {
+        const tx = await buildCashoutTransaction(
+          walletAddress,
+          Number(crashState.id),
+        );
+        await prepareTx(walletAddress, tx);
+        await signAndSendTx(tx);
+        setOnChainCashedOut(true);
+        setMessage("On-chain cashout recorded!");
+        await refresh();
       } else {
-        setMessage(result.error ?? "Cashout failed");
+        const result = await cashout();
+        if (result.success && result.balanceSol !== undefined) {
+          onBalanceUpdate(result.balanceSol);
+          setMessage("Cashed out successfully!");
+        } else {
+          setMessage(result.error ?? "Cashout failed");
+        }
       }
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Cashout failed");
@@ -88,7 +181,7 @@ export function CrashGame({
         }}
       >
         <h3 className="card-title" style={{ margin: 0 }}>
-          🚀 Crash
+          🚀 Crash {onChain ? "(On-Chain)" : ""}
         </h3>
         <span className={`phase-badge ${phase}`}>{phase}</span>
       </div>
@@ -164,19 +257,21 @@ export function CrashGame({
           ))}
         </div>
 
-        <div className="input-group">
-          <label>Auto Cashout (optional, e.g. 2.00)</label>
-          <input
-            className="input"
-            type="number"
-            step="0.01"
-            min="1.01"
-            placeholder="2.00"
-            value={autoCashout}
-            onChange={(e) => setAutoCashout(e.target.value)}
-            disabled={phase !== "betting" || hasActiveBet}
-          />
-        </div>
+        {!onChain && (
+          <div className="input-group">
+            <label>Auto Cashout (optional, e.g. 2.00)</label>
+            <input
+              className="input"
+              type="number"
+              step="0.01"
+              min="1.01"
+              placeholder="2.00"
+              value={autoCashout}
+              onChange={(e) => setAutoCashout(e.target.value)}
+              disabled={phase !== "betting" || hasActiveBet}
+            />
+          </div>
+        )}
 
         <div style={{ display: "flex", gap: 12 }}>
           <button
@@ -200,7 +295,7 @@ export function CrashGame({
 
         {message && (
           <div
-            className={`alert ${message.includes("success") || message.includes("placed") || message.includes("Cashed") ? "alert-success" : "alert-error"}`}
+            className={`alert ${message.includes("placed") || message.includes("Cashed") || message.includes("cashout") ? "alert-success" : "alert-error"}`}
           >
             {message}
           </div>
