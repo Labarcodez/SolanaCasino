@@ -70,7 +70,7 @@ export function Leaderboard() {
                       l.rank
                     )}
                   </td>
-                  <td className="mono-cell">{shortenAddress(l.walletAddress)}</td>
+                  <td className="mono-cell">{l.displayName}</td>
                   <td>{formatSol(l.totalWageredSol)} SOL</td>
                   <td className="text-success">
                     {formatSol(l.totalWonSol)} SOL

@@ -28,6 +28,7 @@ import {
   getPdaAddresses,
   isAnchorEnabled,
 } from "../services/anchor.js";
+import { getPublicProfile, updateDisplayName, upsertUserProfile, mapAuthProvider } from "../services/profile.js";
 import {
   verifyCrashPoint,
   generateCoinflipResult,
@@ -119,11 +120,15 @@ apiRouter.post("/auth/nonce", authLimiter, (req, res) => {
 });
 
 apiRouter.post("/auth/verify", authLimiter, (req, res) => {
-  const { walletAddress, signature, message } = req.body as {
-    walletAddress?: string;
-    signature?: string;
-    message?: string;
-  };
+  const { walletAddress, signature, message, authProvider, email, displayName } =
+    req.body as {
+      walletAddress?: string;
+      signature?: string;
+      message?: string;
+      authProvider?: string;
+      email?: string;
+      displayName?: string;
+    };
 
   if (!walletAddress || !signature || !message) {
     res.status(400).json({ error: "walletAddress, signature, and message required" });
@@ -141,13 +146,22 @@ apiRouter.post("/auth/verify", authLimiter, (req, res) => {
     return;
   }
 
-  getOrCreateUser(walletAddress);
+  const profile = upsertUserProfile(walletAddress, {
+    authProvider: mapAuthProvider(authProvider),
+    email: email?.trim() || undefined,
+    displayName: displayName?.trim() || undefined,
+  });
   const token = createSessionToken(walletAddress);
 
   res.json({
     token,
     walletAddress,
     expiresIn: "7d",
+    profile: {
+      displayName: profile.display_name,
+      email: profile.email,
+      authProvider: profile.auth_provider,
+    },
   });
 });
 
@@ -159,6 +173,7 @@ apiRouter.get(
     try {
       const walletAddress = req.walletAddress!;
       const user = getOrCreateUser(walletAddress);
+      const publicProfile = getPublicProfile(walletAddress);
       const onChainBalance = await getWalletBalance(walletAddress);
       const player = isAnchorEnabled()
         ? await fetchPlayerAccount(walletAddress)
@@ -176,6 +191,9 @@ apiRouter.get(
 
       res.json({
         walletAddress: user.wallet_address,
+        displayName: publicProfile.displayName,
+        email: user.email ?? null,
+        authProvider: publicProfile.authProvider,
         balanceSol: lamportsToSol(balanceLamports),
         balanceLamports,
         onChainBalanceSol: lamportsToSol(onChainBalance),
@@ -183,10 +201,37 @@ apiRouter.get(
         totalWonSol: lamportsToSol(totalWon),
         playerInitialized: Boolean(player),
         onChainEnabled: isAnchorEnabled(),
+        memberSince: user.created_at,
       });
     } catch (err) {
       res.status(500).json({
         error: err instanceof Error ? err.message : "Failed to fetch user",
+      });
+    }
+  },
+);
+
+apiRouter.patch(
+  "/profile",
+  requireAuth,
+  (req: AuthenticatedRequest, res) => {
+    try {
+      const { displayName } = req.body as { displayName?: string };
+      if (!displayName) {
+        res.status(400).json({ error: "displayName required" });
+        return;
+      }
+
+      const profile = updateDisplayName(req.walletAddress!, displayName);
+      res.json({
+        walletAddress: profile.wallet_address,
+        displayName: profile.display_name,
+        email: profile.email,
+        authProvider: profile.auth_provider,
+      });
+    } catch (err) {
+      res.status(400).json({
+        error: err instanceof Error ? err.message : "Profile update failed",
       });
     }
   },
@@ -528,10 +573,12 @@ apiRouter.get(
 apiRouter.get("/leaderboard", (_req, res) => {
   const leaders = db
     .prepare(
-      "SELECT wallet_address, total_wagered_lamports, total_won_lamports, balance_lamports FROM users WHERE total_wagered_lamports > 0 ORDER BY total_wagered_lamports DESC LIMIT 20",
+      `SELECT wallet_address, display_name, total_wagered_lamports, total_won_lamports, balance_lamports
+       FROM users WHERE total_wagered_lamports > 0 ORDER BY total_wagered_lamports DESC LIMIT 20`,
     )
     .all() as Array<{
       wallet_address: string;
+      display_name: string | null;
       total_wagered_lamports: number;
       total_won_lamports: number;
       balance_lamports: number;
@@ -542,6 +589,7 @@ apiRouter.get("/leaderboard", (_req, res) => {
       rank: i + 1,
       walletAddress:
         l.wallet_address.slice(0, 4) + "..." + l.wallet_address.slice(-4),
+      displayName: l.display_name ?? `Player_${l.wallet_address.slice(0, 4)}`,
       totalWageredSol: lamportsToSol(l.total_wagered_lamports),
       totalWonSol: lamportsToSol(l.total_won_lamports),
       balanceSol: lamportsToSol(l.balance_lamports),

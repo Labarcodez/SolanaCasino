@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import { db } from "../db/index.js";
+import { getDisplayName } from "./profile.js";
 
 const MAX_MESSAGE_LENGTH = 200;
 const MAX_STORED_MESSAGES = 200;
@@ -10,6 +11,7 @@ const lastMessageAt = new Map<string, number>();
 export interface ChatMessage {
   id: string;
   walletAddress: string;
+  displayName: string;
   message: string;
   createdAt: string;
 }
@@ -21,18 +23,23 @@ function shortenWallet(address: string): string {
 export function getRecentChatMessages(limit = 50): ChatMessage[] {
   const rows = db
     .prepare(
-      "SELECT id, wallet_address, message, created_at FROM chat_messages ORDER BY created_at DESC LIMIT ?",
+      `SELECT c.id, c.wallet_address, c.message, c.created_at, u.display_name
+       FROM chat_messages c
+       LEFT JOIN users u ON u.wallet_address = c.wallet_address
+       ORDER BY c.created_at DESC LIMIT ?`,
     )
     .all(limit) as {
     id: string;
     wallet_address: string;
     message: string;
     created_at: string;
+    display_name: string | null;
   }[];
 
   return rows.reverse().map((row) => ({
     id: row.id,
     walletAddress: shortenWallet(row.wallet_address),
+    displayName: row.display_name ?? getDisplayName(row.wallet_address),
     message: row.message,
     createdAt: row.created_at,
   }));
@@ -76,6 +83,7 @@ export function sendChatMessage(
   return {
     id,
     walletAddress: shortenWallet(walletAddress),
+    displayName: getDisplayName(walletAddress),
     message: trimmed,
     createdAt: new Date().toISOString(),
   };

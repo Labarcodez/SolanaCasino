@@ -62,6 +62,9 @@ export interface CasinoConfig {
 
 export interface UserProfile {
   walletAddress: string;
+  displayName: string;
+  email: string | null;
+  authProvider: string;
   balanceSol: number;
   balanceLamports: number;
   onChainBalanceSol: number;
@@ -69,6 +72,7 @@ export interface UserProfile {
   totalWonSol: number;
   playerInitialized?: boolean;
   onChainEnabled?: boolean;
+  memberSince?: string;
 }
 
 export async function fetchConfig(): Promise<CasinoConfig> {
@@ -94,14 +98,43 @@ export async function verifyAuth(
   walletAddress: string,
   signature: string,
   message: string,
-): Promise<{ token: string; walletAddress: string }> {
+  profile?: {
+    authProvider?: string;
+    email?: string;
+    displayName?: string;
+  },
+): Promise<{
+  token: string;
+  walletAddress: string;
+  profile?: { displayName: string; email: string | null; authProvider: string };
+}> {
   const res = await fetch(`${API_URL}/api/auth/verify`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ walletAddress, signature, message }),
+    body: JSON.stringify({
+      walletAddress,
+      signature,
+      message,
+      ...profile,
+    }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? "Authentication failed");
+  return data;
+}
+
+export async function updateProfile(displayName: string): Promise<{
+  walletAddress: string;
+  displayName: string;
+  email: string | null;
+  authProvider: string;
+}> {
+  const res = await apiFetch("/api/profile", {
+    method: "PATCH",
+    body: JSON.stringify({ displayName }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Profile update failed");
   return data;
 }
 
@@ -224,6 +257,7 @@ export async function fetchHistory(
 export interface LeaderboardEntry {
   rank: number;
   walletAddress: string;
+  displayName: string;
   totalWageredSol: number;
   totalWonSol: number;
   balanceSol: number;

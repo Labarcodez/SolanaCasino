@@ -1,4 +1,4 @@
-type GameTab = "crash" | "coinflip" | "leaderboard" | "fairness";
+type GameTab = "crash" | "coinflip" | "leaderboard" | "fairness" | "profile";
 
 interface MobileNavProps {
   activeTab: GameTab;
@@ -9,7 +9,7 @@ const TABS: { id: GameTab; label: string; icon: string }[] = [
   { id: "crash", label: "Crash", icon: "🚀" },
   { id: "coinflip", label: "Flip", icon: "🪙" },
   { id: "leaderboard", label: "Ranks", icon: "🏆" },
-  { id: "fairness", label: "Fair", icon: "🔐" },
+  { id: "profile", label: "Profile", icon: "👤" },
 ];
 
 export function MobileNav({ activeTab, onTabChange }: MobileNavProps) {

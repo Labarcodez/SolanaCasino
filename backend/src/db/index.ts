@@ -22,6 +22,9 @@ db.exec(`
     balance_lamports INTEGER NOT NULL DEFAULT 0,
     total_wagered_lamports INTEGER NOT NULL DEFAULT 0,
     total_won_lamports INTEGER NOT NULL DEFAULT 0,
+    display_name TEXT,
+    email TEXT,
+    auth_provider TEXT NOT NULL DEFAULT 'wallet',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -94,6 +97,11 @@ export function getOrCreateUser(walletAddress: string): {
   balance_lamports: number;
   total_wagered_lamports: number;
   total_won_lamports: number;
+  display_name: string | null;
+  email: string | null;
+  auth_provider: string;
+  created_at: string;
+  updated_at: string;
 } {
   const existing = db
     .prepare("SELECT * FROM users WHERE wallet_address = ?")
@@ -103,6 +111,11 @@ export function getOrCreateUser(walletAddress: string): {
         balance_lamports: number;
         total_wagered_lamports: number;
         total_won_lamports: number;
+        display_name: string | null;
+        email: string | null;
+        auth_provider: string;
+        created_at: string;
+        updated_at: string;
       }
     | undefined;
 
@@ -114,6 +127,11 @@ export function getOrCreateUser(walletAddress: string): {
     balance_lamports: 0,
     total_wagered_lamports: 0,
     total_won_lamports: 0,
+    display_name: null,
+    email: null,
+    auth_provider: "wallet",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   };
 }
 
