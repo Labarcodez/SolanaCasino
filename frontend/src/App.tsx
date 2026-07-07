@@ -15,9 +15,15 @@ import { SocketProvider, useSocket } from "./hooks/useSocket";
 import { CASINO_WALLET } from "./lib/api";
 import AuthCallback from "./pages/AuthCallback";
 import { ScreenshotPreview } from "./pages/ScreenshotPreview";
+import { ProfilePanel } from "./components/ProfilePanel";
 import { ScreenshotPreviewCoinflip } from "./pages/ScreenshotPreviewCoinflip";
+import { ScreenshotPreviewProfile } from "./pages/ScreenshotPreviewProfile";
+import { ScreenshotPreviewLeaderboard } from "./pages/ScreenshotPreviewLeaderboard";
+import { ScreenshotPreviewFairness } from "./pages/ScreenshotPreviewFairness";
+import { ScreenshotPreviewAuth, ScreenshotPreviewLanding } from "./pages/ScreenshotPreviewAuth";
+import type { UserProfile } from "./lib/api";
 
-type GameTab = "crash" | "coinflip" | "leaderboard" | "fairness";
+type GameTab = "crash" | "coinflip" | "leaderboard" | "fairness" | "profile";
 
 function CasinoContent() {
   const {
@@ -27,6 +33,7 @@ function CasinoContent() {
     authError,
     authenticate,
     signOut,
+    authProvider,
     walletAddress,
     profile,
     config,
@@ -39,6 +46,7 @@ function CasinoContent() {
   const { connected: wsConnected } = useSocket();
   const [activeTab, setActiveTab] = useState<GameTab>("crash");
   const [localBalance, setLocalBalance] = useState<number | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const balanceSol = localBalance ?? profile?.balanceSol ?? 0;
   const onChainEnabled = config?.onChainEnabled ?? false;
@@ -72,17 +80,21 @@ function CasinoContent() {
           onChainEnabled={onChainEnabled}
         />
         <div className="auth-screen">
-          <h2>Sign in to play</h2>
+          <h2>Complete your profile</h2>
           <p>
-            Sign a message with your wallet to verify ownership. This is free and
-            does not send any SOL.
+            Your wallet is connected
+            {authProvider === "google" || authProvider === "apple"
+              ? ` via ${authProvider === "google" ? "Google" : "Apple"}`
+              : ""}
+            . Sign a free message to create your casino profile — no SOL
+            required.
           </p>
           <button
             className="btn btn-primary"
             onClick={() => authenticate().catch(console.error)}
             disabled={authLoading}
           >
-            {authLoading ? "Signing..." : "Sign In with Wallet"}
+            {authLoading ? "Signing..." : "Create profile & play"}
           </button>
           {authError && <div className="alert alert-error">{authError}</div>}
         </div>
@@ -91,6 +103,14 @@ function CasinoContent() {
     );
   }
 
+  const handleProfileUpdated = (updated: UserProfile) => {
+    void refresh();
+    setProfileOpen(false);
+    if (updated.displayName) {
+      setActiveTab("crash");
+    }
+  };
+
   return (
     <div className="app">
       <AnimatedBackground />
@@ -98,9 +118,23 @@ function CasinoContent() {
         balanceSol={balanceSol}
         connected
         walletAddress={walletAddress}
+        displayName={profile?.displayName}
         onChainEnabled={onChainEnabled}
-        onSignOut={signOut}
+        onSignOut={() => void signOut()}
+        onProfileClick={() => setProfileOpen(true)}
       />
+
+      {profileOpen && profile && (
+        <div className="modal-overlay" onClick={() => setProfileOpen(false)} role="presentation">
+          <div onClick={(e) => e.stopPropagation()}>
+            <ProfilePanel
+              profile={profile}
+              onUpdated={handleProfileUpdated}
+              onClose={() => setProfileOpen(false)}
+            />
+          </div>
+        </div>
+      )}
 
       <div className="container">
         <nav className="nav-tabs" aria-label="Game tabs">
@@ -127,6 +161,12 @@ function CasinoContent() {
             onClick={() => setActiveTab("fairness")}
           >
             🔐 Fairness
+          </button>
+          <button
+            className={`nav-tab ${activeTab === "profile" ? "active" : ""}`}
+            onClick={() => setActiveTab("profile")}
+          >
+            👤 Profile
           </button>
           <div
             className="live-indicator"
@@ -184,6 +224,9 @@ function CasinoContent() {
               )}
               {activeTab === "leaderboard" && <Leaderboard />}
               {activeTab === "fairness" && <FairnessPanel />}
+              {activeTab === "profile" && profile && (
+                <ProfilePanel profile={profile} onUpdated={handleProfileUpdated} />
+              )}
             </div>
 
             <aside className="sidebar-panels">
@@ -254,6 +297,11 @@ export default function App() {
       <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/preview" element={<ScreenshotPreview />} />
       <Route path="/preview-coinflip" element={<ScreenshotPreviewCoinflip />} />
+      <Route path="/preview-profile" element={<ScreenshotPreviewProfile />} />
+      <Route path="/preview-leaderboard" element={<ScreenshotPreviewLeaderboard />} />
+      <Route path="/preview-fairness" element={<ScreenshotPreviewFairness />} />
+      <Route path="/preview-auth" element={<ScreenshotPreviewAuth />} />
+      <Route path="/preview-landing" element={<ScreenshotPreviewLanding />} />
       <Route
         path="/*"
         element={

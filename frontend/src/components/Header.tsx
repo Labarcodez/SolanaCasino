@@ -2,21 +2,26 @@ import { ConnectButton } from "@phantom/react-sdk";
 import { formatSol } from "../lib/api";
 import { shortenAddress } from "../lib/utils";
 import { OnChainBadge } from "./OnChainBadge";
+import { ProfileAvatar } from "./ProfileAvatar";
 
 interface HeaderProps {
   balanceSol?: number;
   connected: boolean;
   walletAddress?: string;
+  displayName?: string;
   onChainEnabled?: boolean;
   onSignOut?: () => void;
+  onProfileClick?: () => void;
 }
 
 export function Header({
   balanceSol,
   connected,
   walletAddress,
+  displayName,
   onChainEnabled,
   onSignOut,
+  onProfileClick,
 }: HeaderProps) {
   return (
     <header className="header">
@@ -34,8 +39,22 @@ export function Header({
               <span className="balance-value">{formatSol(balanceSol)} SOL</span>
             </div>
           )}
-          {connected && walletAddress && (
-            <span className="wallet-chip">{shortenAddress(walletAddress)}</span>
+          {connected && walletAddress && displayName && (
+            <button
+              type="button"
+              className="profile-chip"
+              onClick={onProfileClick}
+            >
+              <ProfileAvatar
+                seed={walletAddress}
+                name={displayName}
+                size="sm"
+              />
+              <span className="profile-chip-name">{displayName}</span>
+              <span className="profile-chip-wallet">
+                {shortenAddress(walletAddress)}
+              </span>
+            </button>
           )}
           {connected && onSignOut && (
             <button className="btn-ghost" onClick={onSignOut} type="button">

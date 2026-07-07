@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import bs58 from "bs58";
 import { AddressType } from "@phantom/browser-sdk";
-import { usePhantom, useSolana } from "@phantom/react-sdk";
+import { usePhantom, useSolana, useDisconnect } from "@phantom/react-sdk";
 import {
   requestAuthNonce,
   verifyAuth,
@@ -9,9 +9,15 @@ import {
   getAuthToken,
 } from "../lib/api";
 
+type PhantomUserExtended = {
+  authProvider?: string;
+  email?: string;
+};
+
 export function useAuth() {
-  const { isConnected, addresses } = usePhantom();
+  const { isConnected, addresses, user: phantomUser } = usePhantom();
   const { solana, isAvailable } = useSolana();
+  const { disconnect } = useDisconnect();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -20,6 +26,9 @@ export function useAuth() {
     (a) => a.addressType === AddressType.solana,
   );
   const walletAddress = solanaAccount?.address;
+
+  const authProvider = phantomUser?.authProvider ?? "injected";
+  const phantomEmail = (phantomUser as PhantomUserExtended | null)?.email;
 
   const authenticate = useCallback(async () => {
     if (!walletAddress || !solana || !isAvailable) {
@@ -34,7 +43,10 @@ export function useAuth() {
       const signResult = await solana.signMessage(message);
       const signature = bs58.encode(signResult.signature);
 
-      const result = await verifyAuth(walletAddress, signature, message);
+      const result = await verifyAuth(walletAddress, signature, message, {
+        authProvider,
+        email: phantomEmail,
+      });
       setAuthToken(result.token);
       setIsAuthenticated(true);
       return result.token;
@@ -47,7 +59,7 @@ export function useAuth() {
     } finally {
       setAuthLoading(false);
     }
-  }, [walletAddress, solana, isAvailable]);
+  }, [walletAddress, solana, isAvailable, authProvider, phantomEmail]);
 
   useEffect(() => {
     if (!isConnected || !walletAddress) {
@@ -67,10 +79,15 @@ export function useAuth() {
     });
   }, [isConnected, walletAddress, authenticate]);
 
-  const signOut = useCallback(() => {
+  const signOut = useCallback(async () => {
     setAuthToken(null);
     setIsAuthenticated(false);
-  }, []);
+    try {
+      await disconnect();
+    } catch {
+      // ignore disconnect errors
+    }
+  }, [disconnect]);
 
   return {
     walletAddress,
@@ -80,5 +97,7 @@ export function useAuth() {
     authError,
     authenticate,
     signOut,
+    authProvider,
+    phantomEmail,
   };
 }

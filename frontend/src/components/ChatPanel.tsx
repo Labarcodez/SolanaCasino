@@ -45,9 +45,11 @@ export function ChatPanel() {
         ) : (
           chatMessages.map((msg) => (
             <div key={msg.id} className="chat-message">
-              <span className="chat-avatar">{msg.walletAddress.slice(0, 1)}</span>
+              <span className="chat-avatar">
+                {msg.displayName.slice(0, 1).toUpperCase()}
+              </span>
               <div className="chat-bubble">
-                <span className="chat-author">{msg.walletAddress}</span>
+                <span className="chat-author">{msg.displayName}</span>
                 <span className="chat-text">{msg.message}</span>
               </div>
             </div>

@@ -51,16 +51,36 @@ export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
           On Solana
         </h1>
         <p>
-          Non-custodial crash and coinflip built for crypto natives. Connect
-          Phantom, deposit to the vault PDA, and withdraw winnings instantly.
+          Connect with Phantom, Google, or Apple. Deposit to the vault, play
+          crash and coinflip, and withdraw winnings instantly.
         </p>
 
-        <ConnectButton />
+        <div className="landing-auth">
+          <ConnectButton />
+          <div className="landing-auth-methods">
+            {socialLoginEnabled ? (
+              <>
+                <span className="auth-method-pill">Google</span>
+                <span className="auth-method-pill">Apple</span>
+                <span className="auth-method-pill">Phantom Wallet</span>
+              </>
+            ) : (
+              <span className="auth-method-pill">Phantom Extension</span>
+            )}
+          </div>
+        </div>
 
         {!socialLoginEnabled && (
           <p className="landing-hint">
-            Phantom extension works out of the box. Email login needs a Portal
-            app ID.
+            Email login (Google / Apple) needs a Phantom Portal app ID. Set{" "}
+            <code>VITE_PHANTOM_APP_ID</code> to enable embedded wallets.
+          </p>
+        )}
+
+        {socialLoginEnabled && (
+          <p className="landing-hint success">
+            Sign in with Google or Apple for a passwordless embedded wallet, or
+            connect your existing Phantom extension.
           </p>
         )}
       </motion.div>

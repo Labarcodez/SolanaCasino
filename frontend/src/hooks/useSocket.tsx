@@ -39,6 +39,7 @@ export interface CrashRoundState {
 export interface ChatMessage {
   id: string;
   walletAddress: string;
+  displayName: string;
   message: string;
   createdAt: string;
 }
