@@ -57,18 +57,41 @@ FMmho438Vv1Y9nov4mtfHZ4pYSZV8NfubiCeCB3bbGCb
 
 ## Quick Start
 
+### Custodial mode (fastest — no Anchor required)
+
 ```bash
-# One-command setup (installs deps, builds, creates .env files)
-npm run setup
-
-# Development (frontend :5173 + backend :3001)
-npm run dev
-
-# Production (single server on :3001, serves built frontend)
-npm run start:prod
+npm run setup          # installs deps, builds app, creates .env + JWT_SECRET
+npm run dev            # frontend :5173 + backend :3001
 ```
 
-Open http://localhost:5173 (dev) or http://localhost:3001 (production).
+1. Open http://localhost:5173
+2. Connect **Phantom** (devnet wallet with SOL — `solana airdrop 2` on devnet)
+3. Sign the free auth message → deposit SOL → play Crash / Limbo / Coinflip
+
+Leave `PROGRAM_AUTHORITY_PRIVATE_KEY` **unset** in `backend/.env` for custodial SQLite balances.
+
+```bash
+# Verify backend is healthy (with server running)
+npm run verify
+```
+
+### Production (single server)
+
+```bash
+npm run setup
+npm run start:prod     # serves built frontend on :3001
+```
+
+Open http://localhost:3001
+
+### Docker
+
+```bash
+npm run setup          # creates backend/.env with JWT_SECRET (required)
+docker compose up --build
+```
+
+Open http://localhost:3001
 
 ## Configuration
 

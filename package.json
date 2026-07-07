@@ -20,7 +20,8 @@
     "docker:build": "docker compose build",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
-    "screenshots": "node scripts/capture-screenshots.mjs"
+    "screenshots": "node scripts/capture-screenshots.mjs",
+    "verify": "bash scripts/verify.sh"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

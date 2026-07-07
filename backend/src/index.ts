@@ -19,6 +19,7 @@ import { requireAuthSocket } from "./middleware/auth.js";
 import { checkRpcHealth } from "./services/solana.js";
 import { getRecentChatMessages, sendChatMessage } from "./services/chat.js";
 import { isCasinoPaused } from "./services/pause.js";
+import { initializeCasinoIfNeeded, isAnchorEnabled, fetchCasinoAccount } from "./services/anchor.js";
 
 const socketRateLimits = new Map<string, number>();
 const SOCKET_COOLDOWN_MS = 500;
@@ -248,6 +249,27 @@ async function start(): Promise<void> {
     console.warn("Warning: RPC health check failed — deposits may be slow");
   } else {
     console.log(`RPC connected: ${rpc.endpoint} (slot ${rpc.slot})`);
+  }
+
+  if (isAnchorEnabled()) {
+    try {
+      const existing = await fetchCasinoAccount();
+      if (existing) {
+        console.log(`On-chain casino active at ${existing.address}`);
+      } else {
+        const sig = await initializeCasinoIfNeeded();
+        if (sig) {
+          console.log(`On-chain casino initialized (tx: ${sig})`);
+        }
+      }
+    } catch (err) {
+      console.error(
+        "On-chain casino init failed — check PROGRAM_AUTHORITY_PRIVATE_KEY and RPC:",
+        err instanceof Error ? err.message : err,
+      );
+    }
+  } else {
+    console.log("Custodial mode — leave PROGRAM_AUTHORITY_PRIVATE_KEY unset for SQLite balances");
   }
 
   httpServer.listen(config.port, () => {

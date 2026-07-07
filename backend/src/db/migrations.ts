@@ -93,5 +93,3 @@ export function runMigrations(): void {
     );
   `);
 }
-
-runMigrations();

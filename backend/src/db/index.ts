@@ -3,7 +3,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { UserRow } from "./types.js";
-import "./migrations.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.join(__dirname, "..", "..", "data");
@@ -93,6 +92,9 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_chat_created ON chat_messages(created_at);
 `);
+
+import { runMigrations } from "./migrations.js";
+runMigrations();
 
 export function getOrCreateUser(walletAddress: string): UserRow {
   const existing = db

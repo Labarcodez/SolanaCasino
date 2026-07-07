@@ -10,10 +10,7 @@ export const config = {
   programId:
     process.env.PROGRAM_ID ??
     "Be5brMe2AvA68zEdiFKxa6KfYJdeQAeY12eWtZiC41vU",
-  programAuthorityPrivateKey:
-    process.env.PROGRAM_AUTHORITY_PRIVATE_KEY ??
-    process.env.CASINO_WALLET_PRIVATE_KEY ??
-    "",
+  programAuthorityPrivateKey: process.env.PROGRAM_AUTHORITY_PRIVATE_KEY ?? "",
   casinoWalletAddress:
     process.env.CASINO_WALLET_ADDRESS ??
     "FMmho438Vv1Y9nov4mtfHZ4pYSZV8NfubiCeCB3bbGCb",

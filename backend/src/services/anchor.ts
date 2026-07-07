@@ -1,4 +1,5 @@
-import { AnchorProvider, BN, Idl, Program, Wallet } from "@coral-xyz/anchor";
+import { AnchorProvider, Idl, Program, Wallet } from "@coral-xyz/anchor";
+import BN from "bn.js";
 import { Connection, Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
 import bs58 from "bs58";
 import idl from "../idl/solcasino.json" with { type: "json" };
@@ -17,8 +18,7 @@ let authorityKeypair: Keypair | null = null;
 
 function loadAuthorityKeypair(): Keypair | null {
   if (authorityKeypair) return authorityKeypair;
-  const secret =
-    config.programAuthorityPrivateKey || config.casinoWalletPrivateKey;
+  const secret = config.programAuthorityPrivateKey;
   if (!secret) return null;
   try {
     authorityKeypair = Keypair.fromSecretKey(bs58.decode(secret));

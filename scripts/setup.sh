@@ -36,7 +36,7 @@ npm install
 
 echo ""
 echo "🔨 Building project..."
-npm run build
+npm run build:docker
 
 echo ""
 echo "✅ Setup complete!"
