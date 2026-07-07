@@ -56,6 +56,9 @@ export interface CasinoConfig {
   maxBetSol: number;
   minWithdrawSol: number;
   houseEdge: number;
+  limboHouseEdge?: number;
+  limboMinTarget?: number;
+  limboMaxTarget?: number;
   withdrawalsEnabled: boolean;
   socialLoginEnabled?: boolean;
 }
@@ -73,6 +76,17 @@ export interface UserProfile {
   playerInitialized?: boolean;
   onChainEnabled?: boolean;
   memberSince?: string;
+  netPnlSol?: number;
+  vipTier?: string;
+  vipLabel?: string;
+  vipRakebackPercent?: number;
+  wagered30dSol?: number;
+  nextVipTier?: string | null;
+  nextVipWagerSol?: number | null;
+  rakebackPendingSol?: number;
+  referralCode?: string;
+  referralLink?: string;
+  referredCount?: number;
 }
 
 export async function fetchConfig(): Promise<CasinoConfig> {
@@ -102,6 +116,7 @@ export async function verifyAuth(
     authProvider?: string;
     email?: string;
     displayName?: string;
+    referralCode?: string;
   },
 ): Promise<{
   token: string;
@@ -189,18 +204,35 @@ export interface CoinflipResult {
 
 export async function prepareCoinflip(
   walletAddress: string,
+  clientSeed?: string,
+): Promise<{
+  prepareId: string;
+  serverSeedHash: string;
+  clientSeed: string;
+}> {
+  const res = await apiFetch("/api/coinflip/prepare", {
+    method: "POST",
+    body: JSON.stringify({ walletAddress, clientSeed }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to prepare coinflip");
+  return data;
+}
+
+export async function revealCoinflip(
+  walletAddress: string,
+  prepareId: string,
 ): Promise<{
   serverSeed: string;
   serverSeedHash: string;
   clientSeed: string;
-  predictedResult: "heads" | "tails";
 }> {
-  const res = await apiFetch("/api/coinflip/prepare", {
+  const res = await apiFetch("/api/coinflip/reveal", {
     method: "POST",
-    body: JSON.stringify({ walletAddress }),
+    body: JSON.stringify({ walletAddress, prepareId }),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? "Failed to prepare coinflip");
+  if (!res.ok) throw new Error(data.error ?? "Failed to reveal coinflip seed");
   return data;
 }
 
@@ -286,6 +318,125 @@ export async function verifyCrashFairness(params: {
 
 export function formatSol(amount: number, decimals = 4): string {
   return amount.toFixed(decimals);
+}
+
+export interface LimboResult {
+  betId: string;
+  targetMultiplier: number;
+  resultMultiplier: number;
+  roll: number;
+  won: boolean;
+  payoutSol: number;
+  balanceSol: number;
+  serverSeedHash: string;
+  serverSeed: string;
+  clientSeed: string;
+}
+
+export async function playLimbo(
+  walletAddress: string,
+  amountSol: number,
+  targetMultiplier: number,
+  clientSeed?: string,
+): Promise<LimboResult> {
+  const res = await apiFetch("/api/limbo", {
+    method: "POST",
+    body: JSON.stringify({ walletAddress, amountSol, targetMultiplier, clientSeed }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Limbo bet failed");
+  return data;
+}
+
+export interface AffiliateStats {
+  referralCode: string;
+  referralLink: string;
+  referredCount: number;
+  totalCommissionSol: number;
+  pendingCommissionSol: number;
+}
+
+export async function fetchAffiliateStats(): Promise<AffiliateStats> {
+  const res = await apiFetch("/api/affiliate");
+  if (!res.ok) throw new Error("Failed to load affiliate stats");
+  return res.json();
+}
+
+export async function claimRakeback(): Promise<{
+  claimedSol: number;
+  balanceSol: number;
+}> {
+  const res = await apiFetch("/api/rakeback/claim", { method: "POST" });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Rakeback claim failed");
+  return data;
+}
+
+export interface TournamentData {
+  weekId: string;
+  weekEnd: string;
+  prizePoolSol: number;
+  entries: Array<{
+    rank: number;
+    displayName: string;
+    walletAddress: string;
+    wageredSol: number;
+    estimatedPrizeSol: number;
+  }>;
+}
+
+export async function fetchTournament(): Promise<TournamentData> {
+  const res = await fetch(`${API_URL}/api/tournament`);
+  if (!res.ok) throw new Error("Failed to load tournament");
+  return res.json();
+}
+
+export interface CasinoStats {
+  casinoWallet: string;
+  casinoBalanceSol: number;
+  totalUsers: number;
+  totalBets: number;
+  handle24hSol: number;
+  grossRevenue24hSol: number;
+  affiliateCommissionsSol: number;
+  tournamentPrizePoolSol: number;
+  tournamentWeekEnd: string;
+}
+
+export async function fetchCasinoStats(): Promise<CasinoStats> {
+  const res = await fetch(`${API_URL}/api/casino/stats`);
+  if (!res.ok) throw new Error("Failed to load stats");
+  return res.json();
+}
+
+export async function verifyLimboFairness(params: {
+  serverSeed: string;
+  betId: string;
+  clientSeed: string;
+  targetMultiplier: number;
+  expectedWon: boolean;
+}): Promise<{ valid: boolean; roll: number; won: boolean }> {
+  const res = await fetch(`${API_URL}/api/fairness/verify-limbo`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  return res.json();
+}
+
+const REFERRAL_KEY = "orbitcasino_ref";
+
+export function storeReferralCode(code: string): void {
+  sessionStorage.setItem(REFERRAL_KEY, code.toUpperCase());
+}
+
+export function getStoredReferralCode(): string | null {
+  return sessionStorage.getItem(REFERRAL_KEY);
+}
+
+export function captureReferralFromUrl(): void {
+  const ref = new URLSearchParams(window.location.search).get("ref");
+  if (ref) storeReferralCode(ref);
 }
 
 export function shortenAddress(address: string): string {

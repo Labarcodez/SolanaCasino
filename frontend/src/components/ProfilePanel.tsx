@@ -1,6 +1,10 @@
 import { useState } from "react";
 import type { UserProfile } from "../lib/api";
-import { updateProfile, formatSol } from "../lib/api";
+import {
+  updateProfile,
+  formatSol,
+  claimRakeback,
+} from "../lib/api";
 import { shortenAddress } from "../lib/utils";
 import { authProviderLabel } from "../lib/avatar";
 import { ProfileAvatar } from "./ProfileAvatar";
@@ -12,10 +16,19 @@ interface ProfilePanelProps {
   onClose?: () => void;
 }
 
+const VIP_COLORS: Record<string, string> = {
+  none: "var(--text-muted)",
+  bronze: "#cd7f32",
+  silver: "#c0c0c0",
+  gold: "#ffd700",
+  orbit: "var(--solana-green)",
+};
+
 export function ProfilePanel({ profile, onUpdated, onClose }: ProfilePanelProps) {
   const { toast } = useToast();
   const [displayName, setDisplayName] = useState(profile.displayName);
   const [saving, setSaving] = useState(false);
+  const [claiming, setClaiming] = useState(false);
 
   const handleSave = async () => {
     if (displayName.trim() === profile.displayName) return;
@@ -36,6 +49,28 @@ export function ProfilePanel({ profile, onUpdated, onClose }: ProfilePanelProps)
     }
   };
 
+  const handleClaimRakeback = async () => {
+    setClaiming(true);
+    try {
+      const result = await claimRakeback();
+      onUpdated({ ...profile, balanceSol: result.balanceSol, rakebackPendingSol: 0 });
+      toast(`Claimed ${formatSol(result.claimedSol)} SOL rakeback`, "success");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Claim failed", "error");
+    } finally {
+      setClaiming(false);
+    }
+  };
+
+  const copyReferral = () => {
+    if (!profile.referralLink) return;
+    void navigator.clipboard.writeText(profile.referralLink);
+    toast("Referral link copied", "success");
+  };
+
+  const netPnl = profile.netPnlSol ?? profile.totalWonSol - profile.totalWageredSol;
+  const vipColor = VIP_COLORS[profile.vipTier ?? "none"] ?? VIP_COLORS.none;
+
   return (
     <div className="card profile-panel">
       <div className="profile-panel-header">
@@ -49,6 +84,11 @@ export function ProfilePanel({ profile, onUpdated, onClose }: ProfilePanelProps)
           <p className="profile-auth-badge">
             Signed in via {authProviderLabel(profile.authProvider)}
           </p>
+          {profile.vipLabel && profile.vipTier !== "none" && (
+            <span className="vip-badge" style={{ borderColor: vipColor, color: vipColor }}>
+              {profile.vipLabel} · {profile.vipRakebackPercent}% rakeback
+            </span>
+          )}
         </div>
         {onClose && (
           <button type="button" className="btn-ghost btn-sm" onClick={onClose}>
@@ -59,18 +99,58 @@ export function ProfilePanel({ profile, onUpdated, onClose }: ProfilePanelProps)
 
       <div className="profile-stats">
         <div className="stat-box">
-          <div className="label">Casino balance</div>
+          <div className="label">Balance</div>
           <div className="value text-success">{formatSol(profile.balanceSol)} SOL</div>
         </div>
         <div className="stat-box">
-          <div className="label">Total wagered</div>
-          <div className="value">{formatSol(profile.totalWageredSol)} SOL</div>
+          <div className="label">Net PnL</div>
+          <div className={`value ${netPnl >= 0 ? "text-success" : "text-danger"}`}>
+            {netPnl >= 0 ? "+" : ""}{formatSol(netPnl)} SOL
+          </div>
         </div>
         <div className="stat-box">
-          <div className="label">Total won</div>
-          <div className="value text-success">{formatSol(profile.totalWonSol)} SOL</div>
+          <div className="label">30d wagered</div>
+          <div className="value">{formatSol(profile.wagered30dSol ?? 0)} SOL</div>
         </div>
       </div>
+
+      {(profile.rakebackPendingSol ?? 0) > 0 && !profile.onChainEnabled && (
+        <div className="rakeback-claim-box">
+          <div>
+            <strong>{formatSol(profile.rakebackPendingSol!)} SOL</strong> rakeback pending
+          </div>
+          <button
+            type="button"
+            className="btn btn-success btn-sm"
+            onClick={handleClaimRakeback}
+            disabled={claiming}
+          >
+            {claiming ? "Claiming..." : "Claim"}
+          </button>
+        </div>
+      )}
+
+      {profile.nextVipTier && profile.nextVipWagerSol && (
+        <p className="panel-hint">
+          {(profile.wagered30dSol ?? 0).toFixed(2)} / {profile.nextVipWagerSol} SOL to{" "}
+          {profile.nextVipTier} VIP
+        </p>
+      )}
+
+      {profile.referralCode && (
+        <div className="affiliate-box">
+          <h4 className="affiliate-title">Refer & earn 30% of house edge</h4>
+          <div className="affiliate-code-row">
+            <code className="affiliate-code">{profile.referralCode}</code>
+            <button type="button" className="btn btn-outline btn-sm" onClick={copyReferral}>
+              Copy link
+            </button>
+          </div>
+          <p className="panel-hint">
+            {profile.referredCount ?? 0} players referred
+          </p>
+        </div>
+      )}
 
       <div className="profile-form">
         <div className="input-group">
@@ -86,11 +166,7 @@ export function ProfilePanel({ profile, onUpdated, onClose }: ProfilePanelProps)
 
         <div className="input-group">
           <label>Wallet address</label>
-          <input
-            className="input mono-cell"
-            value={profile.walletAddress}
-            readOnly
-          />
+          <input className="input mono-cell" value={profile.walletAddress} readOnly />
         </div>
 
         {profile.email && (
@@ -101,7 +177,7 @@ export function ProfilePanel({ profile, onUpdated, onClose }: ProfilePanelProps)
         )}
 
         <p className="panel-hint">
-          Public address: {shortenAddress(profile.walletAddress, 6)}
+          {shortenAddress(profile.walletAddress, 6)}
           {profile.memberSince && (
             <> · Member since {new Date(profile.memberSince).toLocaleDateString()}</>
           )}

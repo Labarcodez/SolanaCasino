@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import { v4 as uuidv4 } from "uuid";
-import { db, recordBet, updateBalance } from "../db/index.js";
+import { db, updateBalance } from "../db/index.js";
+import { recordBetWithRewards } from "./limbo.js";
 import {
   generateCrashPoint,
   generateOnChainCrashPoint,
@@ -221,7 +222,7 @@ export class CrashGameEngine extends EventEmitter {
 
     updateBalance(bet.walletAddress, bet.payoutLamports);
 
-    recordBet({
+    recordBetWithRewards({
       id: bet.id,
       walletAddress: bet.walletAddress,
       game: "crash",
@@ -325,7 +326,7 @@ export class CrashGameEngine extends EventEmitter {
     } else {
       for (const bet of this.round.bets) {
         if (!bet.cashedOut) {
-          recordBet({
+          recordBetWithRewards({
             id: bet.id,
             walletAddress: bet.walletAddress,
             game: "crash",

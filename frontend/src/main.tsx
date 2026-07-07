@@ -8,10 +8,13 @@ import "./index.css";
 import "./theme.css";
 import { PHANTOM_APP_ID } from "./lib/api";
 import { BRAND } from "./lib/brand";
+import { captureReferralFromUrl } from "./lib/api";
 import { ToastProvider } from "./components/ui/Toast";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 const redirectUrl = `${window.location.origin}/auth/callback`;
+
+captureReferralFromUrl();
 
 const providers: Array<"google" | "apple" | "injected"> = PHANTOM_APP_ID
   ? ["google", "apple", "injected"]

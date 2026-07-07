@@ -681,7 +681,151 @@ body {
 .error-boundary .logo {
   margin-bottom: 8px;
 }
+
+.preset-btn.selected {
+  border-color: var(--accent);
+  color: var(--accent-bright);
+  background: rgba(139, 92, 246, 0.12);
+}
+
+.limbo-game .limbo-arena {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.limbo-display {
+  text-align: center;
+  padding: 32px 16px;
+  border-radius: var(--radius-lg);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--glass-border);
+}
+
+.limbo-multiplier {
+  font-size: 4rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  font-family: var(--font-mono);
+}
+
+.limbo-multiplier.idle {
+  background: linear-gradient(135deg, var(--accent-bright), var(--solana-green));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.limbo-multiplier.won { color: var(--solana-green); text-shadow: 0 0 32px var(--solana-green-glow); }
+.limbo-multiplier.lost { color: var(--danger); }
+.limbo-multiplier.rolling { color: var(--text-muted); }
+
+.limbo-chance, .limbo-potential {
+  margin-top: 12px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.limbo-slider { width: 100%; margin-top: 8px; accent-color: var(--accent); }
+.limbo-fairness-note { font-size: 0.8rem; color: var(--text-muted); text-align: center; }
+
+.tournament-hero {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.tournament-prize, .tournament-timer {
+  text-align: center;
+  padding: 16px 24px;
+  border-radius: var(--radius-sm);
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid var(--glass-border);
+}
+
+.tournament-prize-value, .tournament-timer-value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--solana-green);
+  font-family: var(--font-mono);
+}
+
+.tournament-prize-label, .tournament-timer-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.treasury-bar {
+  background: rgba(139, 92, 246, 0.06);
+  border-bottom: 1px solid var(--glass-border);
+  padding: 8px 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.treasury-bar-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+
+.treasury-stat strong { color: var(--text-primary); }
+.treasury-divider { color: var(--text-muted); }
+.treasury-brand { color: var(--accent-bright); }
+
+.vip-badge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 4px 10px;
+  border-radius: 100px;
+  border: 1px solid;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.rakeback-claim-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 255, 163, 0.08);
+  border: 1px solid rgba(0, 255, 163, 0.2);
+}
+
+.affiliate-box {
+  margin-bottom: 20px;
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  background: rgba(139, 92, 246, 0.06);
+  border: 1px solid var(--glass-border);
+}
+
+.affiliate-title { font-size: 0.9rem; font-weight: 700; margin-bottom: 10px; }
+.affiliate-code-row { display: flex; gap: 8px; align-items: center; }
+.affiliate-code {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.fairness-tabs { display: flex; gap: 6px; margin-bottom: 20px; }
+.fairness-tabs .nav-tab { padding: 8px 16px; }
+
 @media (max-width: 768px) {
+  .limbo-game .limbo-arena { grid-template-columns: 1fr; }
   .container {
     padding: 0 16px;
   }

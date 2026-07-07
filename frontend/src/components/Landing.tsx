@@ -17,23 +17,29 @@ const features = [
     color: "var(--solana-green)",
   },
   {
+    icon: "🎯",
+    title: "Limbo",
+    desc: "Set your target multiplier and roll. 98% RTP grinder game with instant results.",
+    color: "var(--accent-bright)",
+  },
+  {
     icon: "🪙",
     title: "Coinflip",
     desc: "Instant 50/50 flips with commit-reveal seeds. Double your SOL in one click.",
-    color: "var(--accent-bright)",
+    color: "var(--warning)",
   },
   {
     icon: "🔐",
     title: "Provably Fair",
     desc: "Every outcome verifiable on-chain. Cryptographic seeds — no trust required.",
-    color: "var(--warning)",
+    color: "var(--solana-green)",
   },
 ];
 
 const steps = [
   { n: "01", title: "Connect", desc: "Phantom, Google, or Apple" },
   { n: "02", title: "Deposit", desc: "SOL to vault PDA" },
-  { n: "03", title: "Play", desc: "Crash & coinflip" },
+  { n: "03", title: "Play", desc: "Crash, limbo & flip" },
   { n: "04", title: "Withdraw", desc: "Instant to wallet" },
 ];
 

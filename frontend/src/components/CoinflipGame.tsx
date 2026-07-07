@@ -7,6 +7,7 @@ import {
   formatSol,
   playCoinflip,
   prepareCoinflip,
+  revealCoinflip,
 } from "../lib/api";
 import { useCasino } from "../hooks/CasinoUserProvider";
 import { useToast } from "./ui/Toast";
@@ -57,13 +58,14 @@ export function CoinflipGame({
       if (onChain) {
         await ensurePlayerInitialized(walletAddress, signAndSendTx);
         const prepared = await prepareCoinflip(walletAddress);
+        const revealed = await revealCoinflip(walletAddress, prepared.prepareId);
         const tx = await buildCoinflipBetTransaction(
           walletAddress,
           Math.floor(amount * LAMPORTS_PER_SOL),
           choice,
-          prepared.clientSeed,
-          prepared.serverSeed,
-          prepared.serverSeedHash,
+          revealed.clientSeed,
+          revealed.serverSeed,
+          revealed.serverSeedHash,
         );
         await prepareTransaction(walletAddress, tx);
         const { signature } = await signAndSendTx(tx);
@@ -72,8 +74,8 @@ export function CoinflipGame({
           walletAddress,
           amountSol: amount,
           choice,
-          clientSeed: prepared.clientSeed,
-          serverSeed: prepared.serverSeed,
+          clientSeed: revealed.clientSeed,
+          serverSeed: revealed.serverSeed,
           signature,
         });
 

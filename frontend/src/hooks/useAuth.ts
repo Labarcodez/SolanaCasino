@@ -7,6 +7,7 @@ import {
   verifyAuth,
   setAuthToken,
   getAuthToken,
+  getStoredReferralCode,
 } from "../lib/api";
 
 type PhantomUserExtended = {
@@ -46,6 +47,7 @@ export function useAuth() {
       const result = await verifyAuth(walletAddress, signature, message, {
         authProvider,
         email: phantomEmail,
+        referralCode: getStoredReferralCode() ?? undefined,
       });
       setAuthToken(result.token);
       setIsAuthenticated(true);

@@ -87,3 +87,58 @@ export function verifyCrashPoint(
   if (hashServerSeed(serverSeed) !== serverSeedHash) return false;
   return generateCrashPoint(serverSeed, roundId, clientSeeds) === crashPoint;
 }
+
+/** Limbo: roll 0–9999, win if roll < winChanceBps. 2% house edge on limbo (98% RTP). */
+export const LIMBO_HOUSE_EDGE = 0.02;
+
+export function generateLimboRoll(
+  serverSeed: string,
+  betId: string,
+  clientSeed: string,
+): number {
+  const combined = `${serverSeed}:${betId}:${clientSeed}`;
+  const hash = crypto.createHash("sha256").update(combined).digest("hex");
+  return parseInt(hash.slice(0, 4), 16) % 10000;
+}
+
+export function getLimboWinChanceBps(
+  targetMultiplier: number,
+  houseEdge = LIMBO_HOUSE_EDGE,
+): number {
+  const edgeBps = Math.floor(houseEdge * 10000);
+  const targetMilli = Math.floor(targetMultiplier * 1000);
+  return Math.floor(((10000 - edgeBps) * 1000) / targetMilli);
+}
+
+export function evaluateLimboBet(params: {
+  serverSeed: string;
+  betId: string;
+  clientSeed: string;
+  targetMultiplier: number;
+  houseEdge?: number;
+}): { roll: number; won: boolean; resultMultiplier: number } {
+  const roll = generateLimboRoll(
+    params.serverSeed,
+    params.betId,
+    params.clientSeed,
+  );
+  const winChanceBps = getLimboWinChanceBps(
+    params.targetMultiplier,
+    params.houseEdge ?? LIMBO_HOUSE_EDGE,
+  );
+  const won = roll < winChanceBps;
+  const resultMultiplier = won ? params.targetMultiplier : 0;
+  return { roll, won, resultMultiplier };
+}
+
+export function verifyLimboBet(params: {
+  serverSeed: string;
+  betId: string;
+  clientSeed: string;
+  targetMultiplier: number;
+  expectedWon: boolean;
+  houseEdge?: number;
+}): boolean {
+  const { won } = evaluateLimboBet(params);
+  return won === params.expectedWon;
+}

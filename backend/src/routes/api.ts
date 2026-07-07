@@ -29,6 +29,11 @@ import {
   isAnchorEnabled,
 } from "../services/anchor.js";
 import { getPublicProfile, updateDisplayName, upsertUserProfile, mapAuthProvider } from "../services/profile.js";
+import { createGamePrepare, revealGamePrepare, purgeExpiredPrepares } from "../services/gamePrepare.js";
+import { applyReferralOnSignup, ensureReferralCode, getAffiliateStats } from "../services/affiliate.js";
+import { claimRakeback, getPendingRakebackLamports, getVipTier } from "../services/vip.js";
+import { getTournamentLeaderboard } from "../services/tournament.js";
+import { placeLimboBet, LIMBO_MIN_TARGET, LIMBO_MAX_TARGET, recordBetWithRewards } from "../services/limbo.js";
 import {
   verifyCrashPoint,
   generateCoinflipResult,
@@ -36,6 +41,8 @@ import {
   generateServerSeed,
   hashServerSeed,
   hashServerSeedBytes,
+  evaluateLimboBet,
+  LIMBO_HOUSE_EDGE,
 } from "../services/provablyFair.js";
 import {
   requireAuth,
@@ -90,6 +97,9 @@ apiRouter.get("/config", async (_req, res) => {
       : config.maxBetSol,
     minWithdrawSol: config.minWithdrawSol,
     houseEdge: casino ? casino.houseEdgeBps / 10000 : config.houseEdge,
+    limboHouseEdge: LIMBO_HOUSE_EDGE,
+    limboMinTarget: LIMBO_MIN_TARGET,
+    limboMaxTarget: LIMBO_MAX_TARGET,
     withdrawalsEnabled: onChain || isWithdrawalEnabled(),
     socialLoginEnabled: Boolean(process.env.PHANTOM_APP_ID),
     rpcEndpoints: getRpcEndpoints().map((url) =>
@@ -120,7 +130,7 @@ apiRouter.post("/auth/nonce", authLimiter, (req, res) => {
 });
 
 apiRouter.post("/auth/verify", authLimiter, (req, res) => {
-  const { walletAddress, signature, message, authProvider, email, displayName } =
+  const { walletAddress, signature, message, authProvider, email, displayName, referralCode } =
     req.body as {
       walletAddress?: string;
       signature?: string;
@@ -128,6 +138,7 @@ apiRouter.post("/auth/verify", authLimiter, (req, res) => {
       authProvider?: string;
       email?: string;
       displayName?: string;
+      referralCode?: string;
     };
 
   if (!walletAddress || !signature || !message) {
@@ -151,6 +162,8 @@ apiRouter.post("/auth/verify", authLimiter, (req, res) => {
     email: email?.trim() || undefined,
     displayName: displayName?.trim() || undefined,
   });
+  applyReferralOnSignup(walletAddress, referralCode?.trim());
+  ensureReferralCode(walletAddress);
   const token = createSessionToken(walletAddress);
 
   res.json({
@@ -189,6 +202,13 @@ apiRouter.get(
         ? player.totalWonLamports
         : user.total_won_lamports;
 
+      const vip = getVipTier(walletAddress);
+      const rakebackPendingSol = lamportsToSol(
+        getPendingRakebackLamports(walletAddress),
+      );
+      const affiliate = getAffiliateStats(walletAddress);
+      const netPnlSol = lamportsToSol(totalWon - totalWagered);
+
       res.json({
         walletAddress: user.wallet_address,
         displayName: publicProfile.displayName,
@@ -199,6 +219,17 @@ apiRouter.get(
         onChainBalanceSol: lamportsToSol(onChainBalance),
         totalWageredSol: lamportsToSol(totalWagered),
         totalWonSol: lamportsToSol(totalWon),
+        netPnlSol,
+        vipTier: vip.tier,
+        vipLabel: vip.label,
+        vipRakebackPercent: vip.rakebackPercent,
+        wagered30dSol: vip.wagered30dSol,
+        nextVipTier: vip.nextTier,
+        nextVipWagerSol: vip.nextTierWagerSol,
+        rakebackPendingSol,
+        referralCode: affiliate.referralCode,
+        referralLink: affiliate.referralLink,
+        referredCount: affiliate.referredCount,
         playerInitialized: Boolean(player),
         onChainEnabled: isAnchorEnabled(),
         memberSince: user.created_at,
@@ -381,27 +412,52 @@ apiRouter.post(
   requireAuth,
   betLimiter,
   (req: AuthenticatedRequest, res) => {
-    const { walletAddress } = req.body as { walletAddress?: string };
+    const { walletAddress, clientSeed } = req.body as {
+      walletAddress?: string;
+      clientSeed?: string;
+    };
     if (!walletAddress || walletAddress !== req.walletAddress) {
       res.status(403).json({ error: "Unauthorized" });
       return;
     }
 
-    const serverSeed = generateServerSeed();
-    const serverSeedHash = hashServerSeedBytes(serverSeed);
-    const clientSeed = uuidv4().replace(/-/g, "").slice(0, 32);
-    const predicted = generateOnChainCoinflipResult(
-      serverSeed,
+    purgeExpiredPrepares();
+    const prepared = createGamePrepare({
       walletAddress,
+      game: "coinflip",
       clientSeed,
-    );
-
-    res.json({
-      serverSeed,
-      serverSeedHash,
-      clientSeed,
-      predictedResult: predicted,
     });
+
+    res.json(prepared);
+  },
+);
+
+apiRouter.post(
+  "/coinflip/reveal",
+  requireAuth,
+  betLimiter,
+  (req: AuthenticatedRequest, res) => {
+    const { walletAddress, prepareId } = req.body as {
+      walletAddress?: string;
+      prepareId?: string;
+    };
+    if (!walletAddress || walletAddress !== req.walletAddress || !prepareId) {
+      res.status(400).json({ error: "walletAddress and prepareId required" });
+      return;
+    }
+
+    try {
+      const revealed = revealGamePrepare(prepareId, walletAddress);
+      res.json({
+        serverSeed: revealed.serverSeed,
+        serverSeedHash: revealed.serverSeedHash,
+        clientSeed: revealed.clientSeed,
+      });
+    } catch (err) {
+      res.status(400).json({
+        error: err instanceof Error ? err.message : "Reveal failed",
+      });
+    }
   },
 );
 
@@ -444,7 +500,7 @@ apiRouter.post(
     const won = result === choice;
     const betId = uuidv4();
 
-    recordBet({
+    recordBetWithRewards({
       id: betId,
       walletAddress,
       game: "coinflip",
@@ -537,6 +593,123 @@ apiRouter.post(
   },
 );
 
+apiRouter.post(
+  "/limbo",
+  requireAuth,
+  betLimiter,
+  (req: AuthenticatedRequest, res) => {
+    try {
+      const { walletAddress, amountSol, targetMultiplier, clientSeed } =
+        req.body as {
+          walletAddress?: string;
+          amountSol?: number;
+          targetMultiplier?: number;
+          clientSeed?: string;
+        };
+
+      if (!walletAddress || walletAddress !== req.walletAddress) {
+        res.status(403).json({ error: "Unauthorized bet" });
+        return;
+      }
+
+      if (!amountSol || !targetMultiplier) {
+        res.status(400).json({ error: "amountSol and targetMultiplier required" });
+        return;
+      }
+
+      if (amountSol < config.minBetSol || amountSol > config.maxBetSol) {
+        res.status(400).json({
+          error: `Bet must be between ${config.minBetSol} and ${config.maxBetSol} SOL`,
+        });
+        return;
+      }
+
+      const result = placeLimboBet({
+        walletAddress,
+        amountLamports: solToLamports(amountSol),
+        targetMultiplier,
+        clientSeed,
+      });
+
+      const updatedUser = db
+        .prepare("SELECT balance_lamports FROM users WHERE wallet_address = ?")
+        .get(walletAddress) as { balance_lamports: number };
+
+      res.json({
+        ...result,
+        payoutSol: lamportsToSol(result.payoutLamports),
+        balanceSol: lamportsToSol(updatedUser.balance_lamports),
+      });
+    } catch (err) {
+      res.status(400).json({
+        error: err instanceof Error ? err.message : "Limbo bet failed",
+      });
+    }
+  },
+);
+
+apiRouter.post(
+  "/limbo/prepare",
+  requireAuth,
+  betLimiter,
+  (req: AuthenticatedRequest, res) => {
+    const { walletAddress, targetMultiplier, clientSeed } = req.body as {
+      walletAddress?: string;
+      targetMultiplier?: number;
+      clientSeed?: string;
+    };
+    if (!walletAddress || walletAddress !== req.walletAddress) {
+      res.status(403).json({ error: "Unauthorized" });
+      return;
+    }
+    if (!targetMultiplier) {
+      res.status(400).json({ error: "targetMultiplier required" });
+      return;
+    }
+
+    purgeExpiredPrepares();
+    const prepared = createGamePrepare({
+      walletAddress,
+      game: "limbo",
+      clientSeed,
+      metadata: { targetMultiplier },
+    });
+    res.json(prepared);
+  },
+);
+
+apiRouter.get(
+  "/affiliate",
+  requireAuth,
+  (req: AuthenticatedRequest, res) => {
+    res.json(getAffiliateStats(req.walletAddress!));
+  },
+);
+
+apiRouter.post(
+  "/rakeback/claim",
+  requireAuth,
+  betLimiter,
+  (req: AuthenticatedRequest, res) => {
+    try {
+      if (isAnchorEnabled()) {
+        res.status(400).json({ error: "Rakeback claim available in custodial mode only" });
+        return;
+      }
+      const result = claimRakeback(req.walletAddress!);
+      res.json(result);
+    } catch (err) {
+      res.status(400).json({
+        error: err instanceof Error ? err.message : "Claim failed",
+      });
+    }
+  },
+);
+
+apiRouter.get("/tournament", (_req, res) => {
+  res.json(getTournamentLeaderboard());
+});
+
 apiRouter.get(
   "/history/:walletAddress",
   requireAuth,
@@ -609,6 +782,23 @@ apiRouter.get("/casino/stats", async (_req, res) => {
     .prepare("SELECT COUNT(*) as count FROM withdrawals WHERE status = 'pending'")
     .get() as { count: number };
 
+  const last24h = db
+    .prepare(
+      `SELECT
+        COALESCE(SUM(amount_lamports), 0) as handle,
+        COALESCE(SUM(amount_lamports - payout_lamports), 0) as gross
+       FROM bets WHERE created_at >= datetime('now', '-1 day')`,
+    )
+    .get() as { handle: number; gross: number };
+
+  const affiliatePaid = db
+    .prepare(
+      "SELECT COALESCE(SUM(commission_lamports), 0) as total FROM affiliate_earnings",
+    )
+    .get() as { total: number };
+
+  const tournament = getTournamentLeaderboard();
+
   res.json({
     casinoWallet: config.casinoWalletAddress,
     casinoBalanceSol: lamportsToSol(casinoBalance),
@@ -616,6 +806,11 @@ apiRouter.get("/casino/stats", async (_req, res) => {
     totalBets: totalBets.count,
     pendingWithdrawals: pendingWithdrawals.count,
     withdrawalsEnabled: isWithdrawalEnabled(),
+    handle24hSol: lamportsToSol(last24h.handle),
+    grossRevenue24hSol: lamportsToSol(last24h.gross),
+    affiliateCommissionsSol: lamportsToSol(affiliatePaid.total),
+    tournamentPrizePoolSol: tournament.prizePoolSol,
+    tournamentWeekEnd: tournament.weekEnd,
   });
 });
 
@@ -667,6 +862,42 @@ apiRouter.post("/fairness/verify-coinflip", (req, res) => {
   res.json({
     valid: result === expectedResult,
     result,
+    serverSeedHash: hashServerSeed(serverSeed),
+  });
+});
+
+apiRouter.post("/fairness/verify-limbo", (req, res) => {
+  const { serverSeed, betId, clientSeed, targetMultiplier, expectedWon } =
+    req.body as {
+      serverSeed?: string;
+      betId?: string;
+      clientSeed?: string;
+      targetMultiplier?: number;
+      expectedWon?: boolean;
+    };
+
+  if (
+    !serverSeed ||
+    !betId ||
+    !clientSeed ||
+    targetMultiplier === undefined ||
+    expectedWon === undefined
+  ) {
+    res.status(400).json({ error: "Missing verification parameters" });
+    return;
+  }
+
+  const evaluation = evaluateLimboBet({
+    serverSeed,
+    betId,
+    clientSeed,
+    targetMultiplier,
+  });
+
+  res.json({
+    valid: evaluation.won === expectedWon,
+    roll: evaluation.roll,
+    won: evaluation.won,
     serverSeedHash: hashServerSeed(serverSeed),
   });
 });

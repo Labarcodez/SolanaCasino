@@ -2,9 +2,9 @@
 export const BRAND = {
   name: "OrbitCasino",
   shortName: "Orbit",
-  tagline: "Crash. Flip. Win on Solana.",
+  tagline: "Crash. Limbo. Flip. Win on Solana.",
   description:
-    "Non-custodial Solana casino with provably fair crash and coinflip. Connect with Phantom, Google, or Apple.",
+    "Non-custodial Solana casino with provably fair crash, limbo, and coinflip. Connect with Phantom, Google, or Apple.",
   domain: "orbitcasino.app",
   twitter: "@OrbitCasino",
   discord: "https://discord.gg/orbitcasino",

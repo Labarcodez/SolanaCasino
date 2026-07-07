@@ -6,6 +6,7 @@ import {
   hashServerSeed,
 } from "./provablyFair.js";
 import { config } from "../config.js";
+import { recordBetWithRewards } from "./limbo.js";
 
 const COINFLIP_PAYOUT_MULTIPLIER = 1 - config.houseEdge;
 
@@ -54,7 +55,7 @@ export function placeCoinflipBet(
     updateBalance(request.walletAddress, payoutLamports);
   }
 
-  recordBet({
+  recordBetWithRewards({
     id: betId,
     walletAddress: request.walletAddress,
     game: "coinflip",

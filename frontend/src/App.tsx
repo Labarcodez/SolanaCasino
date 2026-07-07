@@ -12,6 +12,9 @@ import { AnimatedBackground } from "./components/AnimatedBackground";
 import { MobileNav } from "./components/MobileNav";
 import { useCasino, CasinoUserProvider } from "./hooks/CasinoUserProvider";
 import { SocketProvider, useSocket } from "./hooks/useSocket";
+import { LimboGame } from "./components/LimboGame";
+import { TournamentPanel } from "./components/TournamentPanel";
+import { TreasuryBar } from "./components/TreasuryBar";
 import { SiteFooter } from "./components/SiteFooter";
 import { BRAND } from "./lib/brand";
 import { Logo } from "./components/Logo";
@@ -25,7 +28,7 @@ import { ScreenshotPreviewFairness } from "./pages/ScreenshotPreviewFairness";
 import { ScreenshotPreviewAuth, ScreenshotPreviewLanding } from "./pages/ScreenshotPreviewAuth";
 import type { UserProfile } from "./lib/api";
 
-type GameTab = "crash" | "coinflip" | "leaderboard" | "fairness" | "profile";
+type GameTab = "crash" | "coinflip" | "limbo" | "leaderboard" | "tournament" | "fairness" | "profile";
 
 function CasinoContent() {
   const {
@@ -152,6 +155,8 @@ function CasinoContent() {
         </div>
       )}
 
+      <TreasuryBar />
+
       <div className="container">
         <nav className="nav-tabs" aria-label="Game tabs">
           <button
@@ -167,10 +172,22 @@ function CasinoContent() {
             🪙 Coinflip
           </button>
           <button
+            className={`nav-tab ${activeTab === "limbo" ? "active" : ""}`}
+            onClick={() => setActiveTab("limbo")}
+          >
+            🎯 Limbo
+          </button>
+          <button
             className={`nav-tab ${activeTab === "leaderboard" ? "active" : ""}`}
             onClick={() => setActiveTab("leaderboard")}
           >
             🏆 Leaderboard
+          </button>
+          <button
+            className={`nav-tab ${activeTab === "tournament" ? "active" : ""}`}
+            onClick={() => setActiveTab("tournament")}
+          >
+            ⚔️ Tournament
           </button>
           <button
             className={`nav-tab ${activeTab === "fairness" ? "active" : ""}`}
@@ -238,7 +255,21 @@ function CasinoContent() {
                   onBalanceUpdate={handleBalanceUpdate}
                 />
               )}
+              {activeTab === "limbo" && config && (
+                <LimboGame
+                  walletAddress={walletAddress}
+                  balanceSol={balanceSol}
+                  minBetSol={config.minBetSol}
+                  maxBetSol={config.maxBetSol}
+                  limboMinTarget={config.limboMinTarget}
+                  limboMaxTarget={config.limboMaxTarget}
+                  limboHouseEdge={config.limboHouseEdge}
+                  onChainEnabled={onChainEnabled}
+                  onBalanceUpdate={handleBalanceUpdate}
+                />
+              )}
               {activeTab === "leaderboard" && <Leaderboard />}
+              {activeTab === "tournament" && <TournamentPanel />}
               {activeTab === "fairness" && <FairnessPanel />}
               {activeTab === "profile" && profile && (
                 <ProfilePanel profile={profile} onUpdated={handleProfileUpdated} />
