@@ -1,8 +1,9 @@
 import { chromium } from "playwright";
-import { mkdir } from "node:fs/promises";
+import { copyFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 
-const OUT = "/opt/cursor/artifacts/screenshots";
+const OUT = process.env.SCREENSHOT_OUT ?? path.join(process.cwd(), "screenshots");
+const ARTIFACTS_OUT = "/opt/cursor/artifacts/screenshots";
 const BASE = process.env.SCREENSHOT_URL ?? "http://localhost:5173";
 
 const shots = [
@@ -25,6 +26,18 @@ const shots = [
 ];
 
 await mkdir(OUT, { recursive: true });
+await mkdir(ARTIFACTS_OUT, { recursive: true });
+
+async function saveScreenshot(page, shot, fileName) {
+  const repoFile = path.join(OUT, `${fileName}.png`);
+  await page.screenshot({
+    path: repoFile,
+    fullPage: shot.fullPage ?? true,
+    type: "png",
+  });
+  await copyFile(repoFile, path.join(ARTIFACTS_OUT, `${fileName}.png`));
+  console.log(`Saved ${repoFile}`);
+}
 
 const browser = await chromium.launch({ headless: true });
 
@@ -38,12 +51,7 @@ for (const shot of shots) {
   await page.waitForTimeout(2000);
 
   const file = path.join(OUT, `${shot.name}.png`);
-  await page.screenshot({
-    path: file,
-    fullPage: shot.fullPage ?? true,
-    type: "png",
-  });
-  console.log(`Saved ${file}`);
+  await saveScreenshot(page, shot, shot.name);
   await page.close();
 }
 
@@ -55,11 +63,9 @@ try {
       viewport: { width: 1440, height: 900 },
       deviceScaleFactor: 2,
     });
-    await page.goto(`${prodUrl}/preview-landing`, { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto(`${prodUrl}/`, { waitUntil: "networkidle", timeout: 30000 });
     await page.waitForTimeout(2000);
-    const file = path.join(OUT, "17-production-landing.png");
-    await page.screenshot({ path: file, fullPage: true, type: "png" });
-    console.log(`Saved ${file}`);
+    await saveScreenshot(page, { fullPage: true }, "17-production-landing");
     await page.close();
   }
 } catch {
@@ -67,4 +73,4 @@ try {
 }
 
 await browser.close();
-console.log(`Done. ${shots.length + 1} screenshots in ${OUT}`);
+console.log(`Done. Screenshots in ${OUT} and ${ARTIFACTS_OUT}`);
