@@ -9,7 +9,6 @@ interface PreviewShellProps {
   onChain?: boolean;
   balanceSol?: string;
   headerRight?: ReactNode;
-  footer?: boolean;
 }
 
 export function PreviewShell({
@@ -17,7 +16,6 @@ export function PreviewShell({
   onChain,
   balanceSol,
   headerRight,
-  footer,
 }: PreviewShellProps) {
   return (
     <div className="app">
@@ -40,7 +38,7 @@ export function PreviewShell({
         </div>
       </header>
       {children}
-      {footer && <SiteFooter />}
+      <SiteFooter />
     </div>
   );
 }

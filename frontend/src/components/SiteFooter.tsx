@@ -26,9 +26,9 @@ export function SiteFooter() {
         </div>
 
         <p className="site-footer-legal">
-          {BRAND.name} is a decentralized gaming platform on Solana. Play responsibly.
-          You must be of legal gambling age in your jurisdiction. Cryptocurrency
-          gambling involves risk of loss.
+          Play responsibly. You must be of legal gambling age in your jurisdiction.
+          Cryptocurrency gambling involves risk of loss. {BRAND.name} is a decentralized
+          gaming platform on Solana.
         </p>
       </div>
     </footer>

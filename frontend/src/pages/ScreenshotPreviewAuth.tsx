@@ -25,7 +25,7 @@ export function ScreenshotPreviewAuth() {
 
 export function ScreenshotPreviewLanding() {
   return (
-    <PreviewShell footer>
+    <PreviewShell>
       <Landing socialLoginEnabled onChainEnabled />
     </PreviewShell>
   );

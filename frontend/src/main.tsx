@@ -12,7 +12,6 @@ import { captureReferralFromUrl, fetchConfig } from "./lib/api";
 import { setSolanaCluster } from "./lib/cluster";
 import { ToastProvider } from "./components/ui/Toast";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { AgeGate } from "./components/AgeGate";
 
 const redirectUrl = `${window.location.origin}/auth/callback`;
 
@@ -30,7 +29,6 @@ createRoot(document.getElementById("root")!).render(
     <BrowserRouter>
       <ToastProvider>
         <ErrorBoundary>
-          <AgeGate />
           <PhantomProvider
             config={{
               providers,
