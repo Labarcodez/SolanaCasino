@@ -17,6 +17,7 @@
     "start": "npm run start -w backend",
     "start:prod": "SERVE_FRONTEND=true npm run start -w backend",
     "test": "npm run test -w backend",
+    "test:integration": "npm run build -w backend && npm run test -w backend",
     "docker:build": "docker compose build",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",

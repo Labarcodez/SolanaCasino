@@ -5,8 +5,12 @@ import { fileURLToPath } from "node:url";
 import type { UserRow } from "./types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dataDir = path.join(__dirname, "..", "..", "data");
-const dbPath = path.join(dataDir, "casino.db");
+const dataDir = process.env.SQLITE_PATH
+  ? path.dirname(path.resolve(process.env.SQLITE_PATH))
+  : path.join(__dirname, "..", "..", "data");
+const dbPath = process.env.SQLITE_PATH
+  ? path.resolve(process.env.SQLITE_PATH)
+  : path.join(dataDir, "casino.db");
 
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
