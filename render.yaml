@@ -10,7 +10,7 @@
 # Add a persistent disk ($7/mo) mounted at /app/backend/data before real-money volume.
 services:
   - type: web
-    name: orbitcasino
+    name: orbit-solana-casino
     runtime: node
     plan: free
     region: oregon

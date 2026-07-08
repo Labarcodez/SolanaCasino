@@ -5,7 +5,7 @@ export const BRAND = {
   tagline: "Crash. Limbo. Flip. Win on Solana.",
   description:
     "Non-custodial Solana casino with provably fair crash, limbo, and coinflip. Connect with Phantom, Google, or Apple.",
-  domain: "orbitcasino.app",
+  domain: "orbit-solana-casino.onrender.com",
   twitter: "@OrbitCasino",
   twitterUrl: "https://x.com/OrbitCasino",
   discord: "https://discord.gg/orbitcasino",
