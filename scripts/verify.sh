@@ -30,10 +30,10 @@ check "Leaderboard" "${BASE}/api/leaderboard"
 check "Recent wins" "${BASE}/api/recent-wins"
 check "Tournament" "${BASE}/api/tournament"
 
-# Fairness (POST)
-fairness_code=$(curl -sf -o /dev/null -w "%{http_code}" -X POST "${BASE}/api/fairness/verify-crash" \
+# Fairness (POST) — expect 400 on empty body
+fairness_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${BASE}/api/fairness/verify-crash" \
   -H "Content-Type: application/json" \
-  -d '{}' 2>/dev/null || echo "000")
+  -d '{}')
 if [ "$fairness_code" = "400" ]; then
   echo "✅ Fairness endpoint (400 on empty body)"
 else
@@ -41,8 +41,8 @@ else
   FAIL=1
 fi
 
-# Auth required
-auth_code=$(curl -sf -o /dev/null -w "%{http_code}" "${BASE}/api/user/test" 2>/dev/null || echo "000")
+# Auth required — expect 401 without token
+auth_code=$(curl -s -o /dev/null -w "%{http_code}" "${BASE}/api/user/test")
 if [ "$auth_code" = "401" ]; then
   echo "✅ Auth guard (401 without token)"
 else
