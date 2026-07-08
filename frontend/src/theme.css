@@ -58,12 +58,31 @@ body {
 }
 
 .logo-text {
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.logo-word-primary {
   background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-bright) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  font-weight: 800;
-  letter-spacing: -0.03em;
+}
+
+.logo-word-secondary {
+  color: var(--text-secondary);
+  font-weight: 600;
+  -webkit-text-fill-color: var(--text-secondary);
+}
+
+.logo-satellite,
+.logo-peak,
+.logo-core-pulse {
+  filter: drop-shadow(0 0 5px var(--solana-green-glow));
+}
+
+.logo-sol-token {
+  filter: drop-shadow(0 0 8px var(--solana-green-glow));
 }
 
 /* Header v3 */
