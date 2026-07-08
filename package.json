@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "engines": {
-    "node": ">=22"
+    "node": "22.x"
   },
   "workspaces": [
     "frontend",
@@ -14,6 +14,7 @@
     "dev": "concurrently \"npm run dev -w backend\" \"npm run dev -w frontend\"",
     "build": "npm run anchor:build && npm run build -w backend && npm run build -w frontend",
     "build:docker": "npm run build -w backend && npm run build -w frontend",
+    "build:render": "node scripts/render-build.mjs",
     "anchor:build": "bash scripts/anchor-build.sh",
     "anchor:sync-idl": "cp target/idl/solcasino.json frontend/src/idl/ && cp target/idl/solcasino.json backend/src/idl/",
     "anchor:test": "anchor test",
