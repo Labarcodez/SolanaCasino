@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { usePhantom } from "@phantom/react-sdk";
+import { ConnectBox, usePhantom } from "@phantom/react-sdk";
 import { useAuth } from "../hooks/useAuth";
 import { Logo } from "../components/Logo";
 import { SiteFooter } from "../components/SiteFooter";
@@ -76,11 +76,12 @@ export default function AuthCallback() {
             </>
           ) : (
             <>
-              <h2>Wallet not connected</h2>
-              <p>Connect your wallet and try signing in again.</p>
+              <h2>Finish connecting</h2>
+              <p>Complete wallet setup below, then return to play.</p>
+              <ConnectBox maxWidth="100%" />
               <button
                 type="button"
-                className="btn btn-primary"
+                className="btn btn-outline"
                 style={{ width: "100%", marginTop: 12 }}
                 onClick={() => navigate("/", { replace: true })}
               >

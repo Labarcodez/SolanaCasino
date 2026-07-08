@@ -8,6 +8,7 @@ import "./index.css";
 import "./theme.css";
 import { PHANTOM_APP_ID } from "./lib/api";
 import { BRAND } from "./lib/brand";
+import { getPhantomProviders } from "./lib/phantomProviders";
 import { captureReferralFromUrl, fetchConfig } from "./lib/api";
 import { setSolanaCluster } from "./lib/cluster";
 import { ToastProvider } from "./components/ui/Toast";
@@ -20,9 +21,8 @@ void fetchConfig()
   .then((c) => setSolanaCluster(c.cluster))
   .catch(() => setSolanaCluster("devnet"));
 
-const providers: Array<"google" | "apple" | "injected"> = PHANTOM_APP_ID
-  ? ["google", "apple", "injected"]
-  : ["injected"];
+const providers = getPhantomProviders();
+const appIcon = `${window.location.origin}/favicon.svg`;
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -38,6 +38,7 @@ createRoot(document.getElementById("root")!).render(
             }}
             theme={darkTheme}
             appName={BRAND.name}
+            appIcon={appIcon}
           >
             <App />
           </PhantomProvider>

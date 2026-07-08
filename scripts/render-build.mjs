@@ -12,6 +12,10 @@ if (env.ALCHEMY_API_KEY && !env.VITE_SOLANA_RPC) {
   env.VITE_SOLANA_RPC = `https://solana-${network}.g.alchemy.com/v2/${env.ALCHEMY_API_KEY}`;
 }
 
+if (env.PHANTOM_APP_ID && !env.VITE_PHANTOM_APP_ID) {
+  env.VITE_PHANTOM_APP_ID = env.PHANTOM_APP_ID;
+}
+
 // Render sets NODE_ENV=production globally, which makes `npm ci` skip devDependencies
 // (TypeScript, @types/*, Vite). Force dev deps during the build phase.
 const buildEnv = {

@@ -9,6 +9,7 @@ import {
   getAuthToken,
   getStoredReferralCode,
 } from "../lib/api";
+import { isMobileBrowser } from "../lib/phantomProviders";
 
 type PhantomUserExtended = {
   authProvider?: string;
@@ -76,10 +77,15 @@ export function useAuth() {
       return;
     }
 
+    // Mobile / deeplink: connect and sign must be separate user actions (iOS deep-link limit).
+    if (isMobileBrowser() || authProvider === "deeplink") {
+      return;
+    }
+
     authenticate().catch(() => {
       // User may reject sign prompt on first connect
     });
-  }, [isConnected, walletAddress, authenticate]);
+  }, [isConnected, walletAddress, authenticate, authProvider]);
 
   const signOut = useCallback(async () => {
     setAuthToken(null);

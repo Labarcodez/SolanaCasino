@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { ConnectButton } from "@phantom/react-sdk";
 import { PROGRAM_ID } from "../lib/api";
+import { isMobileBrowser, isPortalConfigured } from "../lib/phantomProviders";
 import { shortenAddress, solscanAccountUrl } from "../lib/utils";
 import { BRAND, GAMES, TRUST_BADGES } from "../lib/brand";
 import { CrashIcon, CoinflipIcon, LimboIcon, FairnessIcon } from "./icons/GameIcons";
@@ -50,6 +51,8 @@ const steps = [
 
 export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
   const taglineParts = BRAND.tagline.split(".");
+  const mobile = isMobileBrowser();
+  const portalReady = socialLoginEnabled ?? isPortalConfigured();
 
   return (
     <div className="landing">
@@ -80,21 +83,38 @@ export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
         <div className="landing-auth">
           <ConnectButton />
           <div className="landing-auth-methods">
-            {socialLoginEnabled ? (
+            {portalReady ? (
               <>
                 <span className="auth-method-pill">Google</span>
                 <span className="auth-method-pill">Apple</span>
-                <span className="auth-method-pill">Phantom</span>
+                <span className="auth-method-pill">Phantom App</span>
+                <span className="auth-method-pill">Extension</span>
               </>
+            ) : mobile ? (
+              <span className="auth-method-pill">Install Phantom app</span>
             ) : (
               <span className="auth-method-pill">Phantom Extension</span>
             )}
           </div>
         </div>
 
-        {!socialLoginEnabled && (
+        {!portalReady && mobile && (
           <p className="landing-hint">
-            Set <code>VITE_PHANTOM_APP_ID</code> for Google & Apple login
+            On mobile, install the{" "}
+            <a href="https://phantom.app/download" target="_blank" rel="noopener noreferrer">
+              Phantom app
+            </a>{" "}
+            and use Google sign-in once the site operator enables Phantom Portal.
+          </p>
+        )}
+
+        {!portalReady && !mobile && (
+          <p className="landing-hint">
+            Install the{" "}
+            <a href="https://phantom.app/download" target="_blank" rel="noopener noreferrer">
+              Phantom browser extension
+            </a>{" "}
+            for Chrome, Brave, or Edge.
           </p>
         )}
 

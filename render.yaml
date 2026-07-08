@@ -38,6 +38,8 @@ services:
         generateValue: true
       - key: BRAND_NAME
         value: Orbit Solana Casino
+      - key: PHANTOM_APP_ID
+        sync: false
       - key: ALCHEMY_API_KEY
         sync: false
       - key: CASINO_WALLET_ADDRESS
