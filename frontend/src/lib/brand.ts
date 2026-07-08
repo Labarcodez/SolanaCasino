@@ -6,8 +6,8 @@ export const BRAND = {
   description:
     "Non-custodial Solana casino with provably fair crash, limbo, and coinflip. Connect with Phantom, Google, or Apple.",
   domain: "orbit-solana-casino.onrender.com",
-  twitter: "@OrbitCasino",
-  twitterUrl: "https://x.com/OrbitCasino",
+  twitter: "@OrbitSolCasino",
+  twitterUrl: "https://x.com/OrbitSolCasino",
   discord: "https://discord.gg/orbitcasino",
   docs: "https://docs.orbitcasino.app",
   supportEmail: "support@orbitcasino.app",
