@@ -31,3 +31,32 @@ export function SiteFooter() {
           >
             Treasury ({shortenAddress(treasuryWallet, 4)})
           </a>
+          <a href={BRAND.docs} target="_blank" rel="noopener noreferrer">
+            Docs
+          </a>
+          <a href={BRAND.discord} target="_blank" rel="noopener noreferrer">
+            Discord
+          </a>
+          <span className="site-footer-divider">·</span>
+          <span>{BRAND.rtp} Crash RTP</span>
+        </div>
+
+        <div className="site-footer-social">
+          <a href={BRAND.twitterUrl} target="_blank" rel="noopener noreferrer">
+            {BRAND.twitter}
+          </a>
+          <a href={`mailto:${BRAND.supportEmail}`}>{BRAND.supportEmail}</a>
+          <a href={`https://${BRAND.domain}`} target="_blank" rel="noopener noreferrer">
+            {BRAND.domain}
+          </a>
+        </div>
+
+        <p className="site-footer-legal">
+          Play responsibly. You must be of legal gambling age in your jurisdiction.
+          Cryptocurrency gambling involves risk of loss. {BRAND.name} is a decentralized
+          gaming platform on Solana.
+        </p>
+      </div>
+    </footer>
+  );
+}
