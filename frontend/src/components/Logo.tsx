@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { BRAND } from "../lib/brand";
+import { OrbitHub } from "./logo/OrbitHub";
 
 interface LogoProps {
   size?: "sm" | "md" | "lg";
@@ -62,6 +63,7 @@ export function Logo({ size = "md", showText = true, className = "" }: LogoProps
   const angleRad = (angleDeg * Math.PI) / 180;
   const tokenX = CENTER + ORBIT_RADIUS * Math.cos(angleRad);
   const tokenY = CENTER + ORBIT_RADIUS * Math.sin(angleRad);
+  const tangentDeg = angleDeg + 90;
 
   return (
     <div className={`logo ${className}`} style={showText ? undefined : { gap: 0 }}>
@@ -76,12 +78,18 @@ export function Logo({ size = "md", showText = true, className = "" }: LogoProps
       >
         <defs>
           <linearGradient id={gradId} x1="14" y1="12" x2="50" y2="52" gradientUnits="userSpaceOnUse">
-            <stop stopColor="var(--accent-bright)" />
-            <stop offset="1" stopColor="var(--accent)" />
+            <stop stopColor="#14F195" />
+            <stop offset="0.55" stopColor="#03E1FF" />
+            <stop offset="1" stopColor="#9945FF" />
+          </linearGradient>
+          <linearGradient id={`${gradId}-chip`} x1="22" y1="22" x2="42" y2="42" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#14F195" />
+            <stop offset="0.45" stopColor="#03E1FF" />
+            <stop offset="1" stopColor="#9945FF" />
           </linearGradient>
           <radialGradient id={`${gradId}-core`} cx={CENTER} cy={CENTER} r="14" gradientUnits="userSpaceOnUse">
-            <stop stopColor="var(--accent-bright)" stopOpacity="0.35" />
-            <stop offset="1" stopColor="var(--accent)" stopOpacity="0" />
+            <stop stopColor="#03E1FF" stopOpacity="0.28" />
+            <stop offset="1" stopColor="#9945FF" stopOpacity="0" />
           </radialGradient>
           <clipPath id={clipId}>
             <circle r={TOKEN_CLIP_R} cx="0" cy="0" />
@@ -99,10 +107,9 @@ export function Logo({ size = "md", showText = true, className = "" }: LogoProps
           opacity="0.45"
         />
 
-        <circle cx={CENTER} cy={CENTER} r="8" fill={`url(#${gradId})`} opacity="0.9" />
-        <circle cx={CENTER} cy={CENTER} r="3.5" fill="var(--solana-green)" className="logo-core-pulse" />
+        <OrbitHub chipGradId={`${gradId}-chip`} />
 
-        <g className="logo-orbit-arm" transform={`translate(${tokenX} ${tokenY})`}>
+        <g className="logo-orbit-arm" transform={`translate(${tokenX} ${tokenY}) rotate(${tangentDeg})`}>
           <SolanaToken clipId={clipId} />
         </g>
       </svg>
