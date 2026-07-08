@@ -1,6 +1,6 @@
 /** Central brand configuration — change here to re-skin the entire app. */
 export const BRAND = {
-  name: "OrbitCasino",
+  name: "Orbit Solana Casino",
   shortName: "Orbit",
   tagline: "Crash. Limbo. Flip. Win on Solana.",
   description:
@@ -45,7 +45,7 @@ export const GAMES = [
 export const TRUST_BADGES = [
   { label: "Provably fair", icon: "shield" },
   { label: "Non-custodial", icon: "wallet" },
-  { label: "On-chain devnet", icon: "chain" },
+  { label: "Mainnet SOL", icon: "chain" },
   { label: "Instant payouts", icon: "bolt" },
 ] as const;
 

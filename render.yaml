@@ -1,0 +1,46 @@
+# Render Blueprint — free mainnet deploy (Alchemy RPC + dRPC fallback)
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Before deploy:
+#   1. Sign up at https://dashboard.alchemy.com → create app → Solana Mainnet → copy API key
+#   2. Set ALCHEMY_API_KEY + wallet secrets when Render prompts
+#   3. Fund CASINO_WALLET_ADDRESS with mainnet SOL for payouts
+#
+# Note: Render free tier uses ephemeral disk — SQLite resets on redeploy.
+# Add a persistent disk ($7/mo) mounted at /app/backend/data before real-money volume.
+services:
+  - type: web
+    name: orbitcasino
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: bash scripts/render-build.sh
+    startCommand: npm run start:prod
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SERVE_FRONTEND
+        value: "true"
+      - key: SOLANA_CLUSTER
+        value: mainnet-beta
+      - key: SOLANA_RPC_FALLBACK
+        value: https://solana.drpc.org
+      - key: PROGRAM_ID
+        value: Be5brMe2AvA68zEdiFKxa6KfYJdeQAeY12eWtZiC41vU
+      - key: VITE_PROGRAM_ID
+        value: Be5brMe2AvA68zEdiFKxa6KfYJdeQAeY12eWtZiC41vU
+      - key: VITE_API_URL
+        value: ""
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ALCHEMY_API_KEY
+        sync: false
+      - key: CASINO_WALLET_ADDRESS
+        sync: false
+      - key: CASINO_WALLET_PRIVATE_KEY
+        sync: false
+      - key: ADMIN_WALLET
+        sync: false
+      - key: VITE_CASINO_WALLET
+        sync: false

@@ -1,12 +1,38 @@
+const solanaCluster = process.env.SOLANA_CLUSTER ?? "devnet";
+
+function alchemyRpcUrl(cluster: string, apiKey: string): string {
+  const network =
+    cluster === "mainnet-beta" || cluster === "mainnet" ? "mainnet" : "devnet";
+  return `https://solana-${network}.g.alchemy.com/v2/${apiKey}`;
+}
+
+function defaultPublicRpc(cluster: string): string {
+  return cluster === "mainnet-beta" || cluster === "mainnet"
+    ? "https://api.mainnet-beta.solana.com"
+    : "https://api.devnet.solana.com";
+}
+
+function resolveSolanaRpcUrl(cluster: string): string {
+  if (process.env.SOLANA_RPC_URL) return process.env.SOLANA_RPC_URL;
+  if (process.env.HELIUS_RPC_URL) return process.env.HELIUS_RPC_URL;
+  if (process.env.ALCHEMY_API_KEY) {
+    return alchemyRpcUrl(cluster, process.env.ALCHEMY_API_KEY);
+  }
+  return defaultPublicRpc(cluster);
+}
+
+function resolveSolanaRpcFallback(cluster: string): string {
+  if (process.env.SOLANA_RPC_FALLBACK) return process.env.SOLANA_RPC_FALLBACK;
+  return cluster === "mainnet-beta" || cluster === "mainnet"
+    ? "https://solana.drpc.org"
+    : "https://api.devnet.solana.com";
+}
+
 export const config = {
   port: parseInt(process.env.PORT ?? "3001", 10),
-  solanaRpcUrl:
-    process.env.SOLANA_RPC_URL ??
-    process.env.HELIUS_RPC_URL ??
-    "https://api.devnet.solana.com",
-  solanaRpcFallback:
-    process.env.SOLANA_RPC_FALLBACK ?? "https://api.mainnet-beta.solana.com",
-  solanaCluster: process.env.SOLANA_CLUSTER ?? "devnet",
+  solanaRpcUrl: resolveSolanaRpcUrl(solanaCluster),
+  solanaRpcFallback: resolveSolanaRpcFallback(solanaCluster),
+  solanaCluster,
   programId:
     process.env.PROGRAM_ID ??
     "Be5brMe2AvA68zEdiFKxa6KfYJdeQAeY12eWtZiC41vU",
@@ -15,7 +41,10 @@ export const config = {
     process.env.CASINO_WALLET_ADDRESS ??
     "FMmho438Vv1Y9nov4mtfHZ4pYSZV8NfubiCeCB3bbGCb",
   casinoWalletPrivateKey: process.env.CASINO_WALLET_PRIVATE_KEY ?? "",
-  frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:5173",
+  frontendUrl:
+    process.env.FRONTEND_URL ??
+    process.env.RENDER_EXTERNAL_URL ??
+    "http://localhost:5173",
   jwtSecret:
     process.env.JWT_SECRET ??
     "dev-only-change-in-production-" + "FMmho438Vv1Y9nov4mtfHZ4pYSZV8NfubiCeCB3bbGCb",

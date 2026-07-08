@@ -36,7 +36,7 @@ export function LiveActivityMarquee() {
     wins.length > 0
       ? wins.map(formatWinMessage)
       : [
-          "OrbitCasino — provably fair Solana gaming",
+          "Orbit Solana Casino — provably fair Solana gaming",
           "Crash · Limbo · Coinflip — play with Phantom",
           "Non-custodial vault · instant devnet payouts",
         ];
