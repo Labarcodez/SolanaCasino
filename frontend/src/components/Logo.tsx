@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import { BRAND } from "../lib/brand";
 import { OrbitHub } from "./logo/OrbitHub";
+import { HUB_BLEND_OPACITY, SOLANA_MIX_STOPS } from "./logo/solanaLogoGeometry";
 
 interface LogoProps {
   size?: "sm" | "md" | "lg";
@@ -9,8 +10,9 @@ interface LogoProps {
 }
 
 const SIZES = { sm: 28, md: 36, lg: 52 };
-const ORBIT_RADIUS = 18;
-const TOKEN_SIZE = 14;
+const ORBIT_RADIUS = 22;
+const TOKEN_SIZE = 11;
+const TOKEN_CONTAINER_R = 7.5;
 const TOKEN_CLIP_R = TOKEN_SIZE / 2 - 0.5;
 const CENTER = 32;
 const ORBIT_PERIOD_MS = 8000;
@@ -19,15 +21,18 @@ function SolanaToken({ clipId }: { clipId: string }) {
   const half = TOKEN_SIZE / 2;
 
   return (
-    <g className="logo-sol-token" clipPath={`url(#${clipId})`}>
-      <image
-        href="/solana-token.png"
-        x={-half}
-        y={-half}
-        width={TOKEN_SIZE}
-        height={TOKEN_SIZE}
-        preserveAspectRatio="xMidYMid slice"
-      />
+    <g className="logo-sol-token">
+      <circle r={TOKEN_CONTAINER_R} fill="#06070b" stroke="#03E1FF" strokeWidth="0.85" />
+      <g clipPath={`url(#${clipId})`}>
+        <image
+          href="/solana-token.png"
+          x={-half}
+          y={-half}
+          width={TOKEN_SIZE}
+          height={TOKEN_SIZE}
+          preserveAspectRatio="xMidYMid slice"
+        />
+      </g>
     </g>
   );
 }
@@ -35,14 +40,16 @@ function SolanaToken({ clipId }: { clipId: string }) {
 export function Logo({ size = "md", showText = true, className = "" }: LogoProps) {
   const px = SIZES[size];
   const fontSize = size === "sm" ? "1.1rem" : size === "lg" ? "1.65rem" : "1.35rem";
-  const gradId = useId().replaceAll(":", "");
+  const hubGradId = useId().replaceAll(":", "");
+  const hubBlendGradId = useId().replaceAll(":", "");
+  const orbitGradId = useId().replaceAll(":", "");
   const clipId = useId().replaceAll(":", "");
   const [angleDeg, setAngleDeg] = useState(0);
 
   useEffect(() => {
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reducedMotion) {
-      setAngleDeg(-90);
+      setAngleDeg(0);
       return;
     }
 
@@ -63,7 +70,6 @@ export function Logo({ size = "md", showText = true, className = "" }: LogoProps
   const angleRad = (angleDeg * Math.PI) / 180;
   const tokenX = CENTER + ORBIT_RADIUS * Math.cos(angleRad);
   const tokenY = CENTER + ORBIT_RADIUS * Math.sin(angleRad);
-  const tangentDeg = angleDeg + 90;
 
   return (
     <div className={`logo ${className}`} style={showText ? undefined : { gap: 0 }}>
@@ -77,39 +83,65 @@ export function Logo({ size = "md", showText = true, className = "" }: LogoProps
         overflow="visible"
       >
         <defs>
-          <linearGradient id={gradId} x1="14" y1="12" x2="50" y2="52" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#14F195" />
-            <stop offset="0.55" stopColor="#03E1FF" />
-            <stop offset="1" stopColor="#9945FF" />
+          <linearGradient
+            id={hubGradId}
+            x1={CENTER}
+            y1="10"
+            x2={CENTER}
+            y2="54"
+            gradientUnits="userSpaceOnUse"
+            gradientTransform={`rotate(38 ${CENTER} ${CENTER})`}
+          >
+            {SOLANA_MIX_STOPS.map((stop) => (
+              <stop key={`hub-${stop.offset}`} offset={stop.offset} stopColor={stop.color} />
+            ))}
           </linearGradient>
-          <linearGradient id={`${gradId}-chip`} x1="22" y1="22" x2="42" y2="42" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#14F195" />
-            <stop offset="0.45" stopColor="#03E1FF" />
-            <stop offset="1" stopColor="#9945FF" />
+          <linearGradient
+            id={hubBlendGradId}
+            x1="10"
+            y1={CENTER}
+            x2="54"
+            y2={CENTER}
+            gradientUnits="userSpaceOnUse"
+            gradientTransform={`rotate(-42 ${CENTER} ${CENTER})`}
+          >
+            {SOLANA_MIX_STOPS.map((stop) => (
+              <stop key={`hub-blend-${stop.offset}`} offset={stop.offset} stopColor={stop.color} />
+            ))}
           </linearGradient>
-          <radialGradient id={`${gradId}-core`} cx={CENTER} cy={CENTER} r="14" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#03E1FF" stopOpacity="0.28" />
-            <stop offset="1" stopColor="#9945FF" stopOpacity="0" />
-          </radialGradient>
+          <linearGradient
+            id={orbitGradId}
+            x1="12"
+            y1="12"
+            x2="52"
+            y2="52"
+            gradientUnits="userSpaceOnUse"
+            gradientTransform={`rotate(18 ${CENTER} ${CENTER})`}
+          >
+            {SOLANA_MIX_STOPS.map((stop) => (
+              <stop key={`orbit-${stop.offset}`} offset={stop.offset} stopColor={stop.color} />
+            ))}
+          </linearGradient>
           <clipPath id={clipId}>
             <circle r={TOKEN_CLIP_R} cx="0" cy="0" />
           </clipPath>
         </defs>
 
-        <circle cx={CENTER} cy={CENTER} r="24" fill={`url(#${gradId}-core)`} />
-
         <circle
           cx={CENTER}
           cy={CENTER}
           r={ORBIT_RADIUS}
-          stroke={`url(#${gradId})`}
-          strokeWidth="1.5"
-          opacity="0.45"
+          stroke={`url(#${orbitGradId})`}
+          strokeWidth="1.35"
         />
 
-        <OrbitHub chipGradId={`${gradId}-chip`} />
+        <OrbitHub
+          hubGradId={hubGradId}
+          hubBlendGradId={hubBlendGradId}
+          hubBlendOpacity={HUB_BLEND_OPACITY}
+        />
 
-        <g className="logo-orbit-arm" transform={`translate(${tokenX} ${tokenY}) rotate(${tangentDeg})`}>
+        <g className="logo-orbit-arm" transform={`translate(${tokenX} ${tokenY})`}>
           <SolanaToken clipId={clipId} />
         </g>
       </svg>
