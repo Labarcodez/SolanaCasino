@@ -12,6 +12,10 @@ if (env.ALCHEMY_API_KEY && !env.VITE_SOLANA_RPC) {
   env.VITE_SOLANA_RPC = `https://solana-${network}.g.alchemy.com/v2/${env.ALCHEMY_API_KEY}`;
 }
 
+if (env.CASINO_WALLET_ADDRESS && !env.VITE_CASINO_WALLET) {
+  env.VITE_CASINO_WALLET = env.CASINO_WALLET_ADDRESS;
+}
+
 if (env.PHANTOM_APP_ID && !env.VITE_PHANTOM_APP_ID) {
   env.VITE_PHANTOM_APP_ID = env.PHANTOM_APP_ID;
 }

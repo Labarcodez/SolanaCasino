@@ -1,8 +1,19 @@
+import { useEffect, useState } from "react";
 import { BRAND } from "../lib/brand";
-import { CASINO_WALLET } from "../lib/api";
-import { solscanAccountUrl } from "../lib/utils";
+import { CASINO_WALLET, fetchConfig } from "../lib/api";
+import { solscanAccountUrl, shortenAddress } from "../lib/utils";
 
 export function SiteFooter() {
+  const [treasuryWallet, setTreasuryWallet] = useState(CASINO_WALLET);
+
+  useEffect(() => {
+    fetchConfig()
+      .then((c) => setTreasuryWallet(c.casinoWallet))
+      .catch(() => {
+        // Keep build-time / fallback wallet
+      });
+  }, []);
+
   return (
     <footer className="site-footer">
       <div className="container site-footer-inner">
@@ -12,35 +23,11 @@ export function SiteFooter() {
         </div>
 
         <div className="site-footer-links">
-          <a href={solscanAccountUrl(CASINO_WALLET)} target="_blank" rel="noopener noreferrer">
-            Treasury
+          <a
+            href={solscanAccountUrl(treasuryWallet)}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={treasuryWallet}
+          >
+            Treasury ({shortenAddress(treasuryWallet, 4)})
           </a>
-          <a href={BRAND.docs} target="_blank" rel="noopener noreferrer">
-            Docs
-          </a>
-          <a href={BRAND.discord} target="_blank" rel="noopener noreferrer">
-            Discord
-          </a>
-          <span className="site-footer-divider">·</span>
-          <span>{BRAND.rtp} Crash RTP</span>
-        </div>
-
-        <div className="site-footer-social">
-          <a href={BRAND.twitterUrl} target="_blank" rel="noopener noreferrer">
-            {BRAND.twitter}
-          </a>
-          <a href={`mailto:${BRAND.supportEmail}`}>{BRAND.supportEmail}</a>
-          <a href={`https://${BRAND.domain}`} target="_blank" rel="noopener noreferrer">
-            {BRAND.domain}
-          </a>
-        </div>
-
-        <p className="site-footer-legal">
-          Play responsibly. You must be of legal gambling age in your jurisdiction.
-          Cryptocurrency gambling involves risk of loss. {BRAND.name} is a decentralized
-          gaming platform on Solana.
-        </p>
-      </div>
-    </footer>
-  );
-}

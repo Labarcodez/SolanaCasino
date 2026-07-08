@@ -108,7 +108,11 @@ export function useCasinoUser() {
           return { signature: result.signature, success: true, amountSol, balanceSol: result.balanceSol };
         }
 
-        const tx = await buildDepositTransaction(walletAddress, amountSol);
+        const tx = await buildDepositTransaction(
+          walletAddress,
+          amountSol,
+          config?.casinoWallet,
+        );
         const result = await solana.signAndSendTransaction(tx);
         const signature = result.signature;
 

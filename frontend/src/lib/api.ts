@@ -2,7 +2,7 @@ import { PublicKey } from "@solana/web3.js";
 
 export const CASINO_WALLET =
   import.meta.env.VITE_CASINO_WALLET ??
-  "FMmho438Vv1Y9nov4mtfHZ4pYSZV8NfubiCeCB3bbGCb";
+  "C9W7nGv2ZBJp4zcmtvBHkrtTPhB1FQ7JaNNPRNhiA4Ze";
 
 export const PROGRAM_ID = new PublicKey(
   import.meta.env.VITE_PROGRAM_ID ??

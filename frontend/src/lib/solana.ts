@@ -18,6 +18,7 @@ import { CASINO_WALLET, SOLANA_RPC } from "./api";
 export async function buildDepositTransaction(
   fromAddress: string,
   amountSol: number,
+  casinoWallet: string = CASINO_WALLET,
 ): Promise<VersionedTransaction> {
   const connection = new Connection(SOLANA_RPC, "confirmed");
   const { blockhash } = await connection.getLatestBlockhash();
@@ -28,7 +29,7 @@ export async function buildDepositTransaction(
     instructions: [
       SystemProgram.transfer({
         fromPubkey: new PublicKey(fromAddress),
-        toPubkey: new PublicKey(CASINO_WALLET),
+        toPubkey: new PublicKey(casinoWallet),
         lamports: Math.floor(amountSol * LAMPORTS_PER_SOL),
       }),
     ],

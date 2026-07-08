@@ -39,7 +39,7 @@ export const config = {
   programAuthorityPrivateKey: process.env.PROGRAM_AUTHORITY_PRIVATE_KEY ?? "",
   casinoWalletAddress:
     process.env.CASINO_WALLET_ADDRESS ??
-    "FMmho438Vv1Y9nov4mtfHZ4pYSZV8NfubiCeCB3bbGCb",
+    "C9W7nGv2ZBJp4zcmtvBHkrtTPhB1FQ7JaNNPRNhiA4Ze",
   casinoWalletPrivateKey: process.env.CASINO_WALLET_PRIVATE_KEY ?? "",
   frontendUrl:
     process.env.FRONTEND_URL ??
