@@ -13,6 +13,7 @@ interface HeaderProps {
   onChainEnabled?: boolean;
   onSignOut?: () => void;
   onProfileClick?: () => void;
+  onWalletClick?: () => void;
 }
 
 export function Header({
@@ -23,6 +24,7 @@ export function Header({
   onChainEnabled,
   onSignOut,
   onProfileClick,
+  onWalletClick,
 }: HeaderProps) {
   return (
     <header className="header">
@@ -32,10 +34,15 @@ export function Header({
         <div className="header-right">
           {onChainEnabled && <OnChainBadge enabled />}
           {connected && balanceSol !== undefined && (
-            <div className="balance-pill">
+            <button
+              type="button"
+              className="balance-pill balance-pill-btn"
+              onClick={onWalletClick}
+              title="Open wallet"
+            >
               <span className="balance-label">Balance</span>
               <span className="balance-value">{formatSol(balanceSol)} SOL</span>
-            </div>
+            </button>
           )}
           {connected && walletAddress && displayName && (
             <button

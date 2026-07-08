@@ -2,7 +2,6 @@ import { lazy, Suspense, useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { Header } from "./components/Header";
 import { Landing } from "./components/Landing";
-import { WalletPanel } from "./components/WalletPanel";
 import { BetHistoryPanel } from "./components/BetHistoryPanel";
 import { AnimatedBackground } from "./components/AnimatedBackground";
 import { MobileNav } from "./components/MobileNav";
@@ -40,6 +39,9 @@ const FairnessPanel = lazy(() =>
 );
 const AdminDashboard = lazy(() =>
   import("./components/AdminDashboard").then((m) => ({ default: m.AdminDashboard })),
+);
+const WalletPage = lazy(() =>
+  import("./pages/WalletPage").then((m) => ({ default: m.WalletPage })),
 );
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 
@@ -84,7 +86,7 @@ function TabLoader() {
 
 const isDev = import.meta.env.DEV;
 
-type GameTab = "crash" | "coinflip" | "limbo" | "leaderboard" | "tournament" | "fairness" | "profile" | "admin";
+type GameTab = "crash" | "coinflip" | "limbo" | "leaderboard" | "tournament" | "fairness" | "profile" | "wallet" | "admin";
 
 function CasinoContent() {
   const {
@@ -203,6 +205,7 @@ function CasinoContent() {
         onChainEnabled={onChainEnabled}
         onSignOut={() => void signOut()}
         onProfileClick={() => setProfileOpen(true)}
+        onWalletClick={() => setActiveTab("wallet")}
       />
 
       {profileOpen && profile && (
@@ -276,6 +279,13 @@ function CasinoContent() {
             Fairness
           </button>
           <button
+            className={`nav-tab ${activeTab === "wallet" ? "active" : ""}`}
+            onClick={() => setActiveTab("wallet")}
+          >
+            <GameIcon id="wallet" size={16} className="nav-tab-icon" />
+            Wallet
+          </button>
+          <button
             className={`nav-tab ${activeTab === "profile" ? "active" : ""}`}
             onClick={() => setActiveTab("profile")}
           >
@@ -315,29 +325,26 @@ function CasinoContent() {
                 />
               </Suspense>
             </GameErrorBoundary>
-            <div className="crash-wallet-row">
-              {profile && (
-                <WalletPanel
-                  balanceSol={balanceSol}
-                  onChainBalanceSol={profile.onChainBalanceSol}
-                  minBetSol={config.minBetSol}
-                  minWithdrawSol={config.minWithdrawSol}
-                  withdrawalsEnabled={config.withdrawalsEnabled}
-                  onChainEnabled={onChainEnabled}
-                  loading={loading}
-                  onDeposit={async (amount) => deposit(amount)}
-                  onWithdraw={async (amount) => {
-                    const result = await withdraw(amount);
-                    handleBalanceUpdate(result.balanceSol);
-                    return result;
-                  }}
-                  error={error}
-                />
-              )}
-              <BetHistoryPanel walletAddress={walletAddress} />
-            </div>
+            <BetHistoryPanel walletAddress={walletAddress} />
           </div>
-        ) : (
+        ) : activeTab === "wallet" && config && profile ? (
+          <Suspense fallback={<TabLoader />}>
+            <WalletPage
+              walletAddress={walletAddress}
+              balanceSol={balanceSol}
+              onChainBalanceSol={profile.onChainBalanceSol}
+              minBetSol={config.minBetSol}
+              minWithdrawSol={config.minWithdrawSol}
+              withdrawalsEnabled={config.withdrawalsEnabled}
+              onChainEnabled={onChainEnabled}
+              loading={loading}
+              error={error}
+              onDeposit={async (amount) => deposit(amount)}
+              onWithdraw={async (amount) => withdraw(amount)}
+              onBalanceUpdate={handleBalanceUpdate}
+            />
+          </Suspense>
+        ) : activeTab === "coinflip" || activeTab === "limbo" ? (
           <div className="container game-grid">
             <div>
               {activeTab === "coinflip" && config && (
@@ -370,54 +377,38 @@ function CasinoContent() {
                   </Suspense>
                 </GameErrorBoundary>
               )}
-              {activeTab === "leaderboard" && (
-                <Suspense fallback={<TabLoader />}>
-                  <Leaderboard />
-                </Suspense>
-              )}
-              {activeTab === "tournament" && (
-                <Suspense fallback={<TabLoader />}>
-                  <TournamentPanel />
-                </Suspense>
-              )}
-              {activeTab === "fairness" && (
-                <Suspense fallback={<TabLoader />}>
-                  <FairnessPanel />
-                </Suspense>
-              )}
-              {activeTab === "profile" && profile && (
-                <ProfilePanel profile={profile} onUpdated={handleProfileUpdated} />
-              )}
-              {activeTab === "admin" && (
-                <GameErrorBoundary label="Admin">
-                  <Suspense fallback={<TabLoader />}>
-                    <AdminDashboard />
-                  </Suspense>
-                </GameErrorBoundary>
-              )}
             </div>
-
             <aside className="sidebar-panels">
-              {config && profile && (
-                <WalletPanel
-                  balanceSol={balanceSol}
-                  onChainBalanceSol={profile.onChainBalanceSol}
-                  minBetSol={config.minBetSol}
-                  minWithdrawSol={config.minWithdrawSol}
-                  withdrawalsEnabled={config.withdrawalsEnabled}
-                  onChainEnabled={onChainEnabled}
-                  loading={loading}
-                  onDeposit={async (amount) => deposit(amount)}
-                  onWithdraw={async (amount) => {
-                    const result = await withdraw(amount);
-                    handleBalanceUpdate(result.balanceSol);
-                    return result;
-                  }}
-                  error={error}
-                />
-              )}
               <BetHistoryPanel walletAddress={walletAddress} />
             </aside>
+          </div>
+        ) : (
+          <div className="container">
+            {activeTab === "leaderboard" && (
+              <Suspense fallback={<TabLoader />}>
+                <Leaderboard />
+              </Suspense>
+            )}
+            {activeTab === "tournament" && (
+              <Suspense fallback={<TabLoader />}>
+                <TournamentPanel />
+              </Suspense>
+            )}
+            {activeTab === "fairness" && (
+              <Suspense fallback={<TabLoader />}>
+                <FairnessPanel />
+              </Suspense>
+            )}
+            {activeTab === "profile" && profile && (
+              <ProfilePanel profile={profile} onUpdated={handleProfileUpdated} />
+            )}
+            {activeTab === "admin" && (
+              <GameErrorBoundary label="Admin">
+                <Suspense fallback={<TabLoader />}>
+                  <AdminDashboard />
+                </Suspense>
+              </GameErrorBoundary>
+            )}
           </div>
         )}
       </main>

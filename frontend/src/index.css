@@ -141,6 +141,17 @@ a {
   font-size: 0.875rem;
 }
 
+.balance-pill-btn {
+  cursor: pointer;
+  color: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.balance-pill-btn:hover {
+  border-color: var(--accent);
+  background: var(--bg-card);
+}
+
 .balance-pill .sol-icon {
   color: var(--solana-green);
   font-weight: 600;
@@ -1305,6 +1316,14 @@ input:focus-visible,
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+.wallet-page {
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding-bottom: 24px;
 }
 
 .panel-subtitle {

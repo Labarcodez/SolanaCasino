@@ -86,6 +86,16 @@ export function ProfileIcon({ size = 18, className }: IconProps) {
   );
 }
 
+export function WalletIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <rect x="3" y="6" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M3 10 H21" stroke="currentColor" strokeWidth="2" />
+      <circle cx="16" cy="14" r="1.5" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function AdminIcon({ size = 18, className }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
@@ -108,6 +118,7 @@ const GAME_ICON_MAP = {
   tournament: TournamentIcon,
   fairness: FairnessIcon,
   profile: ProfileIcon,
+  wallet: WalletIcon,
   admin: AdminIcon,
 } as const;
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { GameIcon, type GameIconId } from "./icons/GameIcons";
 
-type GameTab = "crash" | "coinflip" | "limbo" | "leaderboard" | "tournament" | "fairness" | "profile" | "admin";
+type GameTab = "crash" | "coinflip" | "limbo" | "leaderboard" | "tournament" | "fairness" | "profile" | "wallet" | "admin";
 
 interface MobileNavProps {
   activeTab: GameTab;
@@ -13,11 +13,12 @@ const PRIMARY_TABS: { id: GameTab; label: string; icon: GameIconId }[] = [
   { id: "crash", label: "Crash", icon: "crash" },
   { id: "limbo", label: "Limbo", icon: "limbo" },
   { id: "coinflip", label: "Flip", icon: "coinflip" },
-  { id: "tournament", label: "Race", icon: "tournament" },
+  { id: "wallet", label: "Wallet", icon: "wallet" },
   { id: "profile", label: "Profile", icon: "profile" },
 ];
 
 const MORE_TABS: { id: GameTab; label: string; icon: GameIconId; adminOnly?: boolean }[] = [
+  { id: "tournament", label: "Tournament", icon: "tournament" },
   { id: "leaderboard", label: "Leaderboard", icon: "leaderboard" },
   { id: "fairness", label: "Fairness", icon: "fairness" },
   { id: "admin", label: "Admin", icon: "admin", adminOnly: true },
