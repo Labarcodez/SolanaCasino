@@ -99,6 +99,7 @@ apiRouter.get("/config", async (_req, res) => {
     casinoWallet: config.casinoWalletAddress,
     programId: config.programId,
     cluster: config.solanaCluster,
+    solanaRpcUrl: config.solanaRpcUrl,
     onChainEnabled: onChain,
     casinoInitialized: Boolean(casino),
     casinoPaused: paused,

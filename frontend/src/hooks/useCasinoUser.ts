@@ -12,10 +12,11 @@ import {
   buildDepositTransaction,
   depositOnChain,
   normalizeTxSignature,
+  waitForTransactionConfirmation,
   withdrawOnChain,
   type TxSignature,
 } from "../lib/solana";
-import { setSolanaCluster } from "../lib/cluster";
+import { setSolanaCluster, setSolanaRpc } from "../lib/cluster";
 import { useAuth } from "./useAuth";
 import { useSolana } from "@phantom/react-sdk";
 
@@ -76,6 +77,9 @@ export function useCasinoUser() {
       const c = await fetchConfig();
       setConfig(c);
       setSolanaCluster(c.cluster);
+      if (c.solanaRpcUrl) {
+        setSolanaRpc(c.solanaRpcUrl);
+      }
     } catch (err) {
       setConfigError(err instanceof Error ? err.message : "Failed to load config");
       setConfig(null);
@@ -125,6 +129,7 @@ export function useCasinoUser() {
           walletAddress,
           amountSol,
           casinoWallet,
+          config.solanaRpcUrl,
         );
 
         const signResult = await solana.signAndSendTransaction(tx);
@@ -137,6 +142,7 @@ export function useCasinoUser() {
         }
 
         setWalletActionPhase("confirming");
+        await waitForTransactionConfirmation(signature, 90_000, config.solanaRpcUrl);
         const depositResult = await verifyDeposit(signature, walletAddress);
         await refresh();
         return { signature, ...depositResult };

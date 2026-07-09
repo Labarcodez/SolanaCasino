@@ -13,22 +13,77 @@ import {
   fetchPlayerBalance,
 } from "./anchor";
 import { CASINO_WALLET, SOLANA_RPC } from "./api";
+import { getSolanaRpc } from "./cluster";
 
-export type TxSignature = string | Uint8Array;
+function resolveRpcUrl(rpcUrl?: string): string {
+  return rpcUrl ?? getSolanaRpc() ?? SOLANA_RPC;
+}
 
-export function normalizeTxSignature(signature: TxSignature): string {
+export type TxSignature = string | Uint8Array | number[];
+
+export function normalizeTxSignature(signature: TxSignature | unknown): string {
   if (typeof signature === "string") {
+    if (signature.startsWith("[")) {
+      try {
+        const bytes = JSON.parse(signature) as number[];
+        return bs58.encode(Uint8Array.from(bytes));
+      } catch {
+        return signature;
+      }
+    }
     return signature;
   }
-  return bs58.encode(signature);
+  if (signature instanceof Uint8Array) {
+    return bs58.encode(signature);
+  }
+  if (Array.isArray(signature)) {
+    return bs58.encode(Uint8Array.from(signature));
+  }
+  throw new Error("Invalid transaction signature format");
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function waitForTransactionConfirmation(
+  signature: string,
+  timeoutMs = 90_000,
+  rpcUrl?: string,
+): Promise<void> {
+  const connection = new Connection(resolveRpcUrl(rpcUrl), "confirmed");
+  const started = Date.now();
+
+  while (Date.now() - started < timeoutMs) {
+    const { value } = await connection.getSignatureStatuses([signature], {
+      searchTransactionHistory: true,
+    });
+    const status = value[0];
+
+    if (status?.err) {
+      throw new Error("Transaction failed on-chain");
+    }
+
+    if (
+      status?.confirmationStatus === "confirmed" ||
+      status?.confirmationStatus === "finalized"
+    ) {
+      return;
+    }
+
+    await sleep(1500);
+  }
+
+  throw new Error("Transaction confirmation timed out — check Solscan and retry");
 }
 
 export async function buildDepositTransaction(
   fromAddress: string,
   amountSol: number,
   casinoWallet: string = CASINO_WALLET,
+  rpcUrl?: string,
 ): Promise<Transaction> {
-  const connection = new Connection(SOLANA_RPC, "confirmed");
+  const connection = new Connection(resolveRpcUrl(rpcUrl), "confirmed");
   const { blockhash } = await connection.getLatestBlockhash("confirmed");
 
   const tx = new Transaction().add(
@@ -46,8 +101,9 @@ export async function buildDepositTransaction(
 async function prepareTransaction(
   walletAddress: string,
   tx: Transaction,
+  rpcUrl?: string,
 ): Promise<Transaction> {
-  const connection = new Connection(SOLANA_RPC, "confirmed");
+  const connection = new Connection(resolveRpcUrl(rpcUrl), "confirmed");
   const { blockhash } = await connection.getLatestBlockhash("confirmed");
   tx.recentBlockhash = blockhash;
   tx.feePayer = new PublicKey(walletAddress);

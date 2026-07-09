@@ -10,7 +10,7 @@ import { PHANTOM_APP_ID } from "./lib/api";
 import { BRAND } from "./lib/brand";
 import { getPhantomProviders } from "./lib/phantomProviders";
 import { captureReferralFromUrl, fetchConfig } from "./lib/api";
-import { setSolanaCluster } from "./lib/cluster";
+import { setSolanaCluster, setSolanaRpc } from "./lib/cluster";
 import { ToastProvider } from "./components/ui/Toast";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
@@ -18,7 +18,12 @@ const redirectUrl = `${window.location.origin}/auth/callback`;
 
 captureReferralFromUrl();
 void fetchConfig()
-  .then((c) => setSolanaCluster(c.cluster))
+  .then((c) => {
+    setSolanaCluster(c.cluster);
+    if (c.solanaRpcUrl) {
+      setSolanaRpc(c.solanaRpcUrl);
+    }
+  })
   .catch(() => setSolanaCluster("devnet"));
 
 const providers = getPhantomProviders();

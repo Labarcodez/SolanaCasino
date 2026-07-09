@@ -68,6 +68,7 @@ export interface CasinoConfig {
   casinoWallet: string;
   programId: string;
   cluster: string;
+  solanaRpcUrl?: string;
   onChainEnabled: boolean;
   casinoInitialized: boolean;
   casinoPda: string;
@@ -186,10 +187,27 @@ export async function verifyDeposit(
   signature: string,
   walletAddress: string,
 ): Promise<{ success: boolean; amountSol: number; balanceSol: number }> {
-  const res = await apiFetch("/api/deposit/verify", {
-    method: "POST",
-    body: JSON.stringify({ signature, walletAddress }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120_000);
+
+  let res: Response;
+  try {
+    res = await apiFetch("/api/deposit/verify", {
+      method: "POST",
+      body: JSON.stringify({ signature, walletAddress }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error(
+        "Deposit verification timed out — check Solscan and contact support if SOL was sent",
+      );
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? "Deposit failed");
   return data;

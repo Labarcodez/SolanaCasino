@@ -9,6 +9,10 @@ import {
 } from "@solana/web3.js";
 import bs58 from "bs58";
 import { config } from "../config.js";
+import { extractDepositTransferLamports } from "./depositVerify.js";
+
+const RPC_TIMEOUT_MS = 12_000;
+const DEPOSIT_VERIFY_ATTEMPTS = 12;
 
 const rpcEndpoints = [
   config.solanaRpcUrl,
@@ -17,6 +21,29 @@ const rpcEndpoints = [
 
 export const connection = new Connection(rpcEndpoints[0], "confirmed");
 export const casinoPublicKey = new PublicKey(config.casinoWalletAddress);
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${ms}ms`)),
+      ms,
+    );
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 let casinoKeypair: Keypair | null = null;
 
@@ -37,13 +64,18 @@ if (config.casinoWalletPrivateKey) {
 
 async function withRpcFallback<T>(
   operation: (conn: Connection) => Promise<T>,
+  label = "RPC request",
 ): Promise<T> {
   let lastError: Error | null = null;
 
   for (const endpoint of rpcEndpoints) {
     try {
       const conn = new Connection(endpoint, "confirmed");
-      return await operation(conn);
+      return await withTimeout(
+        operation(conn),
+        RPC_TIMEOUT_MS,
+        `${label} (${endpoint})`,
+      );
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       console.warn(`RPC ${endpoint} failed:`, lastError.message);
@@ -81,56 +113,69 @@ export async function verifyDeposit(
   expectedSender: string,
   minLamports: number,
 ): Promise<{ valid: boolean; amount: number; error?: string }> {
-  for (let attempt = 0; attempt < 8; attempt++) {
+  for (let attempt = 0; attempt < DEPOSIT_VERIFY_ATTEMPTS; attempt++) {
     try {
       const result = await withRpcFallback(async (conn) => {
+        const status = await conn.getSignatureStatuses([signature], {
+          searchTransactionHistory: true,
+        });
+        const statusValue = status.value[0];
+
+        if (statusValue?.err) {
+          return {
+            valid: false as const,
+            amount: 0,
+            error: "Transaction failed on-chain",
+            pending: false,
+          };
+        }
+
         const tx = await conn.getParsedTransaction(signature, {
           maxSupportedTransactionVersion: 0,
           commitment: "confirmed",
         });
 
-        if (!tx || tx.meta?.err) {
+        if (!tx) {
           return {
             valid: false as const,
             amount: 0,
-            error: "Transaction not found or failed",
-            pending: !tx,
+            error: "Transaction not found yet",
+            pending: true,
           };
         }
 
-        const instructions = tx.transaction.message.instructions;
-        let transferAmount = 0;
-
-        for (const ix of instructions) {
-          if ("parsed" in ix && ix.program === "system") {
-            const parsed = ix.parsed as {
-              type: string;
-              info: { source: string; destination: string; lamports: number };
-            };
-            if (
-              parsed.type === "transfer" &&
-              parsed.info.destination === config.casinoWalletAddress &&
-              parsed.info.source === expectedSender
-            ) {
-              transferAmount += parsed.info.lamports;
-            }
-          }
+        if (tx.meta?.err) {
+          return {
+            valid: false as const,
+            amount: 0,
+            error: "Transaction failed on-chain",
+            pending: false,
+          };
         }
+
+        const transferAmount = extractDepositTransferLamports(
+          tx,
+          expectedSender,
+          config.casinoWalletAddress,
+        );
 
         if (transferAmount < minLamports) {
           return {
             valid: false as const,
             amount: transferAmount,
-            error: `Transfer amount too small (min ${minLamports / LAMPORTS_PER_SOL} SOL)`,
+            error:
+              transferAmount === 0
+                ? "No SOL transfer to the casino wallet was found in this transaction"
+                : `Transfer amount too small (min ${minLamports / LAMPORTS_PER_SOL} SOL)`,
             pending: false,
           };
         }
 
         return { valid: true as const, amount: transferAmount, pending: false };
-      });
+      }, "verify deposit");
 
-      if (result.pending && attempt < 7) {
-        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+      if (result.pending && attempt < DEPOSIT_VERIFY_ATTEMPTS - 1) {
+        await sleep(1000 + attempt * 500);
         continue;
       }
 
@@ -140,14 +185,14 @@ export async function verifyDeposit(
 
       return { valid: true, amount: result.amount };
     } catch (err) {
-      if (attempt === 7) {
+      if (attempt === DEPOSIT_VERIFY_ATTEMPTS - 1) {
         return {
           valid: false,
           amount: 0,
           error: err instanceof Error ? err.message : "Verification failed",
         };
       }
-      await new Promise((r) => setTimeout(r, 1500));
+      await sleep(1000);
     }
   }
 

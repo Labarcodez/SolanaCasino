@@ -80,7 +80,9 @@ export function WalletPanel({
 
   const actionLabel = loading
     ? walletActionPhase === "confirming"
-      ? "Confirming deposit..."
+      ? mode === "deposit"
+        ? "Confirming deposit..."
+        : "Processing withdrawal..."
       : "Confirm in wallet..."
     : mode === "deposit"
       ? "Deposit SOL"
