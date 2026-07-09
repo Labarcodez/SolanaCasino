@@ -21,6 +21,9 @@
     "start": "npm run start -w backend",
     "start:prod": "SERVE_FRONTEND=true npm run start -w backend",
     "test": "npm run test -w backend",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium",
+    "test:all": "npm run test && npm run test:e2e",
     "test:integration": "npm run build -w backend && npm run test -w backend",
     "docker:build": "docker compose build",
     "docker:up": "docker compose up -d",
@@ -29,6 +32,9 @@
     "verify": "bash scripts/verify.sh"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@types/react": "^19.2.3",
+    "@types/react-dom": "^19.2.3",
     "concurrently": "^9.1.2",
     "playwright": "^1.61.1"
   }

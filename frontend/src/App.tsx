@@ -1,5 +1,5 @@
-import { lazy, Suspense, useState } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { lazy, Suspense, useCallback, useMemo, useState } from "react";
+import { Routes, Route, Navigate, useSearchParams } from "react-router-dom";
 import { Header } from "./components/Header";
 import { Landing } from "./components/Landing";
 import { BetHistoryPanel } from "./components/BetHistoryPanel";
@@ -18,6 +18,7 @@ import { PauseBanner } from "./components/PauseBanner";
 import { ConfigErrorScreen } from "./components/ConfigErrorScreen";
 import { GameErrorBoundary } from "./components/GameErrorBoundary";
 import type { UserProfile } from "./lib/api";
+import { shortenAddress } from "./lib/api";
 
 const CrashArena = lazy(() =>
   import("./components/CrashArena").then((m) => ({ default: m.CrashArena })),
@@ -88,10 +89,31 @@ const isDev = import.meta.env.DEV;
 
 type GameTab = "crash" | "coinflip" | "limbo" | "leaderboard" | "tournament" | "fairness" | "profile" | "wallet" | "admin";
 
+const GAME_TABS = new Set<GameTab>([
+  "crash",
+  "coinflip",
+  "limbo",
+  "leaderboard",
+  "tournament",
+  "fairness",
+  "profile",
+  "wallet",
+  "admin",
+]);
+
+function parseGameTab(value: string | null): GameTab {
+  if (value && GAME_TABS.has(value as GameTab)) {
+    return value as GameTab;
+  }
+  return "crash";
+}
+
 function CasinoContent() {
   const {
     isConnected,
     isAuthenticated,
+    hasRestorableSession,
+    sessionWalletAddress,
     authLoading,
     authError,
     authenticate,
@@ -104,13 +126,24 @@ function CasinoContent() {
     configError,
     reloadConfig,
     loading,
+    walletActionPhase,
     error,
     deposit,
     withdraw,
     refresh,
   } = useCasino();
   const { connected: wsConnected } = useSocket();
-  const [activeTab, setActiveTab] = useState<GameTab>("crash");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = useMemo(
+    () => parseGameTab(searchParams.get("tab")),
+    [searchParams],
+  );
+  const setActiveTab = useCallback(
+    (tab: GameTab) => {
+      setSearchParams(tab === "crash" ? {} : { tab }, { replace: true });
+    },
+    [setSearchParams],
+  );
   const [localBalance, setLocalBalance] = useState<number | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
 
@@ -129,6 +162,38 @@ function CasinoContent() {
   }
 
   if (!isConnected || !walletAddress) {
+    if (hasRestorableSession && sessionWalletAddress) {
+      return (
+        <div className="app">
+          <AnimatedBackground />
+          <Header connected={false} onChainEnabled={onChainEnabled} />
+          <div className="auth-screen">
+            <div className="auth-card">
+              <Logo size="lg" className="auth-card-logo" />
+              <h2>Welcome back</h2>
+              <p>
+                Your session for{" "}
+                <strong>{shortenAddress(sessionWalletAddress)}</strong> is saved.
+                Reconnect the same Phantom wallet to continue playing.
+              </p>
+              <p className="wallet-hint">
+                Use the Connect button in the header to restore your wallet connection.
+              </p>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => void signOut()}
+                style={{ width: "100%" }}
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
+          <SiteFooter />
+        </div>
+      );
+    }
+
     return (
       <div className="app">
         <AnimatedBackground />
@@ -338,6 +403,7 @@ function CasinoContent() {
               withdrawalsEnabled={config.withdrawalsEnabled}
               onChainEnabled={onChainEnabled}
               loading={loading}
+              walletActionPhase={walletActionPhase}
               error={error}
               onDeposit={async (amount) => deposit(amount)}
               onWithdraw={async (amount) => withdraw(amount)}

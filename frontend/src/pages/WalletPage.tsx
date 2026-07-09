@@ -1,6 +1,7 @@
 import { PageHeader } from "../components/PageHeader";
 import { WalletPanel } from "../components/WalletPanel";
 import { BetHistoryPanel } from "../components/BetHistoryPanel";
+import type { WalletActionPhase } from "../hooks/useCasinoUser";
 
 interface WalletPageProps {
   walletAddress: string;
@@ -11,6 +12,7 @@ interface WalletPageProps {
   withdrawalsEnabled: boolean;
   onChainEnabled: boolean;
   loading: boolean;
+  walletActionPhase?: WalletActionPhase;
   error: string | null;
   onDeposit: (amount: number) => Promise<{ amountSol: number; signature?: string }>;
   onWithdraw: (amount: number) => Promise<{
@@ -31,6 +33,7 @@ export function WalletPage({
   withdrawalsEnabled,
   onChainEnabled,
   loading,
+  walletActionPhase,
   error,
   onDeposit,
   onWithdraw,
@@ -50,6 +53,7 @@ export function WalletPage({
         withdrawalsEnabled={withdrawalsEnabled}
         onChainEnabled={onChainEnabled}
         loading={loading}
+        walletActionPhase={walletActionPhase}
         onDeposit={onDeposit}
         onWithdraw={async (amount) => {
           const result = await onWithdraw(amount);

@@ -8,6 +8,8 @@ import {
   setAuthToken,
   getAuthToken,
   getStoredReferralCode,
+  hasStoredSession,
+  getSessionWalletAddress,
 } from "../lib/api";
 import { isMobileBrowser } from "../lib/phantomProviders";
 
@@ -20,7 +22,7 @@ export function useAuth() {
   const { isConnected, addresses, user: phantomUser } = usePhantom();
   const { solana, isAvailable } = useSolana();
   const { disconnect } = useDisconnect();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => hasStoredSession());
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -31,6 +33,8 @@ export function useAuth() {
 
   const authProvider = phantomUser?.authProvider ?? "injected";
   const phantomEmail = (phantomUser as PhantomUserExtended | null)?.email;
+  const sessionWalletAddress = getSessionWalletAddress();
+  const hasRestorableSession = Boolean(sessionWalletAddress && hasStoredSession());
 
   const authenticate = useCallback(async () => {
     if (!walletAddress || !solana || !isAvailable) {
@@ -66,14 +70,24 @@ export function useAuth() {
 
   useEffect(() => {
     if (!isConnected || !walletAddress) {
-      setIsAuthenticated(false);
-      setAuthToken(null);
+      // Keep JWT across refresh while Phantom reconnects — only drop auth if no token remains.
+      setIsAuthenticated(hasStoredSession());
       return;
     }
 
     const existingToken = getAuthToken();
+    const storedWallet = getSessionWalletAddress();
+
+    if (existingToken && storedWallet && storedWallet !== walletAddress) {
+      setAuthToken(null);
+      setIsAuthenticated(false);
+      setAuthError("Connected wallet does not match your saved session. Sign in again.");
+      return;
+    }
+
     if (existingToken) {
       setIsAuthenticated(true);
+      setAuthError(null);
       return;
     }
 
@@ -90,6 +104,7 @@ export function useAuth() {
   const signOut = useCallback(async () => {
     setAuthToken(null);
     setIsAuthenticated(false);
+    setAuthError(null);
     try {
       await disconnect();
     } catch {
@@ -101,6 +116,8 @@ export function useAuth() {
     walletAddress,
     isConnected,
     isAuthenticated,
+    hasRestorableSession,
+    sessionWalletAddress,
     authLoading,
     authError,
     authenticate,

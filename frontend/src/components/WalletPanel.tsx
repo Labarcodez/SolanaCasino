@@ -2,6 +2,7 @@ import { useState } from "react";
 import { formatSol } from "../lib/api";
 import { solscanTxUrl } from "../lib/utils";
 import { useToast } from "./ui/Toast";
+import type { WalletActionPhase } from "../hooks/useCasinoUser";
 
 interface WalletPanelProps {
   balanceSol: number;
@@ -11,6 +12,7 @@ interface WalletPanelProps {
   withdrawalsEnabled: boolean;
   onChainEnabled?: boolean;
   loading: boolean;
+  walletActionPhase?: WalletActionPhase;
   onDeposit: (amount: number) => Promise<{ amountSol: number; signature?: string }>;
   onWithdraw: (amount: number) => Promise<{
     signature?: string;
@@ -28,6 +30,7 @@ export function WalletPanel({
   withdrawalsEnabled,
   onChainEnabled,
   loading,
+  walletActionPhase = "idle",
   onDeposit,
   onWithdraw,
   error,
@@ -74,6 +77,14 @@ export function WalletPanel({
       toast(err instanceof Error ? err.message : "Transaction failed", "error");
     }
   };
+
+  const actionLabel = loading
+    ? walletActionPhase === "confirming"
+      ? "Confirming deposit..."
+      : "Confirm in wallet..."
+    : mode === "deposit"
+      ? "Deposit SOL"
+      : "Withdraw SOL";
 
   return (
     <div className="card wallet-panel">
@@ -141,11 +152,7 @@ export function WalletPanel({
           onClick={handleAction}
           disabled={loading}
         >
-          {loading
-            ? "Confirm in wallet..."
-            : mode === "deposit"
-              ? "Deposit SOL"
-              : "Withdraw SOL"}
+          {actionLabel}
         </button>
 
         <p className="wallet-hint">

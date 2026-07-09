@@ -4,9 +4,8 @@ import {
   PublicKey,
   SystemProgram,
   Transaction,
-  TransactionMessage,
-  VersionedTransaction,
 } from "@solana/web3.js";
+import bs58 from "bs58";
 import {
   buildDepositTransaction as buildAnchorDeposit,
   buildWithdrawTransaction,
@@ -15,27 +14,33 @@ import {
 } from "./anchor";
 import { CASINO_WALLET, SOLANA_RPC } from "./api";
 
+export type TxSignature = string | Uint8Array;
+
+export function normalizeTxSignature(signature: TxSignature): string {
+  if (typeof signature === "string") {
+    return signature;
+  }
+  return bs58.encode(signature);
+}
+
 export async function buildDepositTransaction(
   fromAddress: string,
   amountSol: number,
   casinoWallet: string = CASINO_WALLET,
-): Promise<VersionedTransaction> {
+): Promise<Transaction> {
   const connection = new Connection(SOLANA_RPC, "confirmed");
-  const { blockhash } = await connection.getLatestBlockhash();
+  const { blockhash } = await connection.getLatestBlockhash("confirmed");
 
-  const message = new TransactionMessage({
-    payerKey: new PublicKey(fromAddress),
-    recentBlockhash: blockhash,
-    instructions: [
-      SystemProgram.transfer({
-        fromPubkey: new PublicKey(fromAddress),
-        toPubkey: new PublicKey(casinoWallet),
-        lamports: Math.floor(amountSol * LAMPORTS_PER_SOL),
-      }),
-    ],
-  }).compileToV0Message();
-
-  return new VersionedTransaction(message);
+  const tx = new Transaction().add(
+    SystemProgram.transfer({
+      fromPubkey: new PublicKey(fromAddress),
+      toPubkey: new PublicKey(casinoWallet),
+      lamports: Math.floor(amountSol * LAMPORTS_PER_SOL),
+    }),
+  );
+  tx.recentBlockhash = blockhash;
+  tx.feePayer = new PublicKey(fromAddress);
+  return tx;
 }
 
 async function prepareTransaction(
@@ -43,7 +48,7 @@ async function prepareTransaction(
   tx: Transaction,
 ): Promise<Transaction> {
   const connection = new Connection(SOLANA_RPC, "confirmed");
-  const { blockhash } = await connection.getLatestBlockhash();
+  const { blockhash } = await connection.getLatestBlockhash("confirmed");
   tx.recentBlockhash = blockhash;
   tx.feePayer = new PublicKey(walletAddress);
   return tx;
@@ -52,9 +57,14 @@ async function prepareTransaction(
 export async function depositOnChain(
   walletAddress: string,
   amountSol: number,
-  signAndSend: (tx: Transaction) => Promise<{ signature: string }>,
+  signAndSend: (tx: Transaction) => Promise<{ signature: TxSignature }>,
 ): Promise<{ signature: string; balanceSol: number }> {
-  await ensurePlayerInitialized(walletAddress, signAndSend);
+  const signAndSendNormalized = async (tx: Transaction) => {
+    const result = await signAndSend(tx);
+    return { signature: normalizeTxSignature(result.signature) };
+  };
+
+  await ensurePlayerInitialized(walletAddress, signAndSendNormalized);
 
   const amountLamports = Math.floor(amountSol * LAMPORTS_PER_SOL);
   const tx = await buildAnchorDeposit(walletAddress, amountLamports);
@@ -64,7 +74,7 @@ export async function depositOnChain(
   const { balanceLamports } = await fetchPlayerBalance(walletAddress);
 
   return {
-    signature,
+    signature: normalizeTxSignature(signature),
     balanceSol: balanceLamports / LAMPORTS_PER_SOL,
   };
 }
@@ -72,7 +82,7 @@ export async function depositOnChain(
 export async function withdrawOnChain(
   walletAddress: string,
   amountSol: number,
-  signAndSend: (tx: Transaction) => Promise<{ signature: string }>,
+  signAndSend: (tx: Transaction) => Promise<{ signature: TxSignature }>,
 ): Promise<{ signature: string; balanceSol: number }> {
   const amountLamports = Math.floor(amountSol * LAMPORTS_PER_SOL);
   const tx = await buildWithdrawTransaction(walletAddress, amountLamports);
@@ -82,7 +92,7 @@ export async function withdrawOnChain(
   const { balanceLamports } = await fetchPlayerBalance(walletAddress);
 
   return {
-    signature,
+    signature: normalizeTxSignature(signature),
     balanceSol: balanceLamports / LAMPORTS_PER_SOL,
   };
 }

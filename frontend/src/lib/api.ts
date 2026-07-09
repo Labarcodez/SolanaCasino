@@ -28,6 +28,26 @@ export function setAuthToken(token: string | null): void {
   }
 }
 
+/** Read wallet address from stored JWT without verifying (client-side session hint). */
+export function getSessionWalletAddress(): string | null {
+  const token = getAuthToken();
+  if (!token) return null;
+
+  try {
+    const payloadPart = token.split(".")[1];
+    if (!payloadPart) return null;
+    const normalized = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(atob(normalized)) as { walletAddress?: string };
+    return typeof payload.walletAddress === "string" ? payload.walletAddress : null;
+  } catch {
+    return null;
+  }
+}
+
+export function hasStoredSession(): boolean {
+  return getAuthToken() !== null;
+}
+
 async function apiFetch(
   path: string,
   options: RequestInit = {},

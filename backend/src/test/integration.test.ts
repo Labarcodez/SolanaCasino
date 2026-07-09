@@ -391,6 +391,10 @@ run()
       serverProc.kill("SIGTERM");
     }
     if (fs.existsSync(testDbPath)) {
-      fs.unlinkSync(testDbPath);
+      try {
+        fs.unlinkSync(testDbPath);
+      } catch {
+        // Windows may keep the SQLite file locked briefly after shutdown.
+      }
     }
   });

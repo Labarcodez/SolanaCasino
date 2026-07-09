@@ -11,17 +11,23 @@ import {
 import {
   buildDepositTransaction,
   depositOnChain,
+  normalizeTxSignature,
   withdrawOnChain,
+  type TxSignature,
 } from "../lib/solana";
 import { setSolanaCluster } from "../lib/cluster";
 import { useAuth } from "./useAuth";
 import { useSolana } from "@phantom/react-sdk";
+
+export type WalletActionPhase = "idle" | "signing" | "confirming";
 
 export function useCasinoUser() {
   const {
     isConnected,
     walletAddress,
     isAuthenticated,
+    hasRestorableSession,
+    sessionWalletAddress,
     authLoading,
     authError,
     authenticate,
@@ -33,8 +39,10 @@ export function useCasinoUser() {
   const [config, setConfig] = useState<CasinoConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
   const [configError, setConfigError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [walletActionPhase, setWalletActionPhase] = useState<WalletActionPhase>("idle");
   const [error, setError] = useState<string | null>(null);
+
+  const walletLoading = walletActionPhase !== "idle";
 
   const signAndSendTx = useCallback(
     async (tx: Transaction) => {
@@ -45,7 +53,7 @@ export function useCasinoUser() {
       if (!result.signature) {
         throw new Error("No transaction signature returned");
       }
-      return { signature: result.signature };
+      return { signature: normalizeTxSignature(result.signature as TxSignature) };
     },
     [solana, isAvailable],
   );
@@ -95,7 +103,7 @@ export function useCasinoUser() {
         throw new Error("Wallet not connected or not authenticated");
       }
 
-      setLoading(true);
+      setWalletActionPhase("signing");
       setError(null);
       try {
         if (config?.onChainEnabled) {
@@ -108,18 +116,27 @@ export function useCasinoUser() {
           return { signature: result.signature, success: true, amountSol, balanceSol: result.balanceSol };
         }
 
+        const casinoWallet = config?.casinoWallet;
+        if (!casinoWallet) {
+          throw new Error("Casino wallet not configured");
+        }
+
         const tx = await buildDepositTransaction(
           walletAddress,
           amountSol,
-          config?.casinoWallet,
+          casinoWallet,
         );
-        const result = await solana.signAndSendTransaction(tx);
-        const signature = result.signature;
+
+        const signResult = await solana.signAndSendTransaction(tx);
+        const signature = signResult.signature
+          ? normalizeTxSignature(signResult.signature as TxSignature)
+          : null;
 
         if (!signature) {
           throw new Error("No transaction signature returned");
         }
 
+        setWalletActionPhase("confirming");
         const depositResult = await verifyDeposit(signature, walletAddress);
         await refresh();
         return { signature, ...depositResult };
@@ -128,7 +145,7 @@ export function useCasinoUser() {
         setError(msg);
         throw err;
       } finally {
-        setLoading(false);
+        setWalletActionPhase("idle");
       }
     },
     [walletAddress, solana, isAvailable, isAuthenticated, config, signAndSendTx, refresh],
@@ -140,7 +157,7 @@ export function useCasinoUser() {
         throw new Error("Wallet not connected or not authenticated");
       }
 
-      setLoading(true);
+      setWalletActionPhase("signing");
       setError(null);
       try {
         if (config?.onChainEnabled) {
@@ -153,6 +170,7 @@ export function useCasinoUser() {
           return { signature: result.signature, balanceSol: result.balanceSol };
         }
 
+        setWalletActionPhase("confirming");
         const result = await withdraw(walletAddress, amountSol);
         await refresh();
         return result;
@@ -161,7 +179,7 @@ export function useCasinoUser() {
         setError(msg);
         throw err;
       } finally {
-        setLoading(false);
+        setWalletActionPhase("idle");
       }
     },
     [walletAddress, isAuthenticated, config, signAndSendTx, refresh],
@@ -170,6 +188,8 @@ export function useCasinoUser() {
   return {
     isConnected,
     isAuthenticated,
+    hasRestorableSession,
+    sessionWalletAddress,
     authLoading,
     authError,
     authenticate,
@@ -181,7 +201,8 @@ export function useCasinoUser() {
     configLoading,
     configError,
     reloadConfig: loadConfig,
-    loading,
+    loading: walletLoading,
+    walletActionPhase,
     error,
     deposit,
     withdraw: withdrawFunds,
