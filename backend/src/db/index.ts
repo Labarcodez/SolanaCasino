@@ -137,6 +137,29 @@ export function updateBalance(
   return row.balance_lamports;
 }
 
+/** Atomically deduct if balance is sufficient; returns new balance or null if insufficient. */
+export function deductBalanceIfSufficient(
+  walletAddress: string,
+  lamports: number,
+): number | null {
+  getOrCreateUser(walletAddress);
+  const result = db
+    .prepare(
+      `UPDATE users
+       SET balance_lamports = balance_lamports - ?, updated_at = datetime('now')
+       WHERE wallet_address = ? AND balance_lamports >= ?`,
+    )
+    .run(lamports, walletAddress, lamports);
+
+  if (result.changes === 0) return null;
+
+  const row = db
+    .prepare("SELECT balance_lamports FROM users WHERE wallet_address = ?")
+    .get(walletAddress) as { balance_lamports: number };
+
+  return row.balance_lamports;
+}
+
 export function recordBet(params: {
   id: string;
   walletAddress: string;

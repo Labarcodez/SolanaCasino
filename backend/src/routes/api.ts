@@ -2,7 +2,7 @@ import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { PublicKey } from "@solana/web3.js";
 import { v4 as uuidv4 } from "uuid";
-import { db, getOrCreateUser, updateBalance, recordBet } from "../db/index.js";
+import { db, getOrCreateUser, updateBalance, deductBalanceIfSufficient, recordBet } from "../db/index.js";
 import { config, lamportsToSol, solToLamports, getPublicRpcSetup, maskRpcUrl } from "../config.js";
 import {
   getCasinoWalletBalance,
@@ -377,12 +377,6 @@ apiRouter.post(
       }
 
       const lamports = solToLamports(amountSol);
-      const user = getOrCreateUser(walletAddress);
-
-      if (user.balance_lamports < lamports) {
-        res.status(400).json({ error: "Insufficient casino balance" });
-        return;
-      }
 
       if (!isWithdrawalEnabled()) {
         res.status(503).json({
@@ -393,7 +387,11 @@ apiRouter.post(
         return;
       }
 
-      updateBalance(walletAddress, -lamports);
+      const newBalance = deductBalanceIfSufficient(walletAddress, lamports);
+      if (newBalance === null) {
+        res.status(400).json({ error: "Insufficient casino balance" });
+        return;
+      }
 
       try {
         const { signature } = await sendWithdrawal(walletAddress, lamports);
@@ -402,15 +400,11 @@ apiRouter.post(
           "INSERT INTO withdrawals (id, wallet_address, amount_lamports, signature, status) VALUES (?, ?, ?, ?, 'complete')",
         ).run(withdrawalId, walletAddress, lamports, signature);
 
-        const newBalance = db
-          .prepare("SELECT balance_lamports FROM users WHERE wallet_address = ?")
-          .get(walletAddress) as { balance_lamports: number };
-
         res.json({
           success: true,
           signature,
           amountSol,
-          balanceSol: lamportsToSol(newBalance.balance_lamports),
+          balanceSol: lamportsToSol(newBalance),
         });
       } catch (withdrawErr) {
         updateBalance(walletAddress, lamports);

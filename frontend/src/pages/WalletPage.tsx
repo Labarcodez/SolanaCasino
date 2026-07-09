@@ -17,7 +17,11 @@ interface WalletPageProps {
   alchemyConfigured?: boolean;
   cluster?: string;
   error: string | null;
-  onDeposit: (amount: number) => Promise<{ amountSol: number; signature?: string }>;
+  onDeposit: (amount: number) => Promise<{
+    amountSol: number;
+    signature?: string;
+    balanceSol?: number;
+  }>;
   onWithdraw: (amount: number) => Promise<{
     signature?: string;
     queued?: boolean;
@@ -63,7 +67,13 @@ export function WalletPage({
         rpcProvider={rpcProvider}
         alchemyConfigured={alchemyConfigured}
         cluster={cluster}
-        onDeposit={onDeposit}
+        onDeposit={async (amount) => {
+          const result = await onDeposit(amount);
+          if ("balanceSol" in result && result.balanceSol !== undefined) {
+            onBalanceUpdate(result.balanceSol);
+          }
+          return result;
+        }}
         onWithdraw={async (amount) => {
           const result = await onWithdraw(amount);
           if (result.balanceSol !== undefined) {
