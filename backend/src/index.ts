@@ -8,7 +8,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
-import { config, solToLamports, lamportsToSol } from "./config.js";
+import { config, solToLamports, lamportsToSol, getPublicRpcSetup, isAlchemyRpcConfigured } from "./config.js";
 import { apiRouter } from "./routes/api.js";
 import { adminRouter } from "./routes/admin.js";
 import { crashEngine } from "./services/crash.js";
@@ -248,7 +248,21 @@ async function start(): Promise<void> {
   if (!rpc.healthy) {
     console.warn("Warning: RPC health check failed — deposits may be slow");
   } else {
-    console.log(`RPC connected: ${rpc.endpoint} (slot ${rpc.slot})`);
+    const setup = getPublicRpcSetup();
+    console.log(
+      `RPC connected: ${setup.solanaRpcUrl} (${setup.provider}, slot ${rpc.slot})`,
+    );
+    if (
+      config.nodeEnv === "production" &&
+      config.solanaCluster === "mainnet-beta" &&
+      !isAlchemyRpcConfigured() &&
+      !process.env.SOLANA_RPC_URL &&
+      !process.env.HELIUS_RPC_URL
+    ) {
+      console.error(
+        "CRITICAL: ALCHEMY_API_KEY is not set — using public mainnet RPC. Deposits will be unreliable. Add ALCHEMY_API_KEY in Render env vars and redeploy.",
+      );
+    }
   }
 
   if (isAnchorEnabled()) {

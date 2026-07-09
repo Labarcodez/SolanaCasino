@@ -69,6 +69,8 @@ export interface CasinoConfig {
   programId: string;
   cluster: string;
   solanaRpcUrl?: string;
+  rpcProvider?: "alchemy" | "helius" | "custom" | "public";
+  alchemyConfigured?: boolean;
   onChainEnabled: boolean;
   casinoInitialized: boolean;
   casinoPda: string;

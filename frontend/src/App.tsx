@@ -405,6 +405,9 @@ function CasinoContent() {
               loading={loading}
               walletActionPhase={walletActionPhase}
               error={error}
+              rpcProvider={config.rpcProvider}
+              alchemyConfigured={config.alchemyConfigured}
+              cluster={config.cluster}
               onDeposit={async (amount) => deposit(amount)}
               onWithdraw={async (amount) => withdraw(amount)}
               onBalanceUpdate={handleBalanceUpdate}

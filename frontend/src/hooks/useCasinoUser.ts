@@ -125,6 +125,16 @@ export function useCasinoUser() {
           throw new Error("Casino wallet not configured");
         }
 
+        if (
+          config.cluster === "mainnet-beta" &&
+          config.alchemyConfigured === false &&
+          config.rpcProvider === "public"
+        ) {
+          throw new Error(
+            "Deposits unavailable: server is not connected to Alchemy. Set ALCHEMY_API_KEY in Render and redeploy.",
+          );
+        }
+
         const tx = await buildDepositTransaction(
           walletAddress,
           amountSol,

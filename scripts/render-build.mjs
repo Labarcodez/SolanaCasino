@@ -16,6 +16,17 @@ if (env.CASINO_WALLET_ADDRESS && !env.VITE_CASINO_WALLET) {
   env.VITE_CASINO_WALLET = env.CASINO_WALLET_ADDRESS;
 }
 
+const cluster = env.SOLANA_CLUSTER ?? "mainnet-beta";
+const isMainnet = cluster === "mainnet-beta" || cluster === "mainnet";
+
+if (isMainnet && !env.ALCHEMY_API_KEY && !env.SOLANA_RPC_URL && !env.HELIUS_RPC_URL) {
+  console.warn(
+    "\n⚠️  WARNING: ALCHEMY_API_KEY is not set for mainnet build.\n" +
+      "   Deposits will fail or hang on the public Solana RPC.\n" +
+      "   In Render → Environment, add ALCHEMY_API_KEY from your Alchemy Solana app.\n",
+  );
+}
+
 if (env.PHANTOM_APP_ID && !env.VITE_PHANTOM_APP_ID) {
   env.VITE_PHANTOM_APP_ID = env.PHANTOM_APP_ID;
 }

@@ -20,6 +20,9 @@ interface WalletPanelProps {
     message?: string;
   }>;
   error: string | null;
+  rpcProvider?: "alchemy" | "helius" | "custom" | "public";
+  alchemyConfigured?: boolean;
+  cluster?: string;
 }
 
 export function WalletPanel({
@@ -34,12 +37,26 @@ export function WalletPanel({
   onDeposit,
   onWithdraw,
   error,
+  rpcProvider,
+  alchemyConfigured,
+  cluster,
 }: WalletPanelProps) {
   const { toast } = useToast();
   const [amount, setAmount] = useState("0.1");
   const [mode, setMode] = useState<"deposit" | "withdraw">("deposit");
 
+  const isMainnet = cluster === "mainnet-beta" || cluster === "mainnet";
+  const rpcMisconfigured = isMainnet && alchemyConfigured === false && rpcProvider === "public";
+
   const handleAction = async () => {
+    if (mode === "deposit" && rpcMisconfigured) {
+      toast(
+        "Deposits are unavailable — the server is not connected to Alchemy. Add ALCHEMY_API_KEY in Render and redeploy.",
+        "error",
+      );
+      return;
+    }
+
     const value = parseFloat(amount);
     if (isNaN(value) || value <= 0) {
       toast("Enter a valid amount greater than 0", "error");
@@ -165,6 +182,14 @@ export function WalletPanel({
 
         {!withdrawalsEnabled && mode === "withdraw" && (
           <p className="wallet-hint warning">Withdrawals queue until authority key is configured.</p>
+        )}
+
+        {rpcMisconfigured && mode === "deposit" && (
+          <p className="wallet-hint warning">
+            Server RPC is not connected to Alchemy (using public mainnet RPC). Deposits will not
+            confirm reliably until <code>ALCHEMY_API_KEY</code> is set in Render environment
+            variables and the app is redeployed.
+          </p>
         )}
 
         {error && <div className="alert alert-error">{error}</div>}

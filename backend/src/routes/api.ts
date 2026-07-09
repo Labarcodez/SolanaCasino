@@ -3,7 +3,7 @@ import rateLimit from "express-rate-limit";
 import { PublicKey } from "@solana/web3.js";
 import { v4 as uuidv4 } from "uuid";
 import { db, getOrCreateUser, updateBalance, recordBet } from "../db/index.js";
-import { config, lamportsToSol, solToLamports } from "../config.js";
+import { config, lamportsToSol, solToLamports, getPublicRpcSetup, maskRpcUrl } from "../config.js";
 import {
   getCasinoWalletBalance,
   getWalletBalance,
@@ -81,10 +81,17 @@ const betLimiter = rateLimit({
 
 apiRouter.get("/health", async (_req, res) => {
   const rpc = await checkRpcHealth();
+  const rpcSetup = getPublicRpcSetup();
   res.json({
     status: rpc.healthy ? "ok" : "degraded",
     timestamp: new Date().toISOString(),
-    rpc,
+    rpc: {
+      ...rpc,
+      endpoint: maskRpcUrl(rpc.endpoint),
+      provider: rpcSetup.provider,
+      alchemyConfigured: rpcSetup.alchemyConfigured,
+      cluster: rpcSetup.cluster,
+    },
     withdrawalsEnabled: isWithdrawalEnabled(),
   });
 });
@@ -95,11 +102,15 @@ apiRouter.get("/config", async (_req, res) => {
   const casino = onChain ? await fetchCasinoAccount() : null;
   const paused = await isCasinoPaused();
 
+  const rpcSetup = getPublicRpcSetup();
+
   res.json({
     casinoWallet: config.casinoWalletAddress,
     programId: config.programId,
     cluster: config.solanaCluster,
     solanaRpcUrl: config.solanaRpcUrl,
+    rpcProvider: rpcSetup.provider,
+    alchemyConfigured: rpcSetup.alchemyConfigured,
     onChainEnabled: onChain,
     casinoInitialized: Boolean(casino),
     casinoPaused: paused,
@@ -119,9 +130,7 @@ apiRouter.get("/config", async (_req, res) => {
     withdrawalsEnabled: onChain || isWithdrawalEnabled(),
     socialLoginEnabled: Boolean(process.env.PHANTOM_APP_ID),
     adminWallet: config.adminWallet || undefined,
-    rpcEndpoints: getRpcEndpoints().map((url) =>
-      url.includes("api-key") ? url.replace(/api-key=[^&]+/, "api-key=***") : url,
-    ),
+    rpcEndpoints: getRpcEndpoints().map((url) => maskRpcUrl(url)),
   });
 });
 

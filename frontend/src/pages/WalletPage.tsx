@@ -13,6 +13,9 @@ interface WalletPageProps {
   onChainEnabled: boolean;
   loading: boolean;
   walletActionPhase?: WalletActionPhase;
+  rpcProvider?: "alchemy" | "helius" | "custom" | "public";
+  alchemyConfigured?: boolean;
+  cluster?: string;
   error: string | null;
   onDeposit: (amount: number) => Promise<{ amountSol: number; signature?: string }>;
   onWithdraw: (amount: number) => Promise<{
@@ -35,6 +38,9 @@ export function WalletPage({
   loading,
   walletActionPhase,
   error,
+  rpcProvider,
+  alchemyConfigured,
+  cluster,
   onDeposit,
   onWithdraw,
   onBalanceUpdate,
@@ -54,6 +60,9 @@ export function WalletPage({
         onChainEnabled={onChainEnabled}
         loading={loading}
         walletActionPhase={walletActionPhase}
+        rpcProvider={rpcProvider}
+        alchemyConfigured={alchemyConfigured}
+        cluster={cluster}
         onDeposit={onDeposit}
         onWithdraw={async (amount) => {
           const result = await onWithdraw(amount);

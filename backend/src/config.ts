@@ -78,3 +78,29 @@ export function solToLamports(sol: number): number {
 export function lamportsToSol(lamports: number): number {
   return lamports / LAMPORTS_PER_SOL;
 }
+
+export type RpcProvider = "alchemy" | "helius" | "custom" | "public";
+
+export function getRpcProvider(): RpcProvider {
+  if (process.env.SOLANA_RPC_URL) return "custom";
+  if (process.env.HELIUS_RPC_URL) return "helius";
+  if (process.env.ALCHEMY_API_KEY) return "alchemy";
+  return "public";
+}
+
+export function isAlchemyRpcConfigured(): boolean {
+  return getRpcProvider() === "alchemy";
+}
+
+export function maskRpcUrl(url: string): string {
+  return url.replace(/\/v2\/[^/?]+/, "/v2/***");
+}
+
+export function getPublicRpcSetup() {
+  return {
+    provider: getRpcProvider(),
+    alchemyConfigured: isAlchemyRpcConfigured(),
+    cluster: config.solanaCluster,
+    solanaRpcUrl: maskRpcUrl(config.solanaRpcUrl),
+  };
+}
