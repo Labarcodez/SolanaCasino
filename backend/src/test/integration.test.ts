@@ -260,15 +260,15 @@ async function testAuthAndGames(): Promise<{ token: string; wallet: string }> {
   assert.equal(limbo.status, 200);
   assert.ok(typeof limbo.data.roll === "number");
 
-  const withdraw = await api<{ success: boolean; queued?: boolean }>(
+  const withdraw = await api<{ error?: string; withdrawalsEnabled?: boolean }>(
     "POST",
     "/withdraw",
     { walletAddress: wallet, amountSol: 0.01 },
     token,
   );
-  assert.equal(withdraw.status, 200);
-  assert.equal(withdraw.data.success, true);
-  assert.equal(withdraw.data.queued, true);
+  assert.equal(withdraw.status, 503);
+  assert.equal(withdraw.data.withdrawalsEnabled, false);
+  assert.ok(withdraw.data.error?.includes("CASINO_WALLET_PRIVATE_KEY"));
 
   const history = await api<unknown[]>("GET", `/history/${wallet}`, undefined, token);
   assert.equal(history.status, 200);

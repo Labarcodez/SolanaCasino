@@ -385,20 +385,10 @@ apiRouter.post(
       }
 
       if (!isWithdrawalEnabled()) {
-        updateBalance(walletAddress, -lamports);
-        const withdrawalId = uuidv4();
-        db.prepare(
-          "INSERT INTO withdrawals (id, wallet_address, amount_lamports, status) VALUES (?, ?, ?, 'pending')",
-        ).run(withdrawalId, walletAddress, lamports);
-
-        res.json({
-          success: true,
-          queued: true,
-          withdrawalId,
-          amountSol,
-          balanceSol: lamportsToSol(user.balance_lamports - lamports),
-          message:
-            "Withdrawal queued — will be processed once casino wallet is configured",
+        res.status(503).json({
+          error:
+            "Instant withdrawals are unavailable — CASINO_WALLET_PRIVATE_KEY is not configured on the server. Your balance was not changed.",
+          withdrawalsEnabled: false,
         });
         return;
       }

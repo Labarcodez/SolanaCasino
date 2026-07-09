@@ -57,6 +57,14 @@ export function WalletPanel({
       return;
     }
 
+    if (mode === "withdraw" && !withdrawalsEnabled) {
+      toast(
+        "Withdrawals are unavailable — the server payout wallet is not configured. Add CASINO_WALLET_PRIVATE_KEY in Render and redeploy.",
+        "error",
+      );
+      return;
+    }
+
     const value = parseFloat(amount);
     if (isNaN(value) || value <= 0) {
       toast("Enter a valid amount greater than 0", "error");
@@ -169,7 +177,11 @@ export function WalletPanel({
           type="button"
           className={`btn ${mode === "deposit" ? "btn-success" : "btn-secondary"}`}
           onClick={handleAction}
-          disabled={loading}
+          disabled={
+            loading ||
+            (mode === "withdraw" && !withdrawalsEnabled) ||
+            (mode === "deposit" && rpcMisconfigured)
+          }
         >
           {actionLabel}
         </button>
@@ -181,7 +193,10 @@ export function WalletPanel({
         </p>
 
         {!withdrawalsEnabled && mode === "withdraw" && (
-          <p className="wallet-hint warning">Withdrawals queue until authority key is configured.</p>
+          <p className="wallet-hint warning">
+            Withdrawals are disabled until <code>CASINO_WALLET_PRIVATE_KEY</code> is set on the
+            server. Your casino balance is safe — SOL is not sent until payouts are enabled.
+          </p>
         )}
 
         {rpcMisconfigured && mode === "deposit" && (
