@@ -108,6 +108,8 @@ apiRouter.get("/config", async (_req, res) => {
     casinoWallet: config.casinoWalletAddress,
     programId: config.programId,
     cluster: config.solanaCluster,
+    /** Public RPC for browser wallet txs (deposits). Backend keeps Alchemy for verify/payouts. */
+    clientRpcUrl: config.solanaRpcFallback,
     solanaRpcUrl: config.solanaRpcUrl,
     rpcProvider: rpcSetup.provider,
     alchemyConfigured: rpcSetup.alchemyConfigured,
@@ -393,23 +395,32 @@ apiRouter.post(
         return;
       }
 
+      let signature: string;
       try {
-        const { signature } = await sendWithdrawal(walletAddress, lamports);
+        ({ signature } = await sendWithdrawal(walletAddress, lamports));
+      } catch (sendErr) {
+        updateBalance(walletAddress, lamports);
+        throw sendErr;
+      }
+
+      try {
         const withdrawalId = uuidv4();
         db.prepare(
           "INSERT INTO withdrawals (id, wallet_address, amount_lamports, signature, status) VALUES (?, ?, ?, ?, 'complete')",
         ).run(withdrawalId, walletAddress, lamports, signature);
-
-        res.json({
-          success: true,
-          signature,
-          amountSol,
-          balanceSol: lamportsToSol(newBalance),
-        });
-      } catch (withdrawErr) {
-        updateBalance(walletAddress, lamports);
-        throw withdrawErr;
+      } catch (recordErr) {
+        console.error(
+          "Withdrawal sent on-chain but failed to record in database:",
+          recordErr,
+        );
       }
+
+      res.json({
+        success: true,
+        signature,
+        amountSol,
+        balanceSol: lamportsToSol(newBalance),
+      });
     } catch (err) {
       res.status(500).json({
         error: err instanceof Error ? err.message : "Withdrawal failed",

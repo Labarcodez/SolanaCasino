@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import { Routes, Route, Navigate, useSearchParams } from "react-router-dom";
 import { Header } from "./components/Header";
 import { Landing } from "./components/Landing";
@@ -131,6 +131,7 @@ function CasinoContent() {
     deposit,
     withdraw,
     refresh,
+    handleBalanceUpdate,
   } = useCasino();
   const { connected: wsConnected } = useSocket();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -144,21 +145,10 @@ function CasinoContent() {
     },
     [setSearchParams],
   );
-  const [localBalance, setLocalBalance] = useState<number | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
 
-  // Server profile is source of truth after refresh; drop stale game/wallet overrides.
-  useEffect(() => {
-    setLocalBalance(null);
-  }, [walletAddress, profile?.balanceSol]);
-
-  const balanceSol = localBalance ?? profile?.balanceSol ?? 0;
+  const balanceSol = profile?.balanceSol ?? 0;
   const onChainEnabled = config?.onChainEnabled ?? false;
-
-  const handleBalanceUpdate = (balance: number) => {
-    setLocalBalance(balance);
-    refresh();
-  };
 
   if (!configLoading && configError && !config) {
     return (

@@ -70,6 +70,18 @@ export function useCasinoUser() {
     }
   }, [walletAddress, isAuthenticated]);
 
+  const patchProfileBalance = useCallback((balanceSol: number) => {
+    setProfile((prev) => (prev ? { ...prev, balanceSol } : prev));
+  }, []);
+
+  const handleBalanceUpdate = useCallback(
+    (balanceSol: number) => {
+      patchProfileBalance(balanceSol);
+      void refresh();
+    },
+    [patchProfileBalance, refresh],
+  );
+
   const loadConfig = useCallback(async () => {
     setConfigLoading(true);
     setConfigError(null);
@@ -77,8 +89,8 @@ export function useCasinoUser() {
       const c = await fetchConfig();
       setConfig(c);
       setSolanaCluster(c.cluster);
-      if (c.solanaRpcUrl) {
-        setSolanaRpc(c.solanaRpcUrl);
+      if (c.clientRpcUrl) {
+        setSolanaRpc(c.clientRpcUrl);
       }
     } catch (err) {
       setConfigError(err instanceof Error ? err.message : "Failed to load config");
@@ -116,6 +128,7 @@ export function useCasinoUser() {
             amountSol,
             signAndSendTx,
           );
+          patchProfileBalance(result.balanceSol);
           await refresh();
           return { signature: result.signature, success: true, amountSol, balanceSol: result.balanceSol };
         }
@@ -139,7 +152,6 @@ export function useCasinoUser() {
           walletAddress,
           amountSol,
           casinoWallet,
-          config.solanaRpcUrl,
         );
 
         const signResult = await solana.signAndSendTransaction(tx);
@@ -152,8 +164,9 @@ export function useCasinoUser() {
         }
 
         setWalletActionPhase("confirming");
-        await waitForTransactionConfirmation(signature, 90_000, config.solanaRpcUrl);
+        await waitForTransactionConfirmation(signature, 90_000);
         const depositResult = await verifyDeposit(signature, walletAddress);
+        patchProfileBalance(depositResult.balanceSol);
         await refresh();
         return { signature, ...depositResult };
       } catch (err) {
@@ -164,7 +177,7 @@ export function useCasinoUser() {
         setWalletActionPhase("idle");
       }
     },
-    [walletAddress, solana, isAvailable, isAuthenticated, config, signAndSendTx, refresh],
+    [walletAddress, solana, isAvailable, isAuthenticated, config, signAndSendTx, refresh, patchProfileBalance],
   );
 
   const withdrawFunds = useCallback(
@@ -182,12 +195,16 @@ export function useCasinoUser() {
             amountSol,
             signAndSendTx,
           );
+          patchProfileBalance(result.balanceSol);
           await refresh();
           return { signature: result.signature, balanceSol: result.balanceSol };
         }
 
         setWalletActionPhase("confirming");
         const result = await withdraw(walletAddress, amountSol);
+        if (result.balanceSol !== undefined) {
+          patchProfileBalance(result.balanceSol);
+        }
         await refresh();
         return result;
       } catch (err) {
@@ -198,7 +215,7 @@ export function useCasinoUser() {
         setWalletActionPhase("idle");
       }
     },
-    [walletAddress, isAuthenticated, config, signAndSendTx, refresh],
+    [walletAddress, isAuthenticated, config, signAndSendTx, refresh, patchProfileBalance],
   );
 
   return {
@@ -223,6 +240,7 @@ export function useCasinoUser() {
     deposit,
     withdraw: withdrawFunds,
     refresh,
+    handleBalanceUpdate,
     signAndSendTx,
   };
 }
