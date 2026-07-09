@@ -234,6 +234,25 @@ docker compose up -d --build
 # App available at http://localhost:3001
 ```
 
+## Azure Deployment (recommended for mainnet)
+
+Use **Microsoft Azure free credits** for production mainnet with **persistent balances** (SQLite on Azure Files — survives redeploys, unlike Render free tier).
+
+```powershell
+az login
+npm run azure:deploy
+```
+
+Full guide: [docs/AZURE-DEPLOY.md](docs/AZURE-DEPLOY.md)
+
+| Resource | Purpose |
+|----------|---------|
+| App Service B1 | Runs Docker container (~$13/mo after credits) |
+| Azure Container Registry | Builds image in cloud |
+| Azure Files | Persistent `/app/backend/data` for SQLite |
+
+Set secrets in `backend/.env` before deploy (`ALCHEMY_API_KEY`, `CASINO_WALLET_PRIVATE_KEY`, `JWT_SECRET`, etc.).
+
 ## API Reference
 
 | Method | Endpoint | Auth | Description |

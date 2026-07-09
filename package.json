@@ -28,6 +28,8 @@
     "docker:build": "docker compose build",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
+    "azure:deploy": "powershell -ExecutionPolicy Bypass -File scripts/azure-deploy.ps1",
+    "azure:build": "node scripts/azure-build.mjs",
     "screenshots": "node scripts/capture-screenshots.mjs",
     "verify": "bash scripts/verify.sh"
   },

@@ -13,7 +13,7 @@ COPY . .
 ARG VITE_PHANTOM_APP_ID=
 ARG VITE_PROGRAM_ID=Be5brMe2AvA68zEdiFKxa6KfYJdeQAeY12eWtZiC41vU
 ARG VITE_CASINO_WALLET=C9W7nGv2ZBJp4zcmtvBHkrtTPhB1FQ7JaNNPRNhiA4Ze
-ARG VITE_SOLANA_RPC=https://api.devnet.solana.com
+ARG VITE_SOLANA_RPC=https://solana.drpc.org
 ARG VITE_API_URL=
 
 ENV VITE_PHANTOM_APP_ID=$VITE_PHANTOM_APP_ID
@@ -33,8 +33,6 @@ ENV NODE_ENV=production
 ENV SERVE_FRONTEND=true
 ENV PORT=3001
 
-RUN groupadd -r orbit && useradd -r -g orbit orbit
-
 COPY package.json package-lock.json ./
 COPY backend/package.json ./backend/
 RUN npm ci --omit=dev --workspace=backend && npm cache clean --force
@@ -43,12 +41,11 @@ COPY --from=builder /app/backend/dist ./backend/dist
 COPY --from=builder /app/frontend/dist ./frontend/dist
 COPY backend/.env.example ./backend/.env.example
 
-RUN mkdir -p /app/backend/data && chown -R orbit:orbit /app
+RUN mkdir -p /app/backend/data
 
 COPY scripts/docker-entrypoint.sh /app/scripts/docker-entrypoint.sh
 RUN chmod +x /app/scripts/docker-entrypoint.sh
 
-USER orbit
 EXPOSE 3001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \

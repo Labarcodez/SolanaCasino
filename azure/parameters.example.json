@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "eastus"
+    },
+    "namePrefix": {
+      "value": "orbitcasino"
+    },
+    "appServicePlanSku": {
+      "value": "B1"
+    },
+    "jwtSecret": {
+      "value": "REPLACE_WITH_OPENSSL_RAND_HEX_32"
+    },
+    "alchemyApiKey": {
+      "value": ""
+    },
+    "casinoWalletPrivateKey": {
+      "value": ""
+    },
+    "casinoWalletAddress": {
+      "value": "C9W7nGv2ZBJp4zcmtvBHkrtTPhB1FQ7JaNNPRNhiA4Ze"
+    },
+    "adminWallet": {
+      "value": ""
+    },
+    "solanaCluster": {
+      "value": "mainnet-beta"
+    },
+    "brandName": {
+      "value": "Orbit Solana Casino"
+    }
+  }
+}
