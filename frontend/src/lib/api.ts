@@ -12,7 +12,7 @@ export const PROGRAM_ID = new PublicKey(
 export const API_URL = import.meta.env.VITE_API_URL ?? "";
 export const PHANTOM_APP_ID = import.meta.env.VITE_PHANTOM_APP_ID ?? "";
 export const SOLANA_RPC =
-  import.meta.env.VITE_SOLANA_RPC ?? "https://api.devnet.solana.com";
+  import.meta.env.VITE_SOLANA_RPC ?? "https://solana.drpc.org";
 
 const AUTH_TOKEN_KEY = "solcasino_auth_token";
 

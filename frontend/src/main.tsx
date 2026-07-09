@@ -20,8 +20,8 @@ captureReferralFromUrl();
 void fetchConfig()
   .then((c) => {
     setSolanaCluster(c.cluster);
-    if (c.solanaRpcUrl) {
-      setSolanaRpc(c.solanaRpcUrl);
+    if (c.clientRpcUrl) {
+      setSolanaRpc(c.clientRpcUrl);
     }
   })
   .catch(() => setSolanaCluster("devnet"));

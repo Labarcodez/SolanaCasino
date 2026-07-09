@@ -148,10 +148,12 @@ export function useCasinoUser() {
           );
         }
 
+        const clientRpc = config.clientRpcUrl;
         const tx = await buildDepositTransaction(
           walletAddress,
           amountSol,
           casinoWallet,
+          clientRpc,
         );
 
         const signResult = await solana.signAndSendTransaction(tx);
@@ -164,7 +166,7 @@ export function useCasinoUser() {
         }
 
         setWalletActionPhase("confirming");
-        await waitForTransactionConfirmation(signature, 90_000);
+        await waitForTransactionConfirmation(signature, 90_000, clientRpc);
         const depositResult = await verifyDeposit(signature, walletAddress);
         patchProfileBalance(depositResult.balanceSol);
         await refresh();

@@ -5,11 +5,16 @@ import { execSync } from "node:child_process";
 
 const env = { ...process.env };
 
-if (env.ALCHEMY_API_KEY && !env.VITE_SOLANA_RPC) {
+if (env.SOLANA_RPC_FALLBACK && !env.VITE_SOLANA_RPC) {
+  env.VITE_SOLANA_RPC = env.SOLANA_RPC_FALLBACK;
+} else if (!env.VITE_SOLANA_RPC) {
   const cluster = env.SOLANA_CLUSTER ?? "mainnet-beta";
   const network =
     cluster === "mainnet-beta" || cluster === "mainnet" ? "mainnet" : "devnet";
-  env.VITE_SOLANA_RPC = `https://solana-${network}.g.alchemy.com/v2/${env.ALCHEMY_API_KEY}`;
+  env.VITE_SOLANA_RPC =
+    network === "mainnet"
+      ? "https://solana.drpc.org"
+      : "https://api.devnet.solana.com";
 }
 
 if (env.CASINO_WALLET_ADDRESS && !env.VITE_CASINO_WALLET) {
