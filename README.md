@@ -236,22 +236,16 @@ docker compose up -d --build
 
 ## Azure Deployment (recommended for mainnet)
 
-Use **Microsoft Azure free credits** for production mainnet with **persistent balances** (SQLite on Azure Files — survives redeploys, unlike Render free tier).
+Use **Microsoft Azure free credits** with **GitHub import** — push to `main` auto-deploys.
 
-```powershell
-az login
-npm run azure:deploy
-```
+**Quick path:** [docs/AZURE-DEPLOY.md](docs/AZURE-DEPLOY.md) → **Option A — Import from GitHub**
 
-Full guide: [docs/AZURE-DEPLOY.md](docs/AZURE-DEPLOY.md)
+1. Azure Portal → deploy `azure/main.bicep` (persistent SQLite on Azure Files)
+2. Web App → **Deployment Center** → connect **Labarcodez/SolanaCasino**
+3. Add GitHub Actions secrets (`AZURE_*` from portal)
+4. Push to `main` → live
 
-| Resource | Purpose |
-|----------|---------|
-| App Service B1 | Runs Docker container (~$13/mo after credits) |
-| Azure Container Registry | Builds image in cloud |
-| Azure Files | Persistent `/app/backend/data` for SQLite |
-
-Set secrets in `backend/.env` before deploy (`ALCHEMY_API_KEY`, `CASINO_WALLET_PRIVATE_KEY`, `JWT_SECRET`, etc.).
+Local CLI alternative: `npm run azure:deploy`
 
 ## API Reference
 
