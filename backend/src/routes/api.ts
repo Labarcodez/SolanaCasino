@@ -357,10 +357,17 @@ apiRouter.post(
       }
 
       const existing = db
-        .prepare("SELECT id FROM deposits WHERE signature = ?")
-        .get(signature);
+        .prepare("SELECT id, amount_lamports FROM deposits WHERE signature = ?")
+        .get(signature) as { id: string; amount_lamports: number } | undefined;
       if (existing) {
-        res.status(409).json({ error: "Deposit already processed" });
+        const user = getOrCreateUser(walletAddress);
+        res.json({
+          success: true,
+          alreadyProcessed: true,
+          amountSol: lamportsToSol(existing.amount_lamports),
+          balanceSol: lamportsToSol(user.balance_lamports),
+          signature,
+        });
         return;
       }
 

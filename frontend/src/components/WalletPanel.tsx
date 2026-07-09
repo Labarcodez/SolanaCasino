@@ -23,6 +23,8 @@ interface WalletPanelProps {
   rpcProvider?: "alchemy" | "helius" | "custom" | "public";
   alchemyConfigured?: boolean;
   cluster?: string;
+  onRecoverPendingDeposit: () => Promise<boolean>;
+  onCreditDeposit: (signature: string) => Promise<{ balanceSol: number; signature: string }>;
 }
 
 export function WalletPanel({
@@ -40,10 +42,14 @@ export function WalletPanel({
   rpcProvider,
   alchemyConfigured,
   cluster,
+  onRecoverPendingDeposit,
+  onCreditDeposit,
 }: WalletPanelProps) {
   const { toast } = useToast();
   const [amount, setAmount] = useState("0.1");
   const [mode, setMode] = useState<"deposit" | "withdraw">("deposit");
+  const [recoverySig, setRecoverySig] = useState("");
+  const [showRecovery, setShowRecovery] = useState(false);
 
   const isMainnet = cluster === "mainnet-beta" || cluster === "mainnet";
   const rpcMisconfigured = isMainnet && alchemyConfigured === false && rpcProvider === "public";
@@ -208,6 +214,77 @@ export function WalletPanel({
         )}
 
         {error && <div className="alert alert-error">{error}</div>}
+
+        {mode === "deposit" && (
+          <div className="wallet-recovery">
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setShowRecovery((v) => !v)}
+            >
+              {showRecovery ? "Hide" : "Deposit sent but balance is 0?"}
+            </button>
+            {showRecovery && (
+              <div className="wallet-recovery-panel">
+                <p className="wallet-hint">
+                  If SOL left your wallet but Casino balance did not update, paste the Solscan
+                  transaction signature to credit it.
+                </p>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="Transaction signature"
+                  value={recoverySig}
+                  onChange={(e) => setRecoverySig(e.target.value)}
+                />
+                <div className="wallet-recovery-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={loading || !recoverySig.trim()}
+                    onClick={() => {
+                      void (async () => {
+                        try {
+                          const result = await onCreditDeposit(recoverySig.trim());
+                          toast(`Credited ${formatSol(result.balanceSol)} SOL`, "success", {
+                            label: "View tx",
+                            href: solscanTxUrl(result.signature),
+                          });
+                          setRecoverySig("");
+                        } catch (err) {
+                          toast(
+                            err instanceof Error ? err.message : "Could not credit deposit",
+                            "error",
+                          );
+                        }
+                      })();
+                    }}
+                  >
+                    Credit deposit
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    disabled={loading}
+                    onClick={() => {
+                      void (async () => {
+                        const ok = await onRecoverPendingDeposit();
+                        toast(
+                          ok
+                            ? "Pending deposit credited"
+                            : "No pending deposit found — paste signature above",
+                          ok ? "success" : "info",
+                        );
+                      })();
+                    }}
+                  >
+                    Retry last deposit
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

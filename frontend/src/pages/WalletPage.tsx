@@ -29,6 +29,8 @@ interface WalletPageProps {
     balanceSol?: number;
   }>;
   onBalanceUpdate: (balance: number) => void;
+  onRecoverPendingDeposit: () => Promise<boolean>;
+  onCreditDeposit: (signature: string) => Promise<{ balanceSol: number; signature: string }>;
 }
 
 export function WalletPage({
@@ -48,6 +50,8 @@ export function WalletPage({
   onDeposit,
   onWithdraw,
   onBalanceUpdate,
+  onRecoverPendingDeposit,
+  onCreditDeposit,
 }: WalletPageProps) {
   return (
     <div className="container wallet-page">
@@ -82,6 +86,12 @@ export function WalletPage({
           return result;
         }}
         error={error}
+        onRecoverPendingDeposit={onRecoverPendingDeposit}
+        onCreditDeposit={async (signature) => {
+          const result = await onCreditDeposit(signature);
+          onBalanceUpdate(result.balanceSol);
+          return result;
+        }}
       />
       <BetHistoryPanel walletAddress={walletAddress} />
     </div>

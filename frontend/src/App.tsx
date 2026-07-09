@@ -132,6 +132,8 @@ function CasinoContent() {
     withdraw,
     refresh,
     handleBalanceUpdate,
+    recoverPendingDeposit,
+    creditDepositBySignature,
   } = useCasino();
   const { connected: wsConnected } = useSocket();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -406,6 +408,8 @@ function CasinoContent() {
               onDeposit={async (amount) => deposit(amount)}
               onWithdraw={async (amount) => withdraw(amount)}
               onBalanceUpdate={handleBalanceUpdate}
+              onRecoverPendingDeposit={() => recoverPendingDeposit()}
+              onCreditDeposit={(signature) => creditDepositBySignature(signature)}
             />
           </Suspense>
         ) : activeTab === "coinflip" || activeTab === "limbo" ? (

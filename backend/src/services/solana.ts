@@ -12,7 +12,7 @@ import { config } from "../config.js";
 import { extractDepositTransferLamports } from "./depositVerify.js";
 
 const RPC_TIMEOUT_MS = 12_000;
-const DEPOSIT_VERIFY_ATTEMPTS = 12;
+const DEPOSIT_VERIFY_ATTEMPTS = 24;
 
 const rpcEndpoints = [
   config.solanaRpcUrl,

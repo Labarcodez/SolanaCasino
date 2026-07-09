@@ -13,7 +13,6 @@ import {
   depositOnChain,
   normalizeTxSignature,
   transactionFromBase64,
-  waitForTransactionConfirmation,
   withdrawOnChain,
   type TxSignature,
 } from "../lib/solana";
@@ -22,6 +21,41 @@ import { useAuth } from "./useAuth";
 import { useSolana } from "@phantom/react-sdk";
 
 export type WalletActionPhase = "idle" | "signing" | "confirming";
+
+const PENDING_DEPOSIT_KEY = "solcasino_pending_deposit";
+
+interface PendingDeposit {
+  signature: string;
+  walletAddress: string;
+  ts: number;
+}
+
+function savePendingDeposit(signature: string, walletAddress: string): void {
+  const payload: PendingDeposit = { signature, walletAddress, ts: Date.now() };
+  localStorage.setItem(PENDING_DEPOSIT_KEY, JSON.stringify(payload));
+}
+
+function clearPendingDeposit(): void {
+  localStorage.removeItem(PENDING_DEPOSIT_KEY);
+}
+
+function readPendingDeposit(walletAddress: string): PendingDeposit | null {
+  const raw = localStorage.getItem(PENDING_DEPOSIT_KEY);
+  if (!raw) return null;
+
+  try {
+    const pending = JSON.parse(raw) as PendingDeposit;
+    if (pending.walletAddress !== walletAddress) return null;
+    if (Date.now() - pending.ts > 24 * 60 * 60 * 1000) {
+      clearPendingDeposit();
+      return null;
+    }
+    return pending;
+  } catch {
+    clearPendingDeposit();
+    return null;
+  }
+}
 
 export function useCasinoUser() {
   const {
@@ -114,6 +148,34 @@ export function useCasinoUser() {
     setProfile(null);
   }, [walletAddress, isAuthenticated, refresh]);
 
+  const recoverPendingDeposit = useCallback(async (): Promise<boolean> => {
+    if (!walletAddress || !isAuthenticated) return false;
+
+    const pending = readPendingDeposit(walletAddress);
+    if (!pending) return false;
+
+    setWalletActionPhase("confirming");
+    setError(null);
+    try {
+      const depositResult = await verifyDeposit(pending.signature, walletAddress);
+      patchProfileBalance(depositResult.balanceSol);
+      clearPendingDeposit();
+      await refresh();
+      return true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Deposit recovery failed";
+      setError(msg);
+      return false;
+    } finally {
+      setWalletActionPhase("idle");
+    }
+  }, [walletAddress, isAuthenticated, patchProfileBalance, refresh]);
+
+  useEffect(() => {
+    if (!walletAddress || !isAuthenticated) return;
+    void recoverPendingDeposit();
+  }, [walletAddress, isAuthenticated, recoverPendingDeposit]);
+
   const deposit = useCallback(
     async (amountSol: number) => {
       if (!walletAddress || !solana || !isAvailable || !isAuthenticated) {
@@ -149,7 +211,6 @@ export function useCasinoUser() {
           );
         }
 
-        const clientRpc = config.clientRpcUrl;
         const { transaction: serializedTx } = await prepareDeposit(
           walletAddress,
           amountSol,
@@ -165,9 +226,10 @@ export function useCasinoUser() {
           throw new Error("No transaction signature returned");
         }
 
+        savePendingDeposit(signature, walletAddress);
         setWalletActionPhase("confirming");
-        await waitForTransactionConfirmation(signature, 90_000, clientRpc);
         const depositResult = await verifyDeposit(signature, walletAddress);
+        clearPendingDeposit();
         patchProfileBalance(depositResult.balanceSol);
         await refresh();
         return { signature, ...depositResult };
@@ -220,6 +282,32 @@ export function useCasinoUser() {
     [walletAddress, isAuthenticated, config, signAndSendTx, refresh, patchProfileBalance],
   );
 
+  const creditDepositBySignature = useCallback(
+    async (signature: string) => {
+      if (!walletAddress || !isAuthenticated) {
+        throw new Error("Wallet not connected or not authenticated");
+      }
+
+      setWalletActionPhase("confirming");
+      setError(null);
+      try {
+        const normalized = normalizeTxSignature(signature.trim());
+        const depositResult = await verifyDeposit(normalized, walletAddress);
+        clearPendingDeposit();
+        patchProfileBalance(depositResult.balanceSol);
+        await refresh();
+        return { signature: normalized, ...depositResult };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Deposit credit failed";
+        setError(msg);
+        throw err;
+      } finally {
+        setWalletActionPhase("idle");
+      }
+    },
+    [walletAddress, isAuthenticated, patchProfileBalance, refresh],
+  );
+
   return {
     isConnected,
     isAuthenticated,
@@ -243,6 +331,8 @@ export function useCasinoUser() {
     withdraw: withdrawFunds,
     refresh,
     handleBalanceUpdate,
+    recoverPendingDeposit,
+    creditDepositBySignature,
     signAndSendTx,
   };
 }
