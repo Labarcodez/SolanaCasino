@@ -186,6 +186,19 @@ export async function fetchUser(walletAddress: string): Promise<UserProfile> {
   return res.json();
 }
 
+export async function prepareDeposit(
+  walletAddress: string,
+  amountSol: number,
+): Promise<{ transaction: string; amountSol: number; casinoWallet: string }> {
+  const res = await apiFetch("/api/deposit/prepare", {
+    method: "POST",
+    body: JSON.stringify({ walletAddress, amountSol }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to prepare deposit");
+  return data;
+}
+
 export async function verifyDeposit(
   signature: string,
   walletAddress: string,

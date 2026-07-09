@@ -13,10 +13,45 @@ import {
   fetchPlayerBalance,
 } from "./anchor";
 import { CASINO_WALLET, SOLANA_RPC } from "./api";
-import { getSolanaRpc } from "./cluster";
+import { getSolanaCluster, getSolanaRpc } from "./cluster";
+
+const CLIENT_RPC_FALLBACKS = [
+  "https://solana.drpc.org",
+  "https://api.mainnet-beta.solana.com",
+  "https://api.devnet.solana.com",
+];
+
+function isBrowserSafeRpc(url: string): boolean {
+  const lower = url.toLowerCase();
+  return (
+    !lower.includes("alchemy.com") &&
+    !lower.includes("helius-rpc.com") &&
+    !url.includes("***")
+  );
+}
 
 function resolveRpcUrl(rpcUrl?: string): string {
-  return rpcUrl ?? getSolanaRpc() ?? SOLANA_RPC;
+  const candidates = [rpcUrl, getSolanaRpc(), SOLANA_RPC, ...CLIENT_RPC_FALLBACKS].filter(
+    (url): url is string => Boolean(url),
+  );
+
+  for (const url of candidates) {
+    if (isBrowserSafeRpc(url)) return url;
+  }
+
+  const cluster = getSolanaCluster();
+  return cluster === "mainnet-beta" || cluster === "mainnet"
+    ? CLIENT_RPC_FALLBACKS[0]
+    : CLIENT_RPC_FALLBACKS[2];
+}
+
+export function transactionFromBase64(serializedBase64: string): Transaction {
+  const binary = atob(serializedBase64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return Transaction.from(bytes);
 }
 
 export type TxSignature = string | Uint8Array | number[];

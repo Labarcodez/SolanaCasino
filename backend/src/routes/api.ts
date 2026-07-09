@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import { db, getOrCreateUser, updateBalance, deductBalanceIfSufficient, recordBet } from "../db/index.js";
 import { config, lamportsToSol, solToLamports, getPublicRpcSetup, maskRpcUrl } from "../config.js";
 import {
+  buildDepositTransactionForWallet,
   getCasinoWalletBalance,
   getWalletBalance,
   isWithdrawalEnabled,
@@ -110,7 +111,7 @@ apiRouter.get("/config", async (_req, res) => {
     cluster: config.solanaCluster,
     /** Public RPC for browser wallet txs (deposits). Backend keeps Alchemy for verify/payouts. */
     clientRpcUrl: config.solanaRpcFallback,
-    solanaRpcUrl: config.solanaRpcUrl,
+    solanaRpcUrl: maskRpcUrl(config.solanaRpcUrl),
     rpcProvider: rpcSetup.provider,
     alchemyConfigured: rpcSetup.alchemyConfigured,
     onChainEnabled: onChain,
@@ -292,6 +293,48 @@ apiRouter.patch(
     } catch (err) {
       res.status(400).json({
         error: err instanceof Error ? err.message : "Profile update failed",
+      });
+    }
+  },
+);
+
+apiRouter.post(
+  "/deposit/prepare",
+  requireAuth,
+  betLimiter,
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const { walletAddress, amountSol } = req.body as {
+        walletAddress?: string;
+        amountSol?: number;
+      };
+
+      if (!walletAddress || walletAddress !== req.walletAddress || !amountSol) {
+        res.status(403).json({ error: "Unauthorized deposit preparation" });
+        return;
+      }
+
+      if (amountSol < config.minBetSol) {
+        res.status(400).json({
+          error: `Minimum deposit is ${config.minBetSol} SOL`,
+        });
+        return;
+      }
+
+      const lamports = solToLamports(amountSol);
+      const { transaction } = await buildDepositTransactionForWallet(
+        walletAddress,
+        lamports,
+      );
+
+      res.json({
+        transaction,
+        amountSol,
+        casinoWallet: config.casinoWalletAddress,
+      });
+    } catch (err) {
+      res.status(500).json({
+        error: err instanceof Error ? err.message : "Failed to prepare deposit",
       });
     }
   },

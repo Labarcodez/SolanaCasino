@@ -203,6 +203,33 @@ export async function verifyDeposit(
   };
 }
 
+export async function buildDepositTransactionForWallet(
+  fromAddress: string,
+  lamports: number,
+): Promise<{ transaction: string }> {
+  return withRpcFallback(async (conn) => {
+    const { blockhash, lastValidBlockHeight } =
+      await conn.getLatestBlockhash("confirmed");
+    const tx = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: new PublicKey(fromAddress),
+        toPubkey: casinoPublicKey,
+        lamports,
+      }),
+    );
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = new PublicKey(fromAddress);
+    tx.lastValidBlockHeight = lastValidBlockHeight;
+
+    const serialized = tx.serialize({
+      requireAllSignatures: false,
+      verifySignatures: false,
+    });
+
+    return { transaction: Buffer.from(serialized).toString("base64") };
+  }, "prepare deposit");
+}
+
 export async function sendWithdrawal(
   toAddress: string,
   lamports: number,

@@ -11,9 +11,14 @@ export function getSolanaCluster(): string {
 }
 
 export function setSolanaRpc(rpcUrl: string): void {
-  if (rpcUrl) {
+  if (rpcUrl && isBrowserSafeRpcImport(rpcUrl)) {
     activeRpc = rpcUrl;
   }
+}
+
+function isBrowserSafeRpcImport(url: string): boolean {
+  const lower = url.toLowerCase();
+  return !lower.includes("alchemy.com") && !lower.includes("helius-rpc.com");
 }
 
 export function getSolanaRpc(): string {

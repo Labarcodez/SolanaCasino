@@ -3,15 +3,16 @@ import { Transaction } from "@solana/web3.js";
 import {
   fetchUser,
   verifyDeposit,
+  prepareDeposit,
   withdraw,
   type UserProfile,
   type CasinoConfig,
   fetchConfig,
 } from "../lib/api";
 import {
-  buildDepositTransaction,
   depositOnChain,
   normalizeTxSignature,
+  transactionFromBase64,
   waitForTransactionConfirmation,
   withdrawOnChain,
   type TxSignature,
@@ -149,12 +150,11 @@ export function useCasinoUser() {
         }
 
         const clientRpc = config.clientRpcUrl;
-        const tx = await buildDepositTransaction(
+        const { transaction: serializedTx } = await prepareDeposit(
           walletAddress,
           amountSol,
-          casinoWallet,
-          clientRpc,
         );
+        const tx = transactionFromBase64(serializedTx);
 
         const signResult = await solana.signAndSendTransaction(tx);
         const signature = signResult.signature
