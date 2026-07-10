@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-type SoundEvent = "tick" | "bet" | "cashout" | "crash" | "win";
+type SoundEvent =
+  | "tick"
+  | "bet"
+  | "cashout"
+  | "crash"
+  | "win"
+  | "flip"
+  | "limboTick"
+  | "limboWin"
+  | "limboBust";
 
 const STORAGE_KEY = "solcasino-sound-muted";
 
@@ -73,6 +82,20 @@ export function useSound() {
           case "win":
             playTone(ctx, 659, 0.1, "triangle", 0.08);
             playTone(ctx, 880, 0.15, "triangle", 0.06);
+            break;
+          case "flip":
+            playTone(ctx, 380, 0.06, "sine", 0.04);
+            playTone(ctx, 520, 0.05, "sine", 0.03);
+            break;
+          case "limboTick":
+            playTone(ctx, 320 + Math.random() * 80, 0.02, "sine", 0.015);
+            break;
+          case "limboWin":
+            playTone(ctx, 523, 0.1, "triangle", 0.08);
+            playTone(ctx, 784, 0.18, "triangle", 0.06);
+            break;
+          case "limboBust":
+            playTone(ctx, 90, 0.2, "sawtooth", 0.08);
             break;
         }
       } catch {

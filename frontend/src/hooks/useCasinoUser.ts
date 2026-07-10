@@ -12,12 +12,14 @@ import {
 import {
   depositOnChain,
   normalizeTxSignature,
+  refreshTransactionBlockhash,
   transactionFromBase64,
   withdrawOnChain,
   type TxSignature,
 } from "../lib/solana";
 import { setSolanaCluster, setSolanaRpc } from "../lib/cluster";
 import { useAuth } from "./useAuth";
+import { getInjectedPhantomProvider, signAndSendInjectedTransaction } from "../lib/injectedPhantom";
 import { useSolana } from "@phantom/react-sdk";
 
 export type WalletActionPhase = "idle" | "signing" | "confirming";
@@ -80,16 +82,30 @@ export function useCasinoUser() {
 
   const walletLoading = walletActionPhase !== "idle";
 
+  const canSignTransactions = Boolean(
+    (solana && isAvailable) || getInjectedPhantomProvider()?.isConnected,
+  );
+
+  const assertWalletReady = useCallback(() => {
+    if (!walletAddress || !isAuthenticated) {
+      throw new Error("Wallet not connected or not authenticated");
+    }
+    if (!canSignTransactions) {
+      throw new Error("Wallet cannot sign transactions — reconnect Phantom and try again");
+    }
+  }, [walletAddress, isAuthenticated, canSignTransactions]);
+
   const signAndSendTx = useCallback(
     async (tx: Transaction) => {
-      if (!solana || !isAvailable) {
-        throw new Error("Wallet not available");
+      if (solana && isAvailable) {
+        const result = await solana.signAndSendTransaction(tx);
+        if (!result.signature) {
+          throw new Error("No transaction signature returned");
+        }
+        return { signature: normalizeTxSignature(result.signature as TxSignature) };
       }
-      const result = await solana.signAndSendTransaction(tx);
-      if (!result.signature) {
-        throw new Error("No transaction signature returned");
-      }
-      return { signature: normalizeTxSignature(result.signature as TxSignature) };
+      const signature = await signAndSendInjectedTransaction(tx);
+      return { signature: normalizeTxSignature(signature) };
     },
     [solana, isAvailable],
   );
@@ -149,7 +165,7 @@ export function useCasinoUser() {
   }, [walletAddress, isAuthenticated, refresh]);
 
   const recoverPendingDeposit = useCallback(async (): Promise<boolean> => {
-    if (!walletAddress || !isAuthenticated) return false;
+    if (!walletAddress || !isAuthenticated || config?.onChainEnabled) return false;
 
     const pending = readPendingDeposit(walletAddress);
     if (!pending) return false;
@@ -169,7 +185,7 @@ export function useCasinoUser() {
     } finally {
       setWalletActionPhase("idle");
     }
-  }, [walletAddress, isAuthenticated, patchProfileBalance, refresh]);
+  }, [walletAddress, isAuthenticated, config?.onChainEnabled, patchProfileBalance, refresh]);
 
   useEffect(() => {
     if (!walletAddress || !isAuthenticated) return;
@@ -178,16 +194,14 @@ export function useCasinoUser() {
 
   const deposit = useCallback(
     async (amountSol: number) => {
-      if (!walletAddress || !solana || !isAvailable || !isAuthenticated) {
-        throw new Error("Wallet not connected or not authenticated");
-      }
+      assertWalletReady();
 
       setWalletActionPhase("signing");
       setError(null);
       try {
         if (config?.onChainEnabled) {
           const result = await depositOnChain(
-            walletAddress,
+            walletAddress!,
             amountSol,
             signAndSendTx,
           );
@@ -212,23 +226,18 @@ export function useCasinoUser() {
         }
 
         const { transaction: serializedTx } = await prepareDeposit(
-          walletAddress,
+          walletAddress!,
           amountSol,
         );
         const tx = transactionFromBase64(serializedTx);
+        await refreshTransactionBlockhash(tx, walletAddress!);
 
-        const signResult = await solana.signAndSendTransaction(tx);
-        const signature = signResult.signature
-          ? normalizeTxSignature(signResult.signature as TxSignature)
-          : null;
+        const signResult = await signAndSendTx(tx);
+        const signature = signResult.signature;
 
-        if (!signature) {
-          throw new Error("No transaction signature returned");
-        }
-
-        savePendingDeposit(signature, walletAddress);
+        savePendingDeposit(signature, walletAddress!);
         setWalletActionPhase("confirming");
-        const depositResult = await verifyDeposit(signature, walletAddress);
+        const depositResult = await verifyDeposit(signature, walletAddress!);
         clearPendingDeposit();
         patchProfileBalance(depositResult.balanceSol);
         await refresh();
@@ -241,7 +250,7 @@ export function useCasinoUser() {
         setWalletActionPhase("idle");
       }
     },
-    [walletAddress, solana, isAvailable, isAuthenticated, config, signAndSendTx, refresh, patchProfileBalance],
+    [assertWalletReady, walletAddress, config, signAndSendTx, refresh, patchProfileBalance],
   );
 
   const withdrawFunds = useCallback(
@@ -254,6 +263,7 @@ export function useCasinoUser() {
       setError(null);
       try {
         if (config?.onChainEnabled) {
+          assertWalletReady();
           const result = await withdrawOnChain(
             walletAddress,
             amountSol,
@@ -274,18 +284,22 @@ export function useCasinoUser() {
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Withdrawal failed";
         setError(msg);
+        await refresh();
         throw err;
       } finally {
         setWalletActionPhase("idle");
       }
     },
-    [walletAddress, isAuthenticated, config, signAndSendTx, refresh, patchProfileBalance],
+    [walletAddress, isAuthenticated, config, signAndSendTx, refresh, patchProfileBalance, assertWalletReady],
   );
 
   const creditDepositBySignature = useCallback(
     async (signature: string) => {
       if (!walletAddress || !isAuthenticated) {
         throw new Error("Wallet not connected or not authenticated");
+      }
+      if (config?.onChainEnabled) {
+        throw new Error("Manual deposit recovery is not available in on-chain mode");
       }
 
       setWalletActionPhase("confirming");
@@ -305,7 +319,7 @@ export function useCasinoUser() {
         setWalletActionPhase("idle");
       }
     },
-    [walletAddress, isAuthenticated, patchProfileBalance, refresh],
+    [walletAddress, isAuthenticated, config?.onChainEnabled, patchProfileBalance, refresh],
   );
 
   return {

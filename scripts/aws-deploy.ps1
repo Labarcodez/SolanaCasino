@@ -75,7 +75,9 @@ $paramFile = Join-Path $env:TEMP "orbit-aws-params.json"
   @{ ParameterKey = "CasinoWalletPrivateKey"; ParameterValue = ($envVars["CASINO_WALLET_PRIVATE_KEY"] ?? "") },
   @{ ParameterKey = "CasinoWalletAddress"; ParameterValue = ($envVars["CASINO_WALLET_ADDRESS"] ?? "C9W7nGv2ZBJp4zcmtvBHkrtTPhB1FQ7JaNNPRNhiA4Ze") },
   @{ ParameterKey = "AdminWallet"; ParameterValue = ($envVars["ADMIN_WALLET"] ?? "") },
-  @{ ParameterKey = "SolanaCluster"; ParameterValue = ($envVars["SOLANA_CLUSTER"] ?? "mainnet-beta") }
+  @{ ParameterKey = "SolanaCluster"; ParameterValue = ($envVars["SOLANA_CLUSTER"] ?? "mainnet-beta") },
+  @{ ParameterKey = "DomainName"; ParameterValue = ($envVars["AWS_DOMAIN_NAME"] ?? "") },
+  @{ ParameterKey = "AcmCertificateArn"; ParameterValue = ($envVars["AWS_ACM_CERTIFICATE_ARN"] ?? "") }
 ) | ConvertTo-Json | Set-Content -Path $paramFile -Encoding UTF8
 
 if (-not $SkipInfra) {

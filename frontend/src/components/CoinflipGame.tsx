@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import {
   confirmCoinflip,
+  fetchCoinflipRecent,
   fetchUser,
   formatSol,
   playCoinflip,
@@ -11,8 +11,16 @@ import {
 } from "../lib/api";
 import { useCasino } from "../hooks/CasinoUserProvider";
 import { useToast } from "./ui/Toast";
+import { useSound } from "../hooks/useSound";
 import { prepareTransaction, solscanTxUrl } from "../lib/utils";
 import { PageHeader } from "./PageHeader";
+import { BetAmountControls } from "./BetAmountControls";
+import { RecentResultsStrip } from "./RecentResultsStrip";
+import { SoundToggle } from "./SoundToggle";
+import { WinCelebration } from "./WinCelebration";
+import { GameActionSpinner } from "./GameActionSpinner";
+import { Coin3D } from "./coinflip/Coin3D";
+import { fairnessUrl } from "../lib/fairnessLink";
 import {
   buildCoinflipBetTransaction,
   ensurePlayerInitialized,
@@ -26,6 +34,12 @@ interface CoinflipGameProps {
   onBalanceUpdate: (balance: number) => void;
 }
 
+interface FlipRecord {
+  id: string;
+  result: "heads" | "tails";
+  won: boolean;
+}
+
 export function CoinflipGame({
   walletAddress,
   balanceSol,
@@ -35,6 +49,7 @@ export function CoinflipGame({
 }: CoinflipGameProps) {
   const { config, signAndSendTx, refresh } = useCasino();
   const { toast } = useToast();
+  const { muted, toggleMute, play } = useSound();
   const [betAmount, setBetAmount] = useState("0.01");
   const [choice, setChoice] = useState<"heads" | "tails">("heads");
   const [flipping, setFlipping] = useState(false);
@@ -42,7 +57,31 @@ export function CoinflipGame({
     flipResult: "heads" | "tails";
     won: boolean;
   } | null>(null);
+  const [recentFlips, setRecentFlips] = useState<FlipRecord[]>([]);
+  const [celebrateWin, setCelebrateWin] = useState(false);
+  const [lastFairness, setLastFairness] = useState<{
+    betId: string;
+    serverSeed: string;
+    clientSeed: string;
+  } | null>(null);
   const onChain = config?.onChainEnabled ?? false;
+
+  useEffect(() => {
+    fetchCoinflipRecent()
+      .then((rows) => {
+        if (rows.length === 0) return;
+        setRecentFlips(
+          rows.map((r) => ({
+            id: r.id,
+            result: r.result,
+            won: r.won,
+          })),
+        );
+      })
+      .catch(() => {
+        /* optional strip — ignore load errors */
+      });
+  }, []);
 
   const handleFlip = async () => {
     const amount = parseFloat(betAmount);
@@ -53,6 +92,7 @@ export function CoinflipGame({
 
     setFlipping(true);
     setResult(null);
+    play("flip");
 
     try {
       if (onChain) {
@@ -79,8 +119,25 @@ export function CoinflipGame({
           signature,
         });
 
-        await new Promise((r) => setTimeout(r, 800));
+        await new Promise((r) => setTimeout(r, 1200));
         setResult({ flipResult: flipResult.result, won: flipResult.won });
+        setRecentFlips((prev) =>
+          [
+            {
+              id: signature,
+              result: flipResult.result,
+              won: flipResult.won,
+            },
+            ...prev,
+          ].slice(0, 10),
+        );
+        play(flipResult.won ? "win" : "limboBust");
+        if (flipResult.won) setCelebrateWin(true);
+        setLastFairness({
+          betId: signature,
+          serverSeed: revealed.serverSeed,
+          clientSeed: revealed.clientSeed,
+        });
         await refresh();
         const updated = await fetchUser(walletAddress);
         onBalanceUpdate(updated.balanceSol);
@@ -94,8 +151,25 @@ export function CoinflipGame({
         );
       } else {
         const flipResult = await playCoinflip(walletAddress, amount, choice);
-        await new Promise((r) => setTimeout(r, 800));
+        await new Promise((r) => setTimeout(r, 1200));
         setResult({ flipResult: flipResult.result, won: flipResult.won });
+        setRecentFlips((prev) =>
+          [
+            {
+              id: `${Date.now()}`,
+              result: flipResult.result,
+              won: flipResult.won,
+            },
+            ...prev,
+          ].slice(0, 10),
+        );
+        play(flipResult.won ? "win" : "limboBust");
+        if (flipResult.won) setCelebrateWin(true);
+        setLastFairness({
+          betId: flipResult.betId,
+          serverSeed: flipResult.serverSeed,
+          clientSeed: flipResult.clientSeed,
+        });
         onBalanceUpdate(flipResult.balanceSol);
         toast(
           flipResult.won
@@ -113,26 +187,40 @@ export function CoinflipGame({
 
   return (
     <div className="card card-glow">
-      <PageHeader
-        title="Coinflip"
-        subtitle="50/50 instant flips · commit-reveal fairness"
-        badge={onChain ? <span className="on-chain-badge"><span className="on-chain-dot" />On-Chain</span> : undefined}
+      <div className="game-header-row">
+        <PageHeader
+          title="Coinflip"
+          subtitle="50/50 instant flips · commit-reveal fairness"
+          badge={
+            onChain ? (
+              <span className="on-chain-badge">
+                <span className="on-chain-dot" />
+                On-Chain
+              </span>
+            ) : undefined
+          }
+        />
+        <SoundToggle muted={muted} onToggle={toggleMute} />
+      </div>
+
+      <RecentResultsStrip
+        title="Recent"
+        results={recentFlips.map((f) => ({
+          id: f.id,
+          label: f.result === "heads" ? "H" : "T",
+          variant: f.won ? "win" : "loss",
+        }))}
       />
 
       <div className="coinflip-container">
-        <motion.div
-          className={`coin ${flipping ? "flipping" : ""} ${
-            result
-              ? result.flipResult === "heads"
-                ? "coin-heads"
-                : "coin-tails"
-              : ""
-          }`}
-          animate={flipping ? { rotateY: 360 } : {}}
-          transition={{ duration: 0.8 }}
-        >
-          {result ? (result.flipResult === "heads" ? "👑" : "🦅") : "◎"}
-        </motion.div>
+        <div className="game-action-stage">
+          <WinCelebration active={celebrateWin} onDone={() => setCelebrateWin(false)} />
+          <Coin3D
+            flipping={flipping}
+            result={result?.flipResult ?? null}
+            won={result?.won ?? null}
+          />
+        </div>
 
         <div className="choice-buttons">
           <button
@@ -141,7 +229,7 @@ export function CoinflipGame({
             onClick={() => setChoice("heads")}
             disabled={flipping}
           >
-            👑 Heads
+            Heads
           </button>
           <button
             type="button"
@@ -149,37 +237,18 @@ export function CoinflipGame({
             onClick={() => setChoice("tails")}
             disabled={flipping}
           >
-            🦅 Tails
+            Tails
           </button>
         </div>
 
-        <div className="input-group" style={{ width: "100%", maxWidth: 320 }}>
-          <label>Amount — {formatSol(balanceSol)} SOL available</label>
-          <input
-            className="input"
-            type="number"
-            step="0.001"
-            min={minBetSol}
-            max={maxBetSol}
-            value={betAmount}
-            onChange={(e) => setBetAmount(e.target.value)}
-            disabled={flipping}
-          />
-        </div>
-
-        <div className="bet-amount-presets">
-          {["0.01", "0.05", "0.1"].map((p) => (
-            <button
-              key={p}
-              type="button"
-              className="preset-btn"
-              onClick={() => setBetAmount(p)}
-              disabled={flipping}
-            >
-              {p}
-            </button>
-          ))}
-        </div>
+        <BetAmountControls
+          balanceSol={balanceSol}
+          minBetSol={minBetSol}
+          maxBetSol={maxBetSol}
+          amount={betAmount}
+          onAmountChange={setBetAmount}
+          disabled={flipping}
+        />
 
         <button
           type="button"
@@ -188,8 +257,19 @@ export function CoinflipGame({
           disabled={flipping}
           style={{ width: "100%", maxWidth: 320 }}
         >
-          {flipping ? "Flipping..." : `Flip for ${betAmount} SOL`}
+          {flipping ? <GameActionSpinner label="Flipping..." /> : `Flip for ${betAmount} SOL`}
         </button>
+
+        {lastFairness && (
+          <a className="fairness-link" href={fairnessUrl({
+            game: "coinflip",
+            betId: lastFairness.betId,
+            serverSeed: lastFairness.serverSeed,
+            clientSeed: lastFairness.clientSeed,
+          })}>
+            Verify last flip in Fairness tab
+          </a>
+        )}
 
         {onChain && (
           <p className="coinflip-fairness-note">

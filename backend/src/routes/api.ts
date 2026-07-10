@@ -13,8 +13,15 @@ import {
   verifyDeposit,
   checkRpcHealth,
   getRpcEndpoints,
+  getLatestBlockhashForClient,
+  WithdrawalPendingError,
 } from "../services/solana.js";
 import { placeCoinflipBet } from "../services/coinflip.js";
+import {
+  cancelPendingWithdrawal,
+  finalizePendingWithdrawals,
+  syncBalanceFromLedger,
+} from "../services/balanceSync.js";
 import {
   buildAuthMessage,
   consumeAuthNonce,
@@ -110,7 +117,7 @@ apiRouter.get("/config", async (_req, res) => {
     programId: config.programId,
     cluster: config.solanaCluster,
     /** Public RPC for browser wallet txs (deposits). Backend keeps Alchemy for verify/payouts. */
-    clientRpcUrl: config.solanaRpcFallback,
+    clientRpcUrl: config.clientRpcUrl,
     solanaRpcUrl: maskRpcUrl(config.solanaRpcUrl),
     rpcProvider: rpcSetup.provider,
     alchemyConfigured: rpcSetup.alchemyConfigured,
@@ -135,6 +142,17 @@ apiRouter.get("/config", async (_req, res) => {
     adminWallet: config.adminWallet || undefined,
     rpcEndpoints: getRpcEndpoints().map((url) => maskRpcUrl(url)),
   });
+});
+
+apiRouter.get("/rpc/latest-blockhash", async (_req, res) => {
+  try {
+    const blockhash = await getLatestBlockhashForClient();
+    res.json(blockhash);
+  } catch (err) {
+    res.status(503).json({
+      error: err instanceof Error ? err.message : "Failed to fetch blockhash",
+    });
+  }
 });
 
 apiRouter.post("/auth/nonce", authLimiter, (req, res) => {
@@ -214,6 +232,9 @@ apiRouter.get(
   async (req: AuthenticatedRequest, res) => {
     try {
       const walletAddress = req.walletAddress!;
+      await finalizePendingWithdrawals(walletAddress);
+      syncBalanceFromLedger(walletAddress);
+
       const user = getOrCreateUser(walletAddress);
       const publicProfile = getPublicProfile(walletAddress);
       const onChainBalance = await getWalletBalance(walletAddress);
@@ -304,6 +325,14 @@ apiRouter.post(
   betLimiter,
   async (req: AuthenticatedRequest, res) => {
     try {
+      if (isAnchorEnabled()) {
+        res.status(400).json({
+          error:
+            "Custodial deposits are disabled in on-chain mode. Use the on-chain deposit button instead.",
+        });
+        return;
+      }
+
       const { walletAddress, amountSol } = req.body as {
         walletAddress?: string;
         amountSol?: number;
@@ -346,6 +375,14 @@ apiRouter.post(
   betLimiter,
   async (req: AuthenticatedRequest, res) => {
     try {
+      if (isAnchorEnabled()) {
+        res.status(400).json({
+          error:
+            "Custodial deposit verification is disabled in on-chain mode.",
+        });
+        return;
+      }
+
       const { signature, walletAddress } = req.body as {
         signature?: string;
         walletAddress?: string;
@@ -411,6 +448,14 @@ apiRouter.post(
   betLimiter,
   async (req: AuthenticatedRequest, res) => {
     try {
+      if (isAnchorEnabled()) {
+        res.status(400).json({
+          error:
+            "Server withdrawals are disabled in on-chain mode. Sign the on-chain withdraw transaction in your wallet.",
+        });
+        return;
+      }
+
       const { walletAddress, amountSol } = req.body as {
         walletAddress?: string;
         amountSol?: number;
@@ -445,22 +490,42 @@ apiRouter.post(
         return;
       }
 
+      const withdrawalId = uuidv4();
+      db.prepare(
+        "INSERT INTO withdrawals (id, wallet_address, amount_lamports, signature, status) VALUES (?, ?, ?, NULL, 'pending')",
+      ).run(withdrawalId, walletAddress, lamports);
+
       let signature: string;
       try {
         ({ signature } = await sendWithdrawal(walletAddress, lamports));
       } catch (sendErr) {
-        updateBalance(walletAddress, lamports);
+        if (sendErr instanceof WithdrawalPendingError) {
+          db.prepare(
+            "UPDATE withdrawals SET signature = ? WHERE id = ?",
+          ).run(sendErr.signature, withdrawalId);
+
+          res.json({
+            success: true,
+            pending: true,
+            signature: sendErr.signature,
+            amountSol,
+            balanceSol: lamportsToSol(newBalance),
+            message: sendErr.message,
+          });
+          return;
+        }
+
+        cancelPendingWithdrawal(withdrawalId, walletAddress);
         throw sendErr;
       }
 
       try {
-        const withdrawalId = uuidv4();
         db.prepare(
-          "INSERT INTO withdrawals (id, wallet_address, amount_lamports, signature, status) VALUES (?, ?, ?, ?, 'complete')",
-        ).run(withdrawalId, walletAddress, lamports, signature);
+          "UPDATE withdrawals SET signature = ?, status = 'complete' WHERE id = ?",
+        ).run(signature, withdrawalId);
       } catch (recordErr) {
         console.error(
-          "Withdrawal sent on-chain but failed to record in database:",
+          "Withdrawal sent on-chain but failed to update withdrawal record:",
           recordErr,
         );
       }
@@ -601,6 +666,41 @@ apiRouter.post(
     });
   },
 );
+
+apiRouter.get("/coinflip/recent", (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT id, result, metadata
+       FROM bets
+       WHERE game = 'coinflip'
+       ORDER BY created_at DESC
+       LIMIT 10`,
+    )
+    .all() as Array<{
+      id: string;
+      result: string;
+      metadata: string | null;
+    }>;
+
+  res.json(
+    rows.map((r) => {
+      let flipResult: "heads" | "tails" = "heads";
+      try {
+        const meta = r.metadata ? (JSON.parse(r.metadata) as { flipResult?: string }) : null;
+        if (meta?.flipResult === "heads" || meta?.flipResult === "tails") {
+          flipResult = meta.flipResult;
+        }
+      } catch {
+        /* ignore malformed metadata */
+      }
+      return {
+        id: r.id,
+        result: flipResult,
+        won: r.result === "win",
+      };
+    }),
+  );
+});
 
 apiRouter.post(
   "/coinflip",
@@ -1140,6 +1240,35 @@ apiRouter.get("/casino/stats", async (_req, res) => {
     affiliateCommissionsSol: lamportsToSol(affiliatePaid.total),
     tournamentPrizePoolSol: tournament.prizePoolSol,
     tournamentWeekEnd: tournament.weekEnd,
+  });
+});
+
+apiRouter.get("/crash/round/:roundId", (req, res) => {
+  const row = db
+    .prepare(
+      "SELECT id, crash_point, server_seed, server_seed_hash, status FROM crash_rounds WHERE id = ?",
+    )
+    .get(req.params.roundId) as
+    | {
+        id: string;
+        crash_point: number;
+        server_seed: string | null;
+        server_seed_hash: string;
+        status: string;
+      }
+    | undefined;
+
+  if (!row) {
+    res.status(404).json({ error: "Round not found" });
+    return;
+  }
+
+  res.json({
+    roundId: row.id,
+    crashPoint: row.crash_point,
+    serverSeed: row.server_seed,
+    serverSeedHash: row.server_seed_hash,
+    status: row.status,
   });
 });
 

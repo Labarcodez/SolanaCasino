@@ -23,15 +23,20 @@ function resolveSolanaRpcUrl(cluster: string): string {
 
 function resolveSolanaRpcFallback(cluster: string): string {
   if (process.env.SOLANA_RPC_FALLBACK) return process.env.SOLANA_RPC_FALLBACK;
-  return cluster === "mainnet-beta" || cluster === "mainnet"
-    ? "https://solana.drpc.org"
-    : "https://api.devnet.solana.com";
+  return defaultPublicRpc(cluster);
+}
+
+/** Browser-safe RPC — avoid providers that block mainnet on free tier (e.g. dRPC). */
+function resolveClientRpcUrl(cluster: string): string {
+  if (process.env.CLIENT_RPC_URL) return process.env.CLIENT_RPC_URL;
+  return defaultPublicRpc(cluster);
 }
 
 export const config = {
   port: parseInt(process.env.PORT ?? "3001", 10),
   solanaRpcUrl: resolveSolanaRpcUrl(solanaCluster),
   solanaRpcFallback: resolveSolanaRpcFallback(solanaCluster),
+  clientRpcUrl: resolveClientRpcUrl(solanaCluster),
   solanaCluster,
   programId:
     process.env.PROGRAM_ID ??
@@ -58,6 +63,11 @@ export const config = {
     .split(",")
     .map((o) => o.trim())
     .filter(Boolean),
+  orbitTokenMint: process.env.ORBIT_TOKEN_MINT ?? "",
+  pumpProgramId:
+    process.env.PUMP_PROGRAM_ID ??
+    "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+  publicApiUrl: process.env.PUBLIC_API_URL ?? "",
 };
 
 if (

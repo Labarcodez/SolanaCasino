@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
+    "@solana/client": "^1.7.0",
+    "@solana/kit": "^5.5.1",
+    "@solana/web3-compat": "^0.0.21",
     "@solana/web3.js": "^1.98.2",
     "better-sqlite3": "^11.9.1",
     "bs58": "^6.0.0",

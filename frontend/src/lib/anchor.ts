@@ -7,10 +7,11 @@ import {
   VersionedTransaction,
 } from "@solana/web3.js";
 import idl from "../idl/solcasino.json";
-import { PROGRAM_ID, SOLANA_RPC } from "./api";
+import { PROGRAM_ID } from "./api";
+import { getSolanaRpc } from "./cluster";
 
 export function getConnection(): Connection {
-  return new Connection(SOLANA_RPC, "confirmed");
+  return new Connection(getSolanaRpc(), "confirmed");
 }
 
 export function getCasinoPda(): [PublicKey, number] {

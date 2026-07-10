@@ -95,7 +95,7 @@ export class CrashGameEngine extends EventEmitter {
   private loadHistory(): void {
     const rows = db
       .prepare(
-        "SELECT id, crash_point FROM crash_rounds WHERE status = 'complete' ORDER BY started_at DESC LIMIT 20",
+        "SELECT id, crash_point FROM crash_rounds WHERE status = 'complete' ORDER BY started_at DESC LIMIT 10",
       )
       .all() as { id: string; crash_point: number }[];
 
@@ -363,7 +363,7 @@ export class CrashGameEngine extends EventEmitter {
       roundId: this.round.id,
       crashPoint: this.round.crashPoint,
     });
-    if (this.history.length > 20) this.history.pop();
+    if (this.history.length > 10) this.history.pop();
 
     this.emit("crash", {
       crashPoint: this.round.crashPoint,

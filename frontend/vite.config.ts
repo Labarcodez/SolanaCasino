@@ -8,13 +8,17 @@ export default defineConfig({
       output: {
         manualChunks: {
           vendor: ["react", "react-dom", "react-router-dom"],
-          solana: ["@solana/web3.js"],
+          solana: ["@solana/web3.js", "@solana/web3-compat"],
           phantom: ["@phantom/react-sdk", "@phantom/browser-sdk"],
           anchor: ["@coral-xyz/anchor"],
           motion: ["framer-motion"],
+          pump: ["@pump-fun/pump-sdk"],
         },
       },
     },
+  },
+  optimizeDeps: {
+    include: ["@pump-fun/pump-sdk"],
   },
   server: {
     port: 5173,

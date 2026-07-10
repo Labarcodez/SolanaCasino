@@ -95,6 +95,12 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_chat_created ON chat_messages(created_at);
+
+  CREATE TABLE IF NOT EXISTS site_tokens (
+    mint TEXT PRIMARY KEY,
+    signature TEXT NOT NULL,
+    registered_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 import { runMigrations } from "./migrations.js";

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { verifyCrashFairness } from "../lib/api";
+import { fairnessUrl } from "../lib/fairnessLink";
 import { shortenAddress } from "../lib/utils";
 
 interface CrashFairnessBarProps {
@@ -68,6 +69,20 @@ export function CrashFairnessBar({
         >
           {verifying ? "..." : verifyResult ?? "Verify"}
         </button>
+      )}
+      {phase === "crashed" && serverSeed && roundId && crashPoint !== undefined && (
+        <a
+          className="fairness-link crash-fairness-link"
+          href={fairnessUrl({
+            game: "crash",
+            roundId,
+            serverSeed,
+            serverSeedHash,
+            crashPoint,
+          })}
+        >
+          Open in Fairness tab
+        </a>
       )}
     </div>
   );

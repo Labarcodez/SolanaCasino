@@ -11,6 +11,7 @@ import { Server } from "socket.io";
 import { config, solToLamports, lamportsToSol, getPublicRpcSetup, isAlchemyRpcConfigured } from "./config.js";
 import { apiRouter } from "./routes/api.js";
 import { adminRouter } from "./routes/admin.js";
+import { tokenRouter } from "./routes/token.js";
 import { crashEngine } from "./services/crash.js";
 import { startCrashKeeper } from "./services/crashKeeper.js";
 import { startBetIndexer } from "./services/indexer.js";
@@ -64,8 +65,9 @@ app.use(
     origin: allowedOrigins,
   }),
 );
-app.use(express.json({ limit: "100kb" }));
+app.use(express.json({ limit: "2mb" }));
 app.use("/api", apiRouter);
+app.use("/api/token", tokenRouter);
 app.use("/api/admin", adminRouter);
 
 function broadcastOnlineCount(): void {

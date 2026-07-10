@@ -71,6 +71,29 @@ http://YOUR-ALB-DNS/api/config
 
 Expect: `"status":"ok"`, `"alchemyConfigured":true`, `"withdrawalsEnabled":true`
 
+**Alchemy** is server-side only — set `ALCHEMY_API_KEY` in `backend/.env` before deploy. The browser does not need an Alchemy key; it uses the RPC URL from `/api/config`.
+
+---
+
+## HTTPS (required for Phantom wallet)
+
+Phantom **will not connect** on plain `http://` except `localhost`. Your AWS ALB URL is HTTP-only until you add a domain and certificate.
+
+### Quick setup
+
+1. Point a domain (Route 53 or your registrar) **CNAME** to your ALB DNS name, e.g. `orbit-casino-alb-737118565.us-east-2.elb.amazonaws.com`
+2. AWS Console → **Certificate Manager** (region **us-east-2**) → **Request certificate** for `your-domain.com` (DNS validation)
+3. Add the validation CNAME records at your DNS host
+4. Add to `backend/.env`:
+   ```env
+   AWS_DOMAIN_NAME=casino.yourdomain.com
+   AWS_ACM_CERTIFICATE_ARN=arn:aws:acm:us-east-2:ACCOUNT:certificate/UUID
+   ```
+5. Redeploy: `npm run aws:deploy`
+6. Open **`https://casino.yourdomain.com`** (not the raw ALB HTTP URL)
+
+The stack redirects HTTP → HTTPS when both env vars are set.
+
 ---
 
 ## Option B — GitHub Actions (push to deploy)

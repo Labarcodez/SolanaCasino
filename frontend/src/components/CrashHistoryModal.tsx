@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { verifyCrashFairness } from "../lib/api";
+import { fetchCrashRound, verifyCrashFairness } from "../lib/api";
 
 interface HistoryRound {
   roundId: string;
@@ -13,21 +13,30 @@ interface CrashHistoryModalProps {
 
 export function CrashHistoryModal({ round, onClose }: CrashHistoryModalProps) {
   const [result, setResult] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   if (!round) return null;
 
   const handleVerify = async () => {
     setResult(null);
+    setLoading(true);
     try {
+      const roundData = await fetchCrashRound(round.roundId);
+      if (!roundData?.serverSeed || !roundData.serverSeedHash) {
+        setResult("Seed not yet revealed — check Fairness tab after round ends");
+        return;
+      }
       const res = await verifyCrashFairness({
         roundId: round.roundId,
-        serverSeedHash: "",
-        serverSeed: "",
+        serverSeedHash: roundData.serverSeedHash,
+        serverSeed: roundData.serverSeed,
         crashPoint: round.crashPoint,
       });
-      setResult(res.valid ? "Verified" : "Could not verify — open Fairness tab");
+      setResult(res.valid ? "✓ Verified provably fair" : "Could not verify — open Fairness tab");
     } catch {
       setResult("Open Fairness tab for full verification");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -64,8 +73,13 @@ export function CrashHistoryModal({ round, onClose }: CrashHistoryModalProps) {
             Use the Fairness tab with the round ID and revealed seed for full
             verification after the round completes.
           </p>
-          <button type="button" className="btn btn-outline btn-sm" onClick={handleVerify}>
-            Quick check
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={handleVerify}
+            disabled={loading}
+          >
+            {loading ? "Checking…" : "Quick check"}
           </button>
           {result && <p className="panel-hint">{result}</p>}
         </div>

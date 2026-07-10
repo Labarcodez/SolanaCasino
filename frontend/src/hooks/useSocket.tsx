@@ -139,17 +139,24 @@ export function SocketProvider({
         serverSeed: string;
         roundId: string;
       }) => {
-        setCrashState((prev) =>
-          prev
-            ? {
-                ...prev,
-                phase: "crashed",
-                multiplier: data.crashPoint,
-                crashPoint: data.crashPoint,
-                serverSeed: data.serverSeed,
-              }
-            : prev,
-        );
+        setCrashState((prev) => {
+          if (!prev) return prev;
+          const historyEntry = {
+            roundId: data.roundId,
+            crashPoint: data.crashPoint,
+          };
+          const withoutDup = prev.history.filter(
+            (h) => h.roundId !== data.roundId,
+          );
+          return {
+            ...prev,
+            phase: "crashed",
+            multiplier: data.crashPoint,
+            crashPoint: data.crashPoint,
+            serverSeed: data.serverSeed,
+            history: [historyEntry, ...withoutDup].slice(0, 10),
+          };
+        });
       },
     );
     s.on("chat:history", (messages: ChatMessage[]) => {

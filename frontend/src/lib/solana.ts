@@ -12,14 +12,15 @@ import {
   ensurePlayerInitialized,
   fetchPlayerBalance,
 } from "./anchor";
-import { CASINO_WALLET, SOLANA_RPC } from "./api";
+import { CASINO_WALLET, API_URL, SOLANA_RPC } from "./api";
 import { getSolanaCluster, getSolanaRpc } from "./cluster";
 
-const CLIENT_RPC_FALLBACKS = [
-  "https://solana.drpc.org",
+const MAINNET_RPC_FALLBACKS = [
   "https://api.mainnet-beta.solana.com",
-  "https://api.devnet.solana.com",
+  "https://solana-rpc.publicnode.com",
 ];
+
+const DEVNET_RPC_FALLBACKS = ["https://api.devnet.solana.com"];
 
 function isBrowserSafeRpc(url: string): boolean {
   const lower = url.toLowerCase();
@@ -30,19 +31,43 @@ function isBrowserSafeRpc(url: string): boolean {
   );
 }
 
-function resolveRpcUrl(rpcUrl?: string): string {
-  const candidates = [rpcUrl, getSolanaRpc(), SOLANA_RPC, ...CLIENT_RPC_FALLBACKS].filter(
-    (url): url is string => Boolean(url),
-  );
-
-  for (const url of candidates) {
-    if (isBrowserSafeRpc(url)) return url;
-  }
-
+function clusterRpcFallbacks(): string[] {
   const cluster = getSolanaCluster();
   return cluster === "mainnet-beta" || cluster === "mainnet"
-    ? CLIENT_RPC_FALLBACKS[0]
-    : CLIENT_RPC_FALLBACKS[2];
+    ? MAINNET_RPC_FALLBACKS
+    : DEVNET_RPC_FALLBACKS;
+}
+
+function getClientRpcCandidates(rpcUrl?: string): string[] {
+  const seen = new Set<string>();
+  const ordered = [rpcUrl, getSolanaRpc(), SOLANA_RPC, ...clusterRpcFallbacks()].filter(
+    (url): url is string => Boolean(url),
+  );
+  return ordered.filter((url) => {
+    if (!isBrowserSafeRpc(url) || seen.has(url)) return false;
+    seen.add(url);
+    return true;
+  });
+}
+
+function resolveRpcUrl(rpcUrl?: string): string {
+  const candidates = getClientRpcCandidates(rpcUrl);
+  if (candidates.length === 0) {
+    return clusterRpcFallbacks()[0];
+  }
+  return candidates[0];
+}
+
+async function fetchLatestBlockhashFromServer(): Promise<{
+  blockhash: string;
+  lastValidBlockHeight: number;
+}> {
+  const res = await fetch(`${API_URL}/api/rpc/latest-blockhash`);
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? "Failed to fetch blockhash from server");
+  }
+  return res.json() as Promise<{ blockhash: string; lastValidBlockHeight: number }>;
 }
 
 export function transactionFromBase64(serializedBase64: string): Transaction {
@@ -112,6 +137,40 @@ export async function waitForTransactionConfirmation(
   throw new Error("Transaction confirmation timed out — check Solscan and retry");
 }
 
+export async function refreshTransactionBlockhash(
+  tx: Transaction,
+  feePayer: string,
+): Promise<void> {
+  const applyBlockhash = (blockhash: string, lastValidBlockHeight: number) => {
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = new PublicKey(feePayer);
+    tx.lastValidBlockHeight = lastValidBlockHeight;
+  };
+
+  try {
+    const fromServer = await fetchLatestBlockhashFromServer();
+    applyBlockhash(fromServer.blockhash, fromServer.lastValidBlockHeight);
+    return;
+  } catch {
+    // Fall back to public browser RPCs if server endpoint is unavailable.
+  }
+
+  let lastError: Error | null = null;
+  for (const url of getClientRpcCandidates()) {
+    try {
+      const connection = new Connection(url, "confirmed");
+      const { blockhash, lastValidBlockHeight } =
+        await connection.getLatestBlockhash("confirmed");
+      applyBlockhash(blockhash, lastValidBlockHeight);
+      return;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+    }
+  }
+
+  throw lastError ?? new Error("Could not refresh transaction blockhash");
+}
+
 export async function buildDepositTransaction(
   fromAddress: string,
   amountSol: number,
@@ -162,10 +221,12 @@ export async function depositOnChain(
   await prepareTransaction(walletAddress, tx);
 
   const { signature } = await signAndSend(tx);
+  const normalized = normalizeTxSignature(signature);
+  await waitForTransactionConfirmation(normalized);
   const { balanceLamports } = await fetchPlayerBalance(walletAddress);
 
   return {
-    signature: normalizeTxSignature(signature),
+    signature: normalized,
     balanceSol: balanceLamports / LAMPORTS_PER_SOL,
   };
 }
@@ -180,10 +241,12 @@ export async function withdrawOnChain(
   await prepareTransaction(walletAddress, tx);
 
   const { signature } = await signAndSend(tx);
+  const normalized = normalizeTxSignature(signature);
+  await waitForTransactionConfirmation(normalized);
   const { balanceLamports } = await fetchPlayerBalance(walletAddress);
 
   return {
-    signature: normalizeTxSignature(signature),
+    signature: normalized,
     balanceSol: balanceLamports / LAMPORTS_PER_SOL,
   };
 }

@@ -12,7 +12,7 @@ export const PROGRAM_ID = new PublicKey(
 export const API_URL = import.meta.env.VITE_API_URL ?? "";
 export const PHANTOM_APP_ID = import.meta.env.VITE_PHANTOM_APP_ID ?? "";
 export const SOLANA_RPC =
-  import.meta.env.VITE_SOLANA_RPC ?? "https://solana.drpc.org";
+  import.meta.env.VITE_SOLANA_RPC ?? "https://api.mainnet-beta.solana.com";
 
 const AUTH_TOKEN_KEY = "solcasino_auth_token";
 
@@ -236,6 +236,7 @@ export async function withdraw(
   signature?: string;
   balanceSol: number;
   queued?: boolean;
+  pending?: boolean;
   message?: string;
 }> {
   const res = await apiFetch("/api/withdraw", {
@@ -386,6 +387,89 @@ export async function verifyCrashFairness(params: {
     body: JSON.stringify(params),
   });
   return res.json();
+}
+
+export interface CrashRoundDetail {
+  roundId: string;
+  crashPoint: number;
+  serverSeed: string | null;
+  serverSeedHash: string;
+  status: string;
+}
+
+export async function fetchCrashRound(
+  roundId: string,
+): Promise<CrashRoundDetail | null> {
+  const res = await fetch(`${API_URL}/api/crash/round/${encodeURIComponent(roundId)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error("Failed to load crash round");
+  return res.json();
+}
+
+export interface TokenMetadataPayload {
+  name: string;
+  symbol: string;
+  description: string;
+  imageBase64: string;
+  twitter?: string;
+  telegram?: string;
+  website?: string;
+}
+
+export interface TokenMetadataResponse {
+  uri: string;
+  metadataId: string;
+}
+
+export async function uploadTokenMetadata(
+  payload: TokenMetadataPayload,
+): Promise<TokenMetadataResponse> {
+  const res = await apiFetch("/api/token/upload-metadata", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? "Failed to upload metadata");
+  }
+  return res.json();
+}
+
+export interface CoinflipRecentFlip {
+  id: string;
+  result: "heads" | "tails";
+  won: boolean;
+}
+
+export async function fetchCoinflipRecent(): Promise<CoinflipRecentFlip[]> {
+  const res = await fetch(`${API_URL}/api/coinflip/recent`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export interface OrbitTokenInfo {
+  mint: string | null;
+  pumpProgramId: string;
+  cluster: string;
+}
+
+export async function fetchOrbitToken(): Promise<OrbitTokenInfo> {
+  const res = await fetch(`${API_URL}/api/token/orbit`);
+  if (!res.ok) throw new Error("Failed to load token info");
+  return res.json();
+}
+
+export async function registerLaunchedToken(mint: string, signature: string): Promise<void> {
+  const res = await apiFetch("/api/token/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mint, signature }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? "Failed to register token");
+  }
 }
 
 export function formatSol(amount: number, decimals = 4): string {

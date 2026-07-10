@@ -44,6 +44,12 @@ const AdminDashboard = lazy(() =>
 const WalletPage = lazy(() =>
   import("./pages/WalletPage").then((m) => ({ default: m.WalletPage })),
 );
+const LaunchTokenPage = lazy(() =>
+  import("./pages/LaunchToken").then((m) => ({ default: m.LaunchTokenPage })),
+);
+const SiteTokenPage = lazy(() =>
+  import("./pages/SiteToken").then((m) => ({ default: m.SiteTokenPage })),
+);
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 
 const ScreenshotPreview = lazy(() =>
@@ -87,7 +93,18 @@ function TabLoader() {
 
 const isDev = import.meta.env.DEV;
 
-type GameTab = "crash" | "coinflip" | "limbo" | "leaderboard" | "tournament" | "fairness" | "profile" | "wallet" | "admin";
+type GameTab =
+  | "crash"
+  | "coinflip"
+  | "limbo"
+  | "leaderboard"
+  | "tournament"
+  | "fairness"
+  | "profile"
+  | "wallet"
+  | "token"
+  | "launch"
+  | "admin";
 
 const GAME_TABS = new Set<GameTab>([
   "crash",
@@ -98,6 +115,8 @@ const GAME_TABS = new Set<GameTab>([
   "fairness",
   "profile",
   "wallet",
+  "token",
+  "launch",
   "admin",
 ]);
 
@@ -348,6 +367,12 @@ function CasinoContent() {
             Wallet
           </button>
           <button
+            className={`nav-tab ${activeTab === "token" ? "active" : ""}`}
+            onClick={() => setActiveTab("token")}
+          >
+            Token
+          </button>
+          <button
             className={`nav-tab ${activeTab === "profile" ? "active" : ""}`}
             onClick={() => setActiveTab("profile")}
           >
@@ -469,6 +494,16 @@ function CasinoContent() {
             )}
             {activeTab === "profile" && profile && (
               <ProfilePanel profile={profile} onUpdated={handleProfileUpdated} />
+            )}
+            {activeTab === "token" && (
+              <Suspense fallback={<TabLoader />}>
+                <SiteTokenPage onLaunchClick={() => setActiveTab("launch")} />
+              </Suspense>
+            )}
+            {activeTab === "launch" && (
+              <Suspense fallback={<TabLoader />}>
+                <LaunchTokenPage />
+              </Suspense>
             )}
             {activeTab === "admin" && (
               <GameErrorBoundary label="Admin">

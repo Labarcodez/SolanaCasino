@@ -58,6 +58,21 @@ Parameters:
     Default: "1024"
     AllowedValues: ["512", "1024", "2048", "4096"]
 
+  DomainName:
+    Type: String
+    Default: ""
+    Description: Custom domain for HTTPS (e.g. casino.example.com). Leave empty for HTTP-only ALB URL.
+
+  AcmCertificateArn:
+    Type: String
+    Default: ""
+    Description: ACM certificate ARN in this region (required with DomainName for Phantom wallet).
+
+Conditions:
+  HasHttps: !And
+    - !Not [!Equals [!Ref DomainName, ""]]
+    - !Not [!Equals [!Ref AcmCertificateArn, ""]]
+
 Resources:
   VPC:
     Type: AWS::EC2::VPC
@@ -185,6 +200,10 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
 
   FileSystem:
     Type: AWS::EFS::FileSystem
@@ -285,6 +304,26 @@ Resources:
       Port: 80
       Protocol: HTTP
       DefaultActions:
+        Fn::If:
+          - HasHttps
+          - - Type: redirect
+              RedirectConfig:
+                Protocol: HTTPS
+                Port: "443"
+                StatusCode: HTTP_301
+          - - Type: forward
+              TargetGroupArn: !Ref TargetGroup
+
+  HttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasHttps
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref AcmCertificateArn
+      DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref TargetGroup
 
@@ -338,7 +377,7 @@ Resources:
             - Name: SOLANA_CLUSTER
               Value: !Ref SolanaCluster
             - Name: SOLANA_RPC_FALLBACK
-              Value: https://solana.drpc.org
+              Value: https://api.mainnet-beta.solana.com
             - Name: PROGRAM_ID
               Value: !Ref ProgramId
             - Name: CASINO_WALLET_ADDRESS
@@ -352,7 +391,10 @@ Resources:
             - Name: MIN_WITHDRAW_SOL
               Value: "0.01"
             - Name: FRONTEND_URL
-              Value: !Sub "http://${LoadBalancer.DNSName}"
+              Value: !If
+                - HasHttps
+                - !Sub "https://${DomainName}"
+                - !Sub "http://${LoadBalancer.DNSName}"
             - Name: JWT_SECRET
               Value: !Ref JwtSecret
             - Name: ALCHEMY_API_KEY
@@ -385,8 +427,15 @@ Resources:
 
 Outputs:
   LoadBalancerUrl:
-    Description: Public URL (set custom domain + HTTPS when ready)
+    Description: Public URL (HTTP ALB DNS — Phantom needs HTTPS)
     Value: !Sub "http://${LoadBalancer.DNSName}"
+
+  PublicSiteUrl:
+    Description: Use this URL in the browser when HTTPS is configured
+    Value: !If
+      - HasHttps
+      - !Sub "https://${DomainName}"
+      - !Sub "http://${LoadBalancer.DNSName}"
 
   HealthCheckUrl:
     Description: Health endpoint

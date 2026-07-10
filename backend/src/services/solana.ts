@@ -5,14 +5,14 @@ import {
   PublicKey,
   SystemProgram,
   Transaction,
-  sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import bs58 from "bs58";
 import { config } from "../config.js";
 import { extractDepositTransferLamports } from "./depositVerify.js";
 
 const RPC_TIMEOUT_MS = 12_000;
-const DEPOSIT_VERIFY_ATTEMPTS = 24;
+const WITHDRAW_CONFIRM_TIMEOUT_MS = 90_000;
+const DEPOSIT_VERIFY_ATTEMPTS = 36;
 
 const rpcEndpoints = [
   config.solanaRpcUrl,
@@ -45,6 +45,17 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Withdrawal was broadcast but not yet confirmed — do NOT restore casino balance. */
+export class WithdrawalPendingError extends Error {
+  constructor(
+    message: string,
+    readonly signature: string,
+  ) {
+    super(message);
+    this.name = "WithdrawalPendingError";
+  }
+}
+
 let casinoKeypair: Keypair | null = null;
 
 if (config.casinoWalletPrivateKey) {
@@ -65,6 +76,7 @@ if (config.casinoWalletPrivateKey) {
 async function withRpcFallback<T>(
   operation: (conn: Connection) => Promise<T>,
   label = "RPC request",
+  timeoutMs = RPC_TIMEOUT_MS,
 ): Promise<T> {
   let lastError: Error | null = null;
 
@@ -73,7 +85,7 @@ async function withRpcFallback<T>(
       const conn = new Connection(endpoint, "confirmed");
       return await withTimeout(
         operation(conn),
-        RPC_TIMEOUT_MS,
+        timeoutMs,
         `${label} (${endpoint})`,
       );
     } catch (err) {
@@ -230,6 +242,42 @@ export async function buildDepositTransactionForWallet(
   }, "prepare deposit");
 }
 
+/** Poll until a signature is confirmed/finalized or failed on-chain. */
+export async function waitForSignatureConfirmation(
+  conn: Connection,
+  signature: string,
+  timeoutMs: number,
+): Promise<"confirmed" | "failed" | "timeout"> {
+  const started = Date.now();
+
+  while (Date.now() - started < timeoutMs) {
+    const { value } = await conn.getSignatureStatuses([signature], {
+      searchTransactionHistory: true,
+    });
+    const status = value[0];
+
+    if (status?.err) {
+      return "failed";
+    }
+
+    if (
+      status?.confirmationStatus === "confirmed" ||
+      status?.confirmationStatus === "finalized"
+    ) {
+      return "confirmed";
+    }
+
+    await sleep(1500);
+  }
+
+  return "timeout";
+}
+
+/**
+ * Send a custodial payout using send + confirm (not sendAndConfirmTransaction).
+ * Avoids false timeouts and never returns until the tx is confirmed, failed, or
+ * the blockhash window expires — per Solana retry/confirmation guides.
+ */
 export async function sendWithdrawal(
   toAddress: string,
   lamports: number,
@@ -241,22 +289,87 @@ export async function sendWithdrawal(
   }
 
   const toPubkey = new PublicKey(toAddress);
+  let lastError: Error | null = null;
 
-  return withRpcFallback(async (conn) => {
-    const transaction = new Transaction().add(
-      SystemProgram.transfer({
-        fromPubkey: casinoKeypair!.publicKey,
-        toPubkey,
-        lamports,
-      }),
-    );
+  for (const endpoint of rpcEndpoints) {
+    try {
+      const conn = new Connection(endpoint, "confirmed");
+      const { blockhash, lastValidBlockHeight } = await withTimeout(
+        conn.getLatestBlockhash("confirmed"),
+        RPC_TIMEOUT_MS,
+        "getLatestBlockhash",
+      );
 
-    const signature = await sendAndConfirmTransaction(conn, transaction, [
-      casinoKeypair!,
-    ]);
+      const transaction = new Transaction({
+        feePayer: casinoKeypair.publicKey,
+        blockhash,
+        lastValidBlockHeight,
+      }).add(
+        SystemProgram.transfer({
+          fromPubkey: casinoKeypair.publicKey,
+          toPubkey,
+          lamports,
+        }),
+      );
 
-    return { signature };
-  });
+      transaction.sign(casinoKeypair);
+      const raw = transaction.serialize();
+
+      const signature = await conn.sendRawTransaction(raw, {
+        skipPreflight: false,
+        maxRetries: 0,
+        preflightCommitment: "confirmed",
+      });
+
+      const confirmResult = await waitForSignatureConfirmation(
+        conn,
+        signature,
+        WITHDRAW_CONFIRM_TIMEOUT_MS,
+      );
+
+      if (confirmResult === "confirmed") {
+        return { signature };
+      }
+
+      if (confirmResult === "failed") {
+        throw new Error("Withdrawal transaction failed on-chain");
+      }
+
+      // Timed out polling — check if blockhash expired without landing.
+      const blockHeight = await conn.getBlockHeight("confirmed");
+      if (blockHeight > lastValidBlockHeight) {
+        const finalStatus = await waitForSignatureConfirmation(
+          conn,
+          signature,
+          5_000,
+        );
+        if (finalStatus === "confirmed") {
+          return { signature };
+        }
+        throw new Error("Withdrawal expired before confirmation — balance restored");
+      }
+
+      // Still within blockhash window; keep polling a bit longer.
+      const lateConfirm = await waitForSignatureConfirmation(
+        conn,
+        signature,
+        30_000,
+      );
+      if (lateConfirm === "confirmed") {
+        return { signature };
+      }
+
+      throw new WithdrawalPendingError(
+        "Withdrawal is still confirming — SOL may already be in your wallet. Balance will update shortly.",
+        signature,
+      );
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.warn(`Withdraw RPC ${endpoint} failed:`, lastError.message);
+    }
+  }
+
+  throw lastError ?? new Error("Withdrawal failed on all RPC endpoints");
 }
 
 export async function getWalletBalance(address: string): Promise<number> {
@@ -270,6 +383,19 @@ export async function getCasinoWalletBalance(): Promise<number> {
 
 export function isWithdrawalEnabled(): boolean {
   return casinoKeypair !== null;
+}
+
+export async function getLatestBlockhashForClient(): Promise<{
+  blockhash: string;
+  lastValidBlockHeight: number;
+}> {
+  return withRpcFallback(async (conn) => {
+    const result = await conn.getLatestBlockhash("confirmed");
+    return {
+      blockhash: result.blockhash,
+      lastValidBlockHeight: result.lastValidBlockHeight,
+    };
+  }, "latest blockhash");
 }
 
 export function getRpcEndpoints(): string[] {

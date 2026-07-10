@@ -17,7 +17,9 @@ interface WalletPanelProps {
   onWithdraw: (amount: number) => Promise<{
     signature?: string;
     queued?: boolean;
+    pending?: boolean;
     message?: string;
+    balanceSol?: number;
   }>;
   error: string | null;
   rpcProvider?: "alchemy" | "helius" | "custom" | "public";
@@ -96,7 +98,16 @@ export function WalletPanel({
           : undefined);
       } else {
         const result = await onWithdraw(value);
-        if (result.queued) {
+        if (result.pending) {
+          toast(
+            result.message ??
+              "Withdrawal sent — balance will update once confirmed on-chain.",
+            "info",
+            result.signature
+              ? { label: "View tx", href: solscanTxUrl(result.signature) }
+              : undefined,
+          );
+        } else if (result.queued) {
           toast(result.message ?? "Withdrawal queued", "info");
         } else {
           toast(`Withdrew ${value} SOL`, "success", result.signature
@@ -105,7 +116,11 @@ export function WalletPanel({
         }
       }
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Transaction failed", "error");
+      const msg = err instanceof Error ? err.message : "Transaction failed";
+      toast(msg, "error");
+      if (mode === "withdraw") {
+        toast("Refreshing balance — if SOL arrived in your wallet, the casino balance should update.", "info");
+      }
     }
   };
 
@@ -125,14 +140,14 @@ export function WalletPanel({
 
       <div className="wallet-stats">
         <div className="stat-box">
-          <div className="label">Casino</div>
+          <div className="label">Casino balance</div>
           <div className="value" style={{ color: "var(--solana-green)" }}>
-            {formatSol(balanceSol)}
+            {formatSol(balanceSol)} SOL
           </div>
         </div>
         <div className="stat-box">
-          <div className="label">Wallet SOL</div>
-          <div className="value">{formatSol(onChainBalanceSol)}</div>
+          <div className="label">Wallet balance</div>
+          <div className="value">{formatSol(onChainBalanceSol)} SOL</div>
         </div>
       </div>
 
@@ -215,7 +230,7 @@ export function WalletPanel({
 
         {error && <div className="alert alert-error">{error}</div>}
 
-        {mode === "deposit" && (
+        {mode === "deposit" && !onChainEnabled && (
           <div className="wallet-recovery">
             <button
               type="button"

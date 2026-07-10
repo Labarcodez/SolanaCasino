@@ -1491,6 +1491,64 @@ input:focus-visible,
   margin-left: auto;
 }
 
+.crash-fairness-link {
+  width: 100%;
+  text-align: center;
+  margin-top: 0.25rem;
+}
+
+.site-token-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.site-token-curve-info,
+.site-token-curve-card {
+  padding: 1rem;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.site-token-curve-info h3,
+.site-token-curve-card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.site-token-curve-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  margin: 0.75rem 0;
+}
+
+.site-token-curve-bar-fill {
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--solana-green));
+  animation: site-token-curve-pulse 2.5s ease-in-out infinite;
+}
+
+.site-token-curve-note {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+@keyframes site-token-curve-pulse {
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 /* Auto cashout */
 .auto-cashout {
   padding: 12px;
@@ -1767,7 +1825,296 @@ input:focus-visible,
 }
 
 .crash-shake {
-  animation: crash-shake 0.4s ease-out;
+  animation: crash-shake 0.65s ease-out;
+}
+
+.crash-rocket-tracked {
+  position: absolute;
+  font-size: 1.5rem;
+  pointer-events: none;
+  z-index: 2;
+  filter: drop-shadow(0 0 8px rgba(0, 255, 163, 0.5));
+}
+
+.crash-player-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+}
+
+.game-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.recent-results-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.recent-results-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.recent-results-pills {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.recent-pill.win {
+  border-color: var(--solana-green);
+  color: var(--solana-green);
+}
+
+.recent-pill.loss {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* 3D Coin */
+.coin-3d-scene {
+  perspective: 800px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 1.5rem 0;
+}
+
+.coin-3d {
+  width: 120px;
+  height: 120px;
+  position: relative;
+  transform-style: preserve-3d;
+}
+
+.coin-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.3);
+}
+
+.coin-face svg {
+  width: 100%;
+  height: 100%;
+}
+
+.coin-face-heads {
+  transform: rotateY(0deg) translateZ(6px);
+}
+
+.coin-face-tails {
+  transform: rotateY(180deg) translateZ(6px);
+}
+
+.coin-face-label {
+  position: absolute;
+  bottom: -1.5rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.coin-3d.coin-win {
+  filter: drop-shadow(0 0 12px rgba(0, 255, 163, 0.6));
+}
+
+.coin-3d.coin-loss {
+  filter: drop-shadow(0 0 12px rgba(255, 59, 92, 0.5));
+}
+
+.coin-shadow {
+  width: 80px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  filter: blur(6px);
+  margin-top: 1rem;
+}
+
+/* Limbo gauge */
+.limbo-gauge {
+  position: relative;
+  width: 8px;
+  height: 120px;
+  background: var(--bg-elevated);
+  border-radius: 4px;
+  margin: 0 auto 1rem;
+  overflow: hidden;
+}
+
+.limbo-gauge-fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to top, var(--solana-green), var(--accent));
+  transition: height 0.05s linear;
+}
+
+.limbo-gauge-target {
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 1px;
+}
+
+.limbo-target-line {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 0.5rem;
+}
+
+/* Launch token */
+.launch-token-page .launch-token-form {
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.launch-token-preview {
+  width: 128px;
+  height: 128px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  margin-top: 0.5rem;
+}
+
+.launch-token-warning {
+  padding: 0.75rem;
+  border-radius: var(--radius-sm);
+  background: rgba(234, 179, 8, 0.1);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+.site-token-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.site-token-mint {
+  word-break: break-all;
+  font-size: 0.85rem;
+}
+
+.site-token-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* Win celebration + loading */
+.game-action-stage,
+.crash-chart-stage {
+  position: relative;
+}
+
+.win-celebration {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.win-celebration-glow {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 255, 163, 0.5), transparent 70%);
+}
+
+.win-celebration-particle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--solana-green);
+  box-shadow: 0 0 8px var(--solana-green);
+}
+
+.game-action-spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.game-action-spinner-ring {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: var(--solana-green);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.fairness-link {
+  color: var(--accent);
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.fairness-link:hover {
+  text-decoration: underline;
+}
+
+.limbo-multiplier.roll-tone-won {
+  color: var(--solana-green);
+  text-shadow: 0 0 20px rgba(0, 255, 163, 0.45);
+}
+
+.limbo-multiplier.roll-tone-lost {
+  color: var(--danger);
+  text-shadow: 0 0 16px rgba(255, 59, 92, 0.4);
+}
+
+.limbo-multiplier.roll-tone-neutral.rolling {
+  color: #e2e8f0;
+}
+
+.preset-btn,
+.choice-btn,
+.mobile-nav-item,
+.mobile-more-item,
+.btn {
+  min-height: 44px;
+}
+
+.preset-btn {
+  min-width: 44px;
+}
+
+.mobile-nav-item {
+  padding: 0.5rem 0.35rem;
+}
+
+.mobile-more-item {
+  min-height: 48px;
+  padding: 0.75rem 1rem;
 }
 
 /* History pills as buttons */

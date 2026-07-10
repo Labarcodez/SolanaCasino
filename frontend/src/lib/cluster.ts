@@ -1,6 +1,6 @@
 let activeCluster = "devnet";
 let activeRpc =
-  import.meta.env.VITE_SOLANA_RPC ?? "https://solana.drpc.org";
+  import.meta.env.VITE_SOLANA_RPC ?? "https://api.mainnet-beta.solana.com";
 
 export function setSolanaCluster(cluster: string): void {
   activeCluster = cluster;

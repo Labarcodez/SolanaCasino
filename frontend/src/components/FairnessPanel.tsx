@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { verifyCrashFairness, verifyLimboFairness } from "../lib/api";
 import { useSocket } from "../hooks/useSocket";
 import { PageHeader } from "./PageHeader";
@@ -7,6 +8,7 @@ type FairnessTab = "crash" | "limbo" | "coinflip";
 
 export function FairnessPanel() {
   const { crashState } = useSocket();
+  const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<FairnessTab>("crash");
   const [serverSeed, setServerSeed] = useState("");
   const [serverSeedHash, setServerSeedHash] = useState("");
@@ -19,6 +21,27 @@ export function FairnessPanel() {
   const [coinflipExpected, setCoinflipExpected] = useState<"heads" | "tails">("heads");
   const [result, setResult] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
+
+  useEffect(() => {
+    const verify = searchParams.get("verify");
+    if (verify === "crash" || verify === "limbo" || verify === "coinflip") {
+      setTab(verify);
+    }
+    const seed = searchParams.get("serverSeed");
+    const hash = searchParams.get("serverSeedHash");
+    const rid = searchParams.get("roundId");
+    const bid = searchParams.get("betId");
+    const cs = searchParams.get("clientSeed");
+    const cp = searchParams.get("crashPoint");
+    const target = searchParams.get("target");
+    if (seed) setServerSeed(seed);
+    if (hash) setServerSeedHash(hash);
+    if (rid) setRoundId(rid);
+    if (bid) setBetId(bid);
+    if (cs) setClientSeed(cs);
+    if (cp) setCrashPoint(cp);
+    if (target) setTargetMultiplier(target);
+  }, [searchParams]);
 
   const fillFromLastRound = () => {
     if (!crashState?.serverSeed) return;

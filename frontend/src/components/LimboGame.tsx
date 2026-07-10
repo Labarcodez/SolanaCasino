@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import {
@@ -11,8 +11,16 @@ import {
 } from "../lib/api";
 import { useCasino } from "../hooks/CasinoUserProvider";
 import { useToast } from "./ui/Toast";
+import { useSound } from "../hooks/useSound";
 import { PageHeader } from "./PageHeader";
+import { BetAmountControls } from "./BetAmountControls";
+import { RecentResultsStrip } from "./RecentResultsStrip";
+import { SoundToggle } from "./SoundToggle";
+import { WinCelebration } from "./WinCelebration";
+import { GameActionSpinner } from "./GameActionSpinner";
+import { fairnessUrl } from "../lib/fairnessLink";
 import { prepareTransaction, solscanTxUrl } from "../lib/utils";
+import { sliderToTarget, targetToSlider } from "../lib/limboSlider";
 import {
   buildLimboBetTransaction,
   ensurePlayerInitialized,
@@ -30,7 +38,13 @@ interface LimboGameProps {
   onBalanceUpdate: (balance: number) => void;
 }
 
-const PRESET_TARGETS = [1.5, 2, 3, 5, 10, 50];
+const PRESET_TARGETS = [1.5, 2, 3, 5, 10, 50, 100, 1000];
+
+interface RollRecord {
+  id: string;
+  multiplier: number;
+  won: boolean;
+}
 
 export function LimboGame({
   walletAddress,
@@ -45,9 +59,15 @@ export function LimboGame({
 }: LimboGameProps) {
   const { signAndSendTx, refresh } = useCasino();
   const { toast } = useToast();
+  const { muted, toggleMute, play } = useSound();
   const [betAmount, setBetAmount] = useState("0.01");
   const [target, setTarget] = useState("2.00");
   const [rolling, setRolling] = useState(false);
+  const [displayRoll, setDisplayRoll] = useState<number | null>(null);
+  const [rollTone, setRollTone] = useState<"neutral" | "won" | "lost">("neutral");
+  const [celebrateWin, setCelebrateWin] = useState(false);
+  const [recentRolls, setRecentRolls] = useState<RollRecord[]>([]);
+  const tickRef = useRef<number | null>(null);
   const [lastResult, setLastResult] = useState<{
     won: boolean;
     roll: number;
@@ -59,6 +79,12 @@ export function LimboGame({
   } | null>(null);
 
   const targetNum = parseFloat(target);
+  const sliderValue = targetToSlider(
+    isNaN(targetNum) ? 2 : targetNum,
+    limboMinTarget,
+    limboMaxTarget,
+  );
+
   const winChance = useMemo(() => {
     if (isNaN(targetNum) || targetNum < limboMinTarget) return 0;
     return ((1 - limboHouseEdge) / targetNum) * 100;
@@ -70,19 +96,54 @@ export function LimboGame({
     return amount * targetNum;
   }, [betAmount, targetNum]);
 
+  const animateRoll = (finalValue: number, won: boolean, durationMs = 1200) => {
+    setRollTone("neutral");
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / durationMs);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const current = 1 + (finalValue - 1) * eased;
+      setDisplayRoll(current);
+      if (!muted && t < 1 && Math.random() > 0.85) play("limboTick");
+      if (t < 1) {
+        tickRef.current = requestAnimationFrame(tick);
+      } else {
+        setDisplayRoll(finalValue);
+        setRollTone(won ? "won" : "lost");
+      }
+    };
+    tickRef.current = requestAnimationFrame(tick);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (tickRef.current) cancelAnimationFrame(tickRef.current);
+    };
+  }, []);
+
   const handlePlay = async () => {
     const amount = parseFloat(betAmount);
     if (isNaN(amount) || amount < minBetSol || amount > maxBetSol) {
       toast(`Bet must be between ${minBetSol} and ${maxBetSol} SOL`, "error");
       return;
     }
-    if (isNaN(targetNum) || targetNum < limboMinTarget || targetNum > limboMaxTarget) {
-      toast(`Target must be between ${limboMinTarget}x and ${limboMaxTarget}x`, "error");
+    if (
+      isNaN(targetNum) ||
+      targetNum < limboMinTarget ||
+      targetNum > limboMaxTarget
+    ) {
+      toast(
+        `Target must be between ${limboMinTarget}x and ${limboMaxTarget}x`,
+        "error",
+      );
       return;
     }
 
     setRolling(true);
     setLastResult(null);
+    setDisplayRoll(1);
+    setRollTone("neutral");
+    play("bet");
 
     try {
       if (onChainEnabled) {
@@ -109,7 +170,8 @@ export function LimboGame({
           signature,
         });
 
-        await new Promise((r) => setTimeout(r, 600));
+        animateRoll(result.resultMultiplier, result.won);
+        await new Promise((r) => setTimeout(r, 1200));
         setLastResult({
           won: result.won,
           roll: result.roll,
@@ -119,6 +181,18 @@ export function LimboGame({
           clientSeed: result.clientSeed,
           signature,
         });
+        setRecentRolls((prev) =>
+          [
+            {
+              id: result.betId,
+              multiplier: result.resultMultiplier,
+              won: result.won,
+            },
+            ...prev,
+          ].slice(0, 10),
+        );
+        play(result.won ? "limboWin" : "limboBust");
+        if (result.won) setCelebrateWin(true);
         await refresh();
         const updated = await fetchUser(walletAddress);
         onBalanceUpdate(updated.balanceSol);
@@ -126,13 +200,14 @@ export function LimboGame({
         toast(
           result.won
             ? `Hit ${targetNum.toFixed(2)}x — won ${formatSol(result.payoutSol)} SOL!`
-            : `Busted at roll ${result.roll}`,
+            : `Busted at ${result.resultMultiplier.toFixed(2)}x`,
           result.won ? "success" : "info",
           { label: "View tx", href: solscanTxUrl(signature) },
         );
       } else {
         const result = await playLimbo(walletAddress, amount, targetNum);
-        await new Promise((r) => setTimeout(r, 600));
+        animateRoll(result.resultMultiplier, result.won);
+        await new Promise((r) => setTimeout(r, 1200));
         setLastResult({
           won: result.won,
           roll: result.roll,
@@ -141,11 +216,23 @@ export function LimboGame({
           betId: result.betId,
           clientSeed: result.clientSeed,
         });
+        setRecentRolls((prev) =>
+          [
+            {
+              id: result.betId,
+              multiplier: result.resultMultiplier,
+              won: result.won,
+            },
+            ...prev,
+          ].slice(0, 10),
+        );
+        play(result.won ? "limboWin" : "limboBust");
+        if (result.won) setCelebrateWin(true);
         onBalanceUpdate(result.balanceSol);
         toast(
           result.won
             ? `Hit ${targetNum.toFixed(2)}x — won ${formatSol(result.payoutSol)} SOL!`
-            : `Busted at roll ${result.roll}`,
+            : `Busted at ${result.resultMultiplier.toFixed(2)}x`,
           result.won ? "success" : "info",
         );
       }
@@ -153,36 +240,68 @@ export function LimboGame({
       toast(err instanceof Error ? err.message : "Limbo failed", "error");
     } finally {
       setRolling(false);
+      setDisplayRoll(null);
+      setRollTone("neutral");
     }
   };
 
+  const gaugePercent = Math.min(
+    100,
+    ((displayRoll ?? (lastResult?.resultMultiplier ?? targetNum)) /
+      Math.max(targetNum, 2)) *
+      100,
+  );
+
   return (
     <div className="card card-glow limbo-game">
-      <PageHeader
-        title="Limbo"
-        subtitle={`Pick your target · ${((1 - limboHouseEdge) * 100).toFixed(0)}% RTP · 2% house edge`}
-        badge={
-          onChainEnabled ? (
-            <span className="on-chain-badge">
-              <span className="on-chain-dot" />
-              On-Chain
-            </span>
-          ) : undefined
-        }
+      <div className="game-header-row">
+        <PageHeader
+          title="Limbo"
+          subtitle={`Pick your target · ${((1 - limboHouseEdge) * 100).toFixed(0)}% RTP · 2% house edge`}
+          badge={
+            onChainEnabled ? (
+              <span className="on-chain-badge">
+                <span className="on-chain-dot" />
+                On-Chain
+              </span>
+            ) : undefined
+          }
+        />
+        <SoundToggle muted={muted} onToggle={toggleMute} />
+      </div>
+
+      <RecentResultsStrip
+        title="Recent rolls"
+        results={recentRolls.map((r) => ({
+          id: r.id,
+          label: `${r.multiplier.toFixed(2)}x`,
+          variant: r.won ? "win" : "loss",
+        }))}
       />
 
       <div className="limbo-arena">
-        <div className="limbo-display">
+        <div className="limbo-display game-action-stage">
+          <WinCelebration active={celebrateWin} onDone={() => setCelebrateWin(false)} />
+          <div className="limbo-gauge">
+            <div
+              className="limbo-gauge-target"
+              style={{ bottom: `${Math.min(95, (targetNum / limboMaxTarget) * 90 + 5)}%` }}
+            />
+            <div
+              className="limbo-gauge-fill"
+              style={{ height: `${gaugePercent}%` }}
+            />
+          </div>
           <AnimatePresence mode="wait">
-            {rolling ? (
+            {rolling || displayRoll !== null ? (
               <motion.div
                 key="rolling"
-                className="limbo-multiplier rolling"
+                className={`limbo-multiplier rolling roll-tone-${rollTone}`}
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0 }}
               >
-                ???
+                {(displayRoll ?? 1).toFixed(2)}x
               </motion.div>
             ) : lastResult ? (
               <motion.div
@@ -206,6 +325,9 @@ export function LimboGame({
               </motion.div>
             )}
           </AnimatePresence>
+          <p className="limbo-target-line">
+            Target: <strong>{targetNum.toFixed(2)}x</strong>
+          </p>
           <p className="limbo-chance">
             Win chance: <strong>{winChance.toFixed(2)}%</strong>
           </p>
@@ -230,17 +352,24 @@ export function LimboGame({
             <input
               className="limbo-slider"
               type="range"
-              min={limboMinTarget}
-              max={Math.min(limboMaxTarget, 100)}
-              step="0.01"
-              value={Math.min(targetNum || 2, 100)}
-              onChange={(e) => setTarget(parseFloat(e.target.value).toFixed(2))}
+              min={0}
+              max={100}
+              step={1}
+              value={sliderValue}
+              onChange={(e) => {
+                const next = sliderToTarget(
+                  parseFloat(e.target.value),
+                  limboMinTarget,
+                  limboMaxTarget,
+                );
+                setTarget(next.toFixed(2));
+              }}
               disabled={rolling}
             />
           </div>
 
           <div className="bet-amount-presets">
-            {PRESET_TARGETS.map((p) => (
+            {PRESET_TARGETS.filter((p) => p <= limboMaxTarget).map((p) => (
               <button
                 key={p}
                 type="button"
@@ -253,33 +382,14 @@ export function LimboGame({
             ))}
           </div>
 
-          <div className="input-group">
-            <label>Amount — {formatSol(balanceSol)} SOL available</label>
-            <input
-              className="input"
-              type="number"
-              step="0.001"
-              min={minBetSol}
-              max={maxBetSol}
-              value={betAmount}
-              onChange={(e) => setBetAmount(e.target.value)}
-              disabled={rolling}
-            />
-          </div>
-
-          <div className="bet-amount-presets">
-            {["0.01", "0.05", "0.1"].map((p) => (
-              <button
-                key={p}
-                type="button"
-                className="preset-btn"
-                onClick={() => setBetAmount(p)}
-                disabled={rolling}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
+          <BetAmountControls
+            balanceSol={balanceSol}
+            minBetSol={minBetSol}
+            maxBetSol={maxBetSol}
+            amount={betAmount}
+            onAmountChange={setBetAmount}
+            disabled={rolling}
+          />
 
           <button
             type="button"
@@ -288,12 +398,28 @@ export function LimboGame({
             disabled={rolling}
             style={{ width: "100%" }}
           >
-            {rolling ? "Rolling..." : `Play Limbo @ ${targetNum.toFixed(2)}x`}
+            {rolling ? (
+              <GameActionSpinner label="Rolling..." />
+            ) : (
+              `Play Limbo @ ${targetNum.toFixed(2)}x`
+            )}
           </button>
 
           {lastResult && (
             <p className="limbo-fairness-note">
-              Roll: {lastResult.roll} / 10000 · Verify in Fairness tab
+              Roll: {lastResult.roll} / 10000 ·{" "}
+              <a
+                className="fairness-link"
+                href={fairnessUrl({
+                  game: "limbo",
+                  betId: lastResult.betId,
+                  serverSeed: lastResult.serverSeed,
+                  clientSeed: lastResult.clientSeed,
+                  targetMultiplier: targetNum,
+                })}
+              >
+                Verify in Fairness tab
+              </a>
             </p>
           )}
         </div>

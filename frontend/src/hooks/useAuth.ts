@@ -11,7 +11,9 @@ import {
   hasStoredSession,
   getSessionWalletAddress,
 } from "../lib/api";
+import { signInjectedMessage, disconnectInjectedPhantom } from "../lib/injectedPhantom";
 import { isMobileBrowser } from "../lib/phantomProviders";
+import { useInjectedPhantom } from "./useInjectedPhantom";
 
 type PhantomUserExtended = {
   authProvider?: string;
@@ -19,9 +21,10 @@ type PhantomUserExtended = {
 };
 
 export function useAuth() {
-  const { isConnected, addresses, user: phantomUser } = usePhantom();
+  const { isConnected: sdkConnected, addresses, user: phantomUser } = usePhantom();
   const { solana, isAvailable } = useSolana();
   const { disconnect } = useDisconnect();
+  const injected = useInjectedPhantom();
   const [isAuthenticated, setIsAuthenticated] = useState(() => hasStoredSession());
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -29,7 +32,8 @@ export function useAuth() {
   const solanaAccount = addresses.find(
     (a) => a.addressType === AddressType.solana,
   );
-  const walletAddress = solanaAccount?.address;
+  const walletAddress = solanaAccount?.address ?? injected.address ?? undefined;
+  const isConnected = sdkConnected || injected.connected;
 
   const authProvider = phantomUser?.authProvider ?? "injected";
   const phantomEmail = (phantomUser as PhantomUserExtended | null)?.email;
@@ -37,7 +41,7 @@ export function useAuth() {
   const hasRestorableSession = Boolean(sessionWalletAddress && hasStoredSession());
 
   const authenticate = useCallback(async () => {
-    if (!walletAddress || !solana || !isAvailable) {
+    if (!walletAddress) {
       throw new Error("Wallet not connected");
     }
 
@@ -46,8 +50,14 @@ export function useAuth() {
 
     try {
       const { message } = await requestAuthNonce(walletAddress);
-      const signResult = await solana.signMessage(message);
-      const signature = bs58.encode(signResult.signature);
+      let signatureBytes: Uint8Array;
+      if (solana && isAvailable) {
+        const signResult = await solana.signMessage(message);
+        signatureBytes = signResult.signature;
+      } else {
+        signatureBytes = await signInjectedMessage(message);
+      }
+      const signature = bs58.encode(signatureBytes);
 
       const result = await verifyAuth(walletAddress, signature, message, {
         authProvider,
@@ -106,6 +116,7 @@ export function useAuth() {
     setIsAuthenticated(false);
     setAuthError(null);
     try {
+      await disconnectInjectedPhantom();
       await disconnect();
     } catch {
       // ignore disconnect errors

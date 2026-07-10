@@ -566,6 +566,37 @@ body {
   margin-top: 8px;
 }
 
+.wallet-connect-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.wallet-connect-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  max-width: 420px;
+  text-align: center;
+}
+
+.wallet-connect-error {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #f87171;
+  max-width: 480px;
+  text-align: center;
+  line-height: 1.45;
+}
+
+.wallet-connect-secure-warning {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+}
+
 .auth-method-pill {
   background: rgba(139, 92, 246, 0.08);
   border-color: rgba(139, 92, 246, 0.2);
