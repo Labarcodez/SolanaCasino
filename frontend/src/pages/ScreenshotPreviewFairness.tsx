@@ -4,7 +4,7 @@ import { SocketProvider } from "../hooks/useSocket";
 
 export function ScreenshotPreviewFairness() {
   return (
-    <SocketProvider enabled={false}>
+    <SocketProvider mode="off">
       <PreviewShell>
         <div className="container">
           <nav className="nav-tabs">

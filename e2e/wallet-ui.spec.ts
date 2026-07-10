@@ -7,7 +7,7 @@ test.describe("Wallet UI", () => {
       localStorage.setItem("solcasino_auth_token", storedToken);
     }, buildTestSessionToken(TEST_WALLET));
 
-    await page.goto("/?tab=wallet");
+    await page.goto("/wallet");
 
     // Without a connected wallet we should not reach the wallet panel yet.
     await expect(

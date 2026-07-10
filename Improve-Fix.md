@@ -1,568 +1,269 @@
-# Orbit Casino — Improve & Fix Plan
+# Orbit Solana Casino — UI/UX Perfection Plan
 
-> Research compiled July 2026. Production: **https://orbit-casino.com** (AWS ECS, custodial mode, Alchemy RPC server-side).
-
----
-
-## Original Goals
-
-1. **Crash** — Simple line that goes up and sometimes breaks; history should show **last 10 games only**.
-2. **Coinflip** — Boring coin; needs richer visuals and feel.
-3. **Limbo** — Boring; needs more polish and features.
-4. **Cross-game** — More features, better overall look and feel.
-5. **Solana Kit** — Implement modern `@solana/kit` stack.
-6. **Pump.fun** — Integrate tools to launch a memecoin for the site.
+**Site:** [orbit-casino.com](https://orbit-casino.com/)  
+**X:** [@OrbitSolCasino](https://x.com/OrbitSolCasino)  
+**Email:** orbitsolanacasino@gmail.com
 
 ---
 
-## Current Codebase Audit
+## Current State Assessment
 
-| Area | File(s) | Current State | Gap |
-|------|---------|---------------|-----|
-| Crash history UI | `frontend/src/components/CrashGame.tsx:278` | Shows **16** pills via `.slice(0, 16)` | User wants **10** |
-| Crash history backend | `backend/src/services/crash.ts:366` | Stores **20** rounds | Align to 10 (or keep 20 server-side, slice 10 client-side) |
-| Crash chart | `frontend/src/components/CrashChart.tsx` | Canvas line + gradient; rocket emoji **centered overlay**, not on curve | Industry standard: asset follows curve |
-| Crash crash animation | `CrashChart.tsx` | Line turns red on bust | No graph crack, particles, or screen shake beyond CSS class |
-| Crash verification modal | `frontend/src/components/CrashHistoryModal.tsx:22-27` | Passes **empty** `serverSeed` / `serverSeedHash` | Quick verify always fails |
-| Crash history refresh | `useSocket.tsx` / `crash.ts` | History updates on round end server-side; client may lag until next `crash:round_start` | History pills not instant on bust |
-| Coinflip | `frontend/src/components/CoinflipGame.tsx` | Emoji coin (◎/👑/🦅), single `rotateY` flip | No 3D faces, physics, recent-flips strip, sounds |
-| Limbo | `frontend/src/components/LimboGame.tsx` | Text multiplier (idle/???/result); slider capped at **100** while max target is **1000** | No roll-up animation, target line, recent rolls |
-| Solana stack | `frontend/package.json`, `backend/package.json` | `@solana/web3.js` **v1.98.2**, `@coral-xyz/anchor` **v0.32.1** | No Kit, no Pump SDK |
-| Pump.fun | — | Not implemented | New feature module needed |
+### What's already strong
+- Cohesive dark Orbit brand with purple/Solana-green accents
+- Three fully wired games (Crash, Limbo, Coinflip) with sound, animations, and provably-fair backend
+- Hybrid on-chain + real-time architecture
+- Mobile bottom nav with safe-area support
+- Live activity marquee, chat, live bets, win celebrations
 
-### Stack Summary
-
-```
-Frontend: React 19, Vite 6, framer-motion, socket.io-client, Phantom SDK
-Backend:  Express 5, Socket.IO, SQLite, Anchor 0.32.1, web3.js v1
-Deploy:   AWS ECS Fargate, Cloudflare DNS, ACM HTTPS (us-east-2)
-Mode:     Custodial (onChainEnabled: false) — deposits/withdrawals working
-```
+### Critical gaps vs. Stake / Shuffle / industry leaders
+- Games are locked behind wallet connect — no demo or preview mode
+- Fairness tools live on a separate tab, not inline after each bet
+- Crash layout stacks chat + live bets on mobile, burying the cash-out action
+- No "focus mode," dual-bet panel, or advanced auto-bet controls
+- Wallet flows lack optimistic balance updates and rich tx status
+- Monolithic CSS (~3.6k lines) makes iteration slow
+- Zero frontend/E2E tests for actual game play
 
 ---
 
-## Part 1 — Game UX Research & Recommendations
+## Master Improvement Plan
 
-### Industry Reference: Stake Originals (2025–2026 refresh)
+### Phase 1 — Foundation & Design System (Week 1)
 
-Sources:
-- [Stake Crash upgrade (May 2026)](https://gamingamericas.com/latest-news/2026/05/15/121574/stake-upgrades-flagship-crash-game-with-sharper-visuals-and-smoother-gameplay/)
-- [Crash games explained (Game-Ace)](https://game-ace.com/blog/crash-games-explained/)
-- [Stake Limbo review](https://www.jaxon.gg/reviews/stake-com/limbo/)
-
-**Crash (Stake 2026 update highlights):**
-- Dynamic multiplier gradients: **blue → green → purple → yellow** as multiplier rises
-- **Graph crack animation** at bust — clear visual end to each round
-- **Rocket/asset follows the curve** (not a static centered emoji)
-- Live **player count** during round
-- Faster cashout UX; mobile-first big buttons
-- Particle trails optional; multiplier text pulses/scales
-
-**Limbo (Stake pattern):**
-- Minimal dark UI; focus on **central multiplier display**
-- Multiplier **ticks upward** during roll (not static "???")
-- **Recent results strip** above play area (last ~10 rolls)
-- Target multiplier input + win probability + estimated payout
-- Subtle sounds: bet chime, win burst, no looping soundtrack
-- Auto-play with win/loss limits (future enhancement)
-
-**Coinflip (industry pattern):**
-- **3D CSS coin** with distinct heads/tails faces (not emoji)
-- Multi-revolution flip with easing (slow start, fast middle, settle)
-- **Recent flips strip** (last 10: H/T with color)
-- Win/loss flash + optional coin clink sound
-- Bet shortcuts: ½, 2×, Max (match Crash/Limbo)
+| # | Task | Why |
+|---|------|-----|
+| 1.1 | **Extract design tokens** into a structured token file (`colors`, `spacing`, `typography`, `shadows`, `motion`) | Enables consistent changes across 3 games |
+| 1.2 | **Componentize repeated patterns** — `GameCard`, `PrimaryCTA`, `StatPill`, `PhaseBadge`, `BetPanel`, `FairnessChip` | Reduces duplication across Crash/Limbo/Coinflip |
+| 1.3 | **Split `index.css` + `theme.css`** into scoped modules per game + shared | Maintainability; faster iteration |
+| 1.4 | **Enforce 44×44px minimum tap targets** on all interactive elements | Mobile error prevention (industry standard) |
+| 1.5 | **Add `prefers-reduced-motion` coverage** for all Framer Motion animations | Accessibility compliance |
+| 1.6 | **Clean up `frontend/frontend/`** accidental nested folder | Repo hygiene |
+| 1.7 | **Implement clean URL routing** — `/crash`, `/limbo`, `/coinflip` (keep `?tab=` as fallback) | Shareable deep links, SEO, marketing |
 
 ---
 
-### 1.1 Crash — Implementation Plan
+### Phase 2 — Onboarding & First-Run UX (Week 1–2)
 
-#### Quick fixes (1–2 hours)
-
-| Task | File | Change |
-|------|------|--------|
-| History → 10 pills | `CrashGame.tsx:278` | `slice(0, 16)` → `slice(0, 10)` |
-| Backend history cap (optional) | `crash.ts:366` | `> 20` → `> 10` for consistency |
-| Fix verification modal | `CrashHistoryModal.tsx` | Fetch round seeds from API or pass from `CrashFairnessBar` state; never send empty strings |
-| Instant history update | `useSocket.tsx` / `CrashGame.tsx` | On `crash:crashed`, prepend `{ roundId, crashPoint }` to local history |
-
-#### Visual upgrades (1–2 days)
-
-**`CrashChart.tsx` refactor:**
-
-1. **Curve-following rocket**
-   - Track last point `{ x, y }` from canvas draw loop
-   - Position rocket div/SVG at that coordinate (transform translate)
-   - Rotate rocket to match tangent angle between last two points
-
-2. **Dynamic gradient by multiplier**
-   ```ts
-   // Suggested color stops (Stake-style)
-   mult < 2   → #3B82F6 (blue)
-   mult < 5   → #22C55E (green)
-   mult < 10  → #A855F7 (purple)
-   mult >= 10 → #EAB308 (yellow)
-   ```
-
-3. **Bust effects**
-   - Graph crack: draw 2–3 jagged lines from last point outward (canvas overlay, fade out 600ms)
-   - Screen shake: existing `.crash-shake` — extend duration
-   - Particle burst at crash point (8–12 small divs or canvas dots, CSS animation)
-   - Play existing `crash` sound (already wired via `useSound`)
-
-4. **Running phase polish**
-   - Multiplier text scale pulse: `scale(1 + (mult - 1) * 0.02)` capped
-   - Area fill under curve uses same dynamic gradient
-   - Optional: subtle grid tick labels (2x, 5x, 10x)
-
-5. **Social layer**
-   - Show active bettor count from `crashState.bets?.length` or socket event
-   - Already have `WinFeed` for recent cashouts — keep visible
-
-#### CSS targets
-
-- `frontend/src/styles/` — add `.crash-crack`, `.crash-particle`, `.crash-player-count`
-- Ensure history pills use color tiers: `<1.5x` red, `<3x` amber, `≥3x` green (already present)
+| # | Task | Why |
+|---|------|-----|
+| 2.1 | **Guest/demo mode** — let unauthenticated users watch Crash rounds and preview Limbo/Coinflip UI (bet buttons disabled with "Connect to play") | Stake/Shuffle show games immediately; reduces bounce |
+| 2.2 | **Fix `?tab=crash` on landing** — when unauthenticated, scroll to game preview or show split hero + live crash spectator | URL promise doesn't match current behavior |
+| 2.3 | **Unified connect modal** — single sheet with Phantom Extension, Phantom App (deep link), Google, Apple as equal visual options | Landing mentions Google/Apple but only shows pills |
+| 2.4 | **Smart Phantom detection UX** — replace raw "extension not detected" with install CTA + "Continue with Google/Apple" fallback + mobile app deep link | Current message is a dead end |
+| 2.5 | **3-step onboarding tooltip** after first connect: Deposit → Pick game → Play | Reduces confusion for Web3 newcomers |
+| 2.6 | **Zero-balance empty state** — prominent "Deposit SOL" CTA with animated vault explainer when balance = 0 | Users connect then don't know what to do |
+| 2.7 | **Persistent session indicator** — show connected wallet, network (devnet/mainnet), and balance in header at all times | Trust + orientation |
 
 ---
 
-### 1.2 Coinflip — Implementation Plan
+### Phase 3 — Wallet, Deposit & Withdraw Flows (Week 2)
 
-#### New component structure
-
-```
-frontend/src/components/coinflip/
-  Coin3D.tsx          — CSS 3D transform coin with heads/tails SVG faces
-  RecentFlipsStrip.tsx — Last 10 results from API or local state
-  CoinflipGame.tsx    — orchestrates (refactor existing)
-```
-
-#### Coin3D design (CSS, no WebGL required)
-
-```css
-/* Concept: preserve-3d container, two faces, rotateY animation */
-.coin-3d { transform-style: preserve-3d; }
-.coin-face-heads { transform: rotateY(0deg) translateZ(4px); }
-.coin-face-tails { transform: rotateY(180deg) translateZ(4px); }
-```
-
-- **Heads face:** Orbit branding / crown icon (SVG, not emoji)
-- **Tails face:** Eagle or "O" monogram
-- **Flip animation:** 4–6 full rotations via framer-motion `rotateY: [0, 1800 + resultOffset]`
-- **Landing:** ease-out last 200ms; green/red rim glow on win/loss
-
-#### Features to add
-
-| Feature | Priority | Notes |
-|---------|----------|-------|
-| 3D coin faces | P0 | Replace emoji `◎/👑/🦅` |
-| Recent flips strip | P1 | Store last 10 in component state; optional backend endpoint |
-| Flip + win sounds | P1 | Extend `useSound` hooks |
-| ½ / 2× / Max bet buttons | P1 | Match other games |
-| Streak indicator | P2 | "3 wins in a row" badge |
-| Auto-flip mode | P3 | Like Stake auto-bet |
-
-#### Backend (optional)
-
-- `GET /api/coinflip/recent` — last N public flips for strip (privacy: wallet truncated)
+| # | Task | Why |
+|---|------|-----|
+| 3.1 | **Optimistic balance updates** — update UI immediately on bet/deposit; reconcile on confirmation | Industry standard; feels instant |
+| 3.2 | **Rich transaction status banners** — Pending → Confirming → Confirmed with Solscan link and ETA | #1 trust builder per 2026 Web3 UX research |
+| 3.3 | **Withdrawal flow redesign** — amount picker, fee estimate, network warning, confirmation summary, real-time status until finality | Withdrawals cause the most support tickets |
+| 3.4 | **Deposit QR + copy address** for mobile users sending from exchange | Reduces deposit friction |
+| 3.5 | **Balance breakdown tooltip** — wallet SOL vs. vault balance vs. in-play bets | Clarity for hybrid custodial/on-chain mode |
+| 3.6 | **Low-balance warning** before bet attempt with one-tap deposit shortcut | Prevents failed bet frustration |
+| 3.7 | **Transaction history panel** — filterable by game, with status badges and explorer links | Transparency builds retention |
 
 ---
 
-### 1.3 Limbo — Implementation Plan
+### Phase 4 — Crash Game Perfection (Week 2–3)
 
-#### Bug fix
+Crash is the flagship — every millisecond matters.
 
-- **Slider cap mismatch:** `LimboGame.tsx:234-237` caps slider at 100 but `limboMaxTarget` defaults to 1000.
-  - Option A: Log-scale slider for 1.01–1000
-  - Option B: Slider 1.01–100 + number input for higher targets
-  - Option C: Raise slider max to 1000 with non-linear steps
-
-#### Visual upgrades
-
-1. **Roll-up animation**
-   - On bet: animate counter from `1.00` → `resultMultiplier` over ~1.2s (requestAnimationFrame or framer-motion)
-   - Color: white while rolling → green if `roll >= target`, red if bust
-   - Show **target line** (horizontal dashed rule at target Y on a mini gauge)
-
-2. **Recent rolls strip**
-   - Row of pills above arena: `{ multiplier, won/lost }` last 10
-   - Same pattern as Crash history pills
-
-3. **Layout (Stake-style)**
-   - Left: bet controls (amount, target, presets, play)
-   - Center/right: large multiplier display + roll animation
-   - Bottom: win chance, potential payout (already present)
-
-4. **Sounds**
-   - Tick during roll-up (optional, muted by default)
-   - Win chime / bust thud
-
-#### Presets alignment
-
-- Current: `[1.5, 2, 3, 5, 10, 50]`
-- Add: `100`, `1000` as text buttons (high-risk lottery targets — Stake supports up to 1,000,000x)
+| # | Task | Why |
+|---|------|-----|
+| 4.1 | **Multiplier as hero** — enlarge center multiplier, color-shift as it climbs (green → gold → red), smooth 60fps canvas updates without strobing | Core tension driver |
+| 4.2 | **Cash-out button redesign** — largest element on screen, bottom-center thumb zone on mobile, pulsing glow when active, instant press feedback | Most critical control in crash games |
+| 4.3 | **Focus mode toggle** — hide chat + live bets during running phase; show only multiplier + cash-out | Reduces decision fatigue |
+| 4.4 | **Dual bet panel** — two independent bet slots (Bet A / Bet B) like Stake | Power users expect this |
+| 4.5 | **Auto-cashout UX upgrade** — slider + preset chips (1.5×, 2×, 5×, 10×), visual target line on chart, confirmation when triggered | Current control is functional but not prominent |
+| 4.6 | **Auto-bet strategy panel** — stop-on-win, stop-on-loss, number of rounds, increase-on-loss (martingale toggle with warning) | Retention feature on top platforms |
+| 4.7 | **Round history strip** — clickable crash points above chart; tap opens fairness verification pre-filled | Pattern visualization builds trust |
+| 4.8 | **Phase state machine clarity** — distinct visual states for Betting (countdown bar) → Running (curve animating) → Crashed (explosion FX) → Cooldown (reset pulse) | Players must never wonder "what phase is this?" |
+| 4.9 | **Mobile crash layout rewrite** — game + cash-out pinned to bottom 60%; chat/bets as swipe-up bottom sheets | Current stack buries cash-out below fold |
+| 4.10 | **Latency compensation** — show "cashing out…" state immediately; reconcile server response; handle race conditions gracefully | Trust lives in milliseconds |
+| 4.11 | **My bet status card** — sticky panel showing active bet amount, current profit, cash-out value in real time | Reduces mental math under pressure |
+| 4.12 | **Keyboard shortcuts** (desktop) — Space = cash out, Enter = place bet | Power user retention |
 
 ---
 
-### 1.4 Cross-Game Polish
+### Phase 5 — Limbo Game Perfection (Week 3)
 
-| Item | Games | Implementation |
-|------|-------|----------------|
-| Bet shortcuts ½ / 2× / Max | All | Shared `BetAmountControls.tsx` component |
-| Consistent preset chips | All | `0.01, 0.05, 0.1, 0.5, 1` |
-| Sound toggle | Crash only today | Add to Coinflip + Limbo headers |
-| Mobile thumb targets | All | Min 44px buttons; stack controls vertically |
-| Win celebration | All | Brief confetti or glow (reuse framer-motion) |
-| Loading skeletons | All | Replace "Flipping..." / "Rolling..." with animated placeholders |
-| Provably fair links | All | Link to Fairness tab with pre-filled seeds |
-
----
-
-## Part 2 — Solana Kit Migration
-
-### What is Solana Kit?
-
-- Official modern JS SDK: [@solana/kit](https://solanakit.com)
-- Modular, tree-shakable, native `bigint`, Ed25519/WebCrypto
-- Successor path for web3.js 2.x / v3.x ecosystem
-- RPC, codecs, signers, transactions, subscriptions as separate packages
-
-### Current Orbit dependencies
-
-```json
-"@solana/web3.js": "^1.98.2"
-"@coral-xyz/anchor": "^0.32.1"
-```
-
-Anchor TS client is **web3.js v1 only**. Full Kit migration requires either:
-- **Incremental:** `@solana/web3-compat` bridge (recommended first step)
-- **Long-term:** Codama-generated Kit-native clients from Anchor IDL
-
-### Recommended migration path
-
-#### Phase 0 — Compat layer (low risk, 1 sprint)
-
-Sources:
-- [Solana web3-compat docs](https://solana.com/docs/frontend/web3-compat)
-- [@solana/web3-compat npm](https://www.npmjs.com/package/@solana/web3-compat)
-- [Kit ↔ web3 interop guide](https://github.com/solana-foundation/solana-dev-skill/blob/main/skill/references/kit-web3-interop.md)
-
-```bash
-# Frontend + backend
-npm install @solana/web3-compat @solana/kit @solana/client
-# Keep @solana/web3.js for unimplemented compat methods
-```
-
-**File-by-file import swap:**
-```ts
-// Before
-import { Connection, PublicKey, Transaction } from "@solana/web3.js";
-// After
-import { Connection, PublicKey, Transaction } from "@solana/web3-compat";
-```
-
-**Suggested order:**
-1. `frontend/src/lib/solana.ts` — RPC, blockhash refresh (already uses server endpoint)
-2. `frontend/src/lib/anchor.ts` — keep web3.js at boundary if Anchor requires it
-3. `backend/src/services/solana.ts` — deposit/withdraw/send paths
-4. `backend/src/services/balanceSync.ts`
-
-**Bridge helpers when mixing Kit + legacy:**
-- `toAddress()`, `toPublicKey()`, `toWeb3Instruction()`, `toKitSigner()`
-
-#### Phase 1 — Kit-native new code only
-
-- New Pump.fun module uses `@solana/kit` + `@solana/client` directly
-- Do not rewrite working deposit/withdraw until compat proven stable
-
-#### Phase 2 — Anchor / on-chain (when enabling on-chain mode)
-
-- Generate Kit client from IDL via **Codama** ([Solana Programs docs](https://solanakit.com))
-- Replace `@coral-xyz/anchor` Program calls in `frontend/src/lib/anchor.ts`
-
-#### Known compat limitations (Phase 0)
-
-- Not all `Connection` methods implemented — keep legacy connection for:
-  - `getTransaction`, subscriptions, `requestAirdrop`
-- Account data: base64 decode only
-- Websocket normalization incomplete
-
-#### Folder structure (recommended)
-
-```
-frontend/src/solana/
-  kit/          — new Kit-first code (Pump, future features)
-  web3/         — compat adapters, Anchor boundary
-  shared/       — RPC URL config, address validation
-backend/src/solana/
-  kit/
-  web3/
-```
+| # | Task | Why |
+|---|------|-----|
+| 5.1 | **Target multiplier gauge redesign** — larger arc/gauge with animated needle, color zones for risk level | Visual centerpiece |
+| 5.2 | **Live stats row** — Win chance %, potential payout SOL, house edge, RTP always visible | Stake shows these inline; reduces anxiety |
+| 5.3 | **Preset target chips** — make `[1.5, 2, 3, 5, 10, 50, 100, 1000]` thumb-friendly pills with win% labels | Faster target selection |
+| 5.4 | **Roll animation polish** — consistent duration (no jitter), satisfying deceleration, win/loss color flash | Randomness must feel fair, not suspicious |
+| 5.5 | **Result card** — post-roll panel with roll value, target, win/loss, profit, "Verify this bet" link | Inline fairness verification |
+| 5.6 | **Recent results visualization** — bar/scatter chart of last 20 rolls showing distribution (not just strip) | Proves randomness visually |
+| 5.7 | **Quick re-bet** — "Bet again" button with same amount/target after result | Reduces clicks per session |
+| 5.8 | **Auto-roll mode** — N rolls with same settings, stop on win/loss threshold | Standard on competitor platforms |
+| 5.9 | **Mobile layout** — bet controls + roll button in bottom thumb zone; gauge above | One-handed play |
 
 ---
 
-## Part 3 — Pump.fun Memecoin Launch
+### Phase 6 — Coinflip Game Perfection (Week 3)
 
-### Official Pump.fun overview
-
-Source: [Pump.fun — How to create a coin](https://pump.fun/docs/create-coin)
-
-- Launchpad on Solana; no liquidity seeding, no presale
-- Bonding curve pricing; graduates to **PumpSwap** at market-cap threshold
-- **No creation fee** (trading/graduation fees apply)
-- Metadata (name, symbol, image) is **immutable** after launch
-- Wallet: Phantom sign-in; or email via Privy on pump.fun
-
-### SDK options
-
-| Package | Maintainer | Status | Notes |
-|---------|------------|--------|-------|
-| `@pump-fun/pump-sdk` | pump.fun | **Official** — v1.36.0 (May 2026) | npm: 14.9K weekly downloads |
-| `@nirholas/pump-sdk` | Community | Active, well-documented | Offline-first builders, tutorials |
-| REST APIs (pumpapi.io, PumpDev, Launchpad.Trade) | Third-party | Varies | Some require private keys — **avoid for production** |
-
-**Recommendation:** Start with **`@pump-fun/pump-sdk`**; reference `@nirholas/pump-sdk` docs for `create_v2` examples.
-
-### Critical protocol update: `create_v2`
-
-Source: [pump-fun/pump-public-docs](https://github.com/pump-fun/pump-public-docs)
-
-| Item | Detail |
-|------|--------|
-| Old instruction | `create` — **deprecated** (still active, will sunset) |
-| New instruction | **`create_v2`** — Token-2022 program, not Metaplex |
-| Mayhem mode | Boolean `is_mayhem_mode` / `mayhemMode` — different fee recipient |
-| Token program | Token-2022 for mint, bonding curve ATA, user ATA |
-| Atomic launch+buy | `createV2AndBuyInstructions` |
-
-**Program IDs:**
-```
-Pump program:  6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P
-Pump AMM:      pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA
-```
-
-### Recommended Orbit architecture (secure)
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Frontend (/token or /launch)                               │
-│  - Form: name, symbol, description, image upload             │
-│  - Phantom signs create_v2 tx (creator = user wallet)        │
-│  - Mint keypair generated client-side, user signs both       │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-┌──────────────────────────▼──────────────────────────────────┐
-│  Backend (optional helpers)                                  │
-│  - POST /api/token/metadata → IPFS/Arweave upload → URI      │
-│  - GET  /api/token/orbit → site token mint address (config)  │
-│  - NO creator private keys on ECS                            │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Never store creator private keys on the server.** User signs via Phantom; server only hosts metadata and reads chain state.
-
-### Implementation steps
-
-#### Step 1 — Metadata pipeline
-
-```
-backend/src/routes/token.ts
-  POST /api/token/upload-metadata
-    - Validate: name (3-32), symbol (2-10), image (PNG/JPG, max 512KB)
-    - Upload JSON + image to IPFS (Pinata/Web3.Storage) or Arweave
-    - Return { uri }
-```
-
-#### Step 2 — Frontend launch page
-
-```
-frontend/src/pages/LaunchToken.tsx
-frontend/src/lib/pump.ts
-  - npm install @pump-fun/pump-sdk bn.js
-  - Generate mint Keypair in browser
-  - Build createV2Instruction (mayhemMode: false for Orbit brand token)
-  - VersionedTransaction + signAndSendTx (Phantom)
-  - Store launched mint in localStorage + POST to backend registry
-```
-
-**Example flow (from community SDK docs):**
-```ts
-const mint = Keypair.generate();
-const createIx = await PUMP_SDK.createV2Instruction({
-  mint: mint.publicKey,
-  name: "Orbit Casino",
-  symbol: "ORBIT",
-  uri: metadataUri,
-  creator: walletPublicKey,
-  user: walletPublicKey,
-  mayhemMode: false,
-});
-// tx.sign([wallet, mint]) — both must sign
-```
-
-#### Step 3 — Site token page
-
-```
-frontend/src/pages/SiteToken.tsx
-  - Display Orbit token mint, bonding curve progress, link to pump.fun
-  - Optional: embed buy widget via SDK buyInstructions (user-signed)
-```
-
-#### Step 4 — Config
-
-```env
-# .env / ECS task — public addresses only
-ORBIT_TOKEN_MINT=<mint after launch>
-PUMP_PROGRAM_ID=6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P
-```
-
-### Pump.fun launch checklist (from official docs)
-
-- [ ] Decide brand **before** signing (immutable)
-- [ ] Square image 512×512, high contrast
-- [ ] Add X / Telegram / website links in metadata
-- [ ] Review [Pump.fun Terms](https://pump.fun) and trademark guidelines
-- [ ] Test on **devnet** first (`@pump-fun/pump-sdk` has devnet builds)
-- [ ] Mainnet launch with Phantom + sufficient SOL for tx fees
-
-### Post-launch integration ideas
-
-- Display token in site header/footer with live price (DexScreener/Birdeye API)
-- Holder perks: cosmetic badge in chat (verify SPL balance via RPC)
-- Promotional buy link — **user always signs**, no custodial token trading
+| # | Task | Why |
+|---|------|-----|
+| 6.1 | **3D coin polish** — improve lighting, shadow, flip physics; ensure 60fps on mid-range mobile | Coin is the entire visual identity |
+| 6.2 | **Heads/Tails selector redesign** — large tappable cards with coin faces, not small toggle buttons | Clear choice before flip |
+| 6.3 | **Result reveal drama** — slow-mo final rotation, win confetti / loss dim, distinct sounds (fix: loss currently reuses `limboBust`) | Audio/visual consistency |
+| 6.4 | **Streak tracker** — show last 10 results as H/T dots with "streak" label | Addresses gambler's fallacy with transparency |
+| 6.5 | **Post-flip fairness chip** — one-tap "Verify" with seeds pre-populated | Trust at point of outcome |
+| 6.6 | **Quick flip** — tap same choice again instantly after result | Speed is the product |
+| 6.7 | **Auto-flip mode** — flip N times, stop on win count or loss limit | Parity with Limbo auto-roll |
+| 6.8 | **Mobile** — coin centered, heads/tails + bet + flip in bottom panel | Thumb-zone layout |
 
 ---
 
-## Part 4 — Known Bugs to Fix (Priority)
+### Phase 7 — Provably Fair & Trust UX (Week 3–4)
 
-| # | Bug | Severity | Fix |
-|---|-----|----------|-----|
-| 1 | Crash history shows 16 not 10 | Low | One-line slice change |
-| 2 | CrashHistoryModal verify broken | Medium | Pass real seeds or fetch by roundId |
-| 3 | History not instant on crash | Medium | Optimistic update on `crash:crashed` |
-| 4 | Limbo slider max 100 vs target 1000 | Medium | Log slider or dual input |
-| 5 | Rocket not on curve | Low (UX) | CrashChart position fix |
-| 6 | Coinflip/Limbo no sounds | Low | Extend useSound |
+Trust is the competitive moat for crypto casinos.
 
----
-
-## Part 5 — Implementation Roadmap
-
-### Sprint 1 — Quick wins (2–3 days)
-
-- [x] Crash history → 10 pills
-- [x] Fix CrashHistoryModal verification
-- [x] Instant crash history on bust event
-- [x] Limbo slider / target input fix
-- [x] Shared bet shortcuts (½, 2×, Max) across games
-
-### Sprint 2 — Crash visual pass (3–5 days)
-
-- [x] Dynamic multiplier gradients
-- [x] Rocket follows curve + rotation
-- [x] Graph crack + particle bust animation
-- [x] Active player count badge
-
-### Sprint 3 — Coinflip + Limbo polish (3–5 days)
-
-- [x] Coin3D component with SVG faces
-- [x] Recent flips / recent rolls strips
-- [x] Limbo roll-up counter animation
-- [x] Sounds for all three games
-
-### Sprint 4 — Solana Kit Phase 0 (3–5 days)
-
-- [x] Install web3-compat + kit deps (frontend optional; backend reverted to web3.js)
-- [x] Migrate `solana.ts` (frontend — `@solana/web3.js` stable; backend — `@solana/web3.js`)
-- [ ] Regression test deposit / withdraw / blockhash (manual on deploy)
-- [x] Document compat boundaries in code comments (see `src/types/solana-web3-compat.d.ts`)
-
-### Sprint 5 — Pump.fun launch (5–7 days)
-
-- [x] Metadata upload API
-- [x] LaunchToken page + Phantom signing
-- [ ] Devnet end-to-end test (requires wallet + devnet SOL)
-- [ ] Mainnet Orbit token launch (operator action)
-- [x] SiteToken page + nav link
-
-### Future / optional
-
-- [ ] Codama Kit client for on-chain mode
-- [ ] Auto-play modes (Limbo, Coinflip)
-- [ ] Dual bet slots on Crash
-- [ ] Phaser/Pixi upgrade if canvas performance limits hit
+| # | Task | Why |
+|---|------|-----|
+| 7.1 | **In-game fairness modal** (Stake-style) — accessible from every game via shield icon; not buried in "More" tab | Fairness must be encountered naturally |
+| 7.2 | **Client seed editor** — let users set/customize their client seed before betting | Player agency = trust |
+| 7.3 | **Server seed hash display** — show hash before bet, reveal after round/bet | Core provably-fair UX pattern |
+| 7.4 | **One-click verify** after every bet — pre-filled modal from bet result data | Eliminates manual copy-paste |
+| 7.5 | **Fairness education** — 3-step visual explainer: "We commit hash → You set seed → Outcome is verifiable" | Newcomers don't understand provably fair |
+| 7.6 | **On-chain badge clarity** — when on-chain mode active, show what's on-chain vs. off-chain per action | Reduces confusion in hybrid mode |
+| 7.7 | **Program ID + treasury links** — already on landing; also show in-game footer bar | Persistent trust signal |
+| 7.8 | **Bet history → verify links** — every past bet in history has "Verify" action | Audit trail |
 
 ---
 
-## References
+### Phase 8 — Mobile & Responsive UX (Week 4)
 
-### Game UX
-- [Stake Crash visual upgrade (May 2026)](https://gamingamericas.com/latest-news/2026/05/15/121574/stake-upgrades-flagship-crash-game-with-sharper-visuals-and-smoother-gameplay/)
-- [Crash games explained](https://game-ace.com/blog/crash-games-explained/)
-- [Stake Limbo guide](https://www.jaxon.gg/reviews/stake-com/limbo/)
-
-### Solana Kit
-- [Solana Kit homepage](https://solanakit.com)
-- [web3-compat migration](https://solana.com/docs/frontend/web3-compat)
-- [@solana/web3-compat npm](https://www.npmjs.com/package/@solana/web3-compat)
-- [Kit ↔ web3 interop patterns](https://github.com/solana-foundation/solana-dev-skill/blob/main/skill/references/kit-web3-interop.md)
-- [web3.js v3 release notes](https://github.com/solana-foundation/solana-web3.js/blob/v3.x/RELEASE_NOTES.md)
-
-### Pump.fun
-- [How to create a coin (official)](https://pump.fun/docs/create-coin)
-- [@pump-fun/pump-sdk npm](https://www.npmjs.com/package/@pump-fun/pump-sdk)
-- [pump-public-docs (create_v2)](https://github.com/pump-fun/pump-public-docs)
-- [Community SDK API reference](https://github.com/nirholas/pump-fun-sdk/blob/HEAD/docs/api-reference.md)
-- [Community create token tutorial](https://github.com/nirholas/pump-fun-sdk/blob/main/tutorials/01-create-token.md)
-
-### Orbit production
-- Live site: https://orbit-casino.com
-- AWS region: us-east-2
-- RPC: Alchemy (server-side `ALCHEMY_API_KEY`)
+| # | Task | Why |
+|---|------|-----|
+| 8.1 | **Reduce bottom nav to 5 items** — merge Profile into Wallet or More; industry max is 5 | Current 6 items (incl. More) crowds icons |
+| 8.2 | **Bottom sheet pattern** for chat, live bets, bet history, fairness | Reachable without scrolling |
+| 8.3 | **Sticky game action bar** — bet amount + primary action always visible above nav | Never scroll to bet |
+| 8.4 | **Haptic feedback** on cash-out, win, loss (where supported) | Micro-interactions build confidence |
+| 8.5 | **Landscape mode** for Crash — chart full-width, controls on side | Tablet/laptop users |
+| 8.6 | **PWA manifest + install prompt** — "Add to Home Screen" for app-like experience | Mobile-first retention |
+| 8.7 | **Performance budget** — LCP < 2.5s, 60fps animations, lazy-load non-critical panels | Mobile users churn on slow load |
+| 8.8 | **Safe-area audit** — verify all fixed elements respect `env(safe-area-inset-*)` on notched devices | Already partially done; needs full audit |
 
 ---
 
-*Last updated: July 10, 2026*
+### Phase 9 — Social, Engagement & Retention (Week 4–5)
+
+| # | Task | Why |
+|---|------|-----|
+| 9.1 | **Surface leaderboard** — move from "More" to primary nav or game sidebar | Social proof drives play |
+| 9.2 | **Tournament widget** — persistent prize pool + countdown banner on game pages | Urgency + competition |
+| 9.3 | **Win feed improvements** — show game icon, multiplier, relative time; tap to see bet | Already exists; needs polish |
+| 9.4 | **Chat UX** — emoji reactions, @mentions, bet share cards ("I cashed out at 5.2×!") | Community retention |
+| 9.5 | **Player profile stats** — total wagered, biggest win, favorite game, win rate | Personalization |
+| 9.6 | **Hotkeys / achievements** — "First 10× cashout", "100 flips", etc. | Gamification without clutter |
+| 9.7 | **Referral system UI** — share link, track referrals, bonus display | Growth loop |
 
 ---
 
-## Implementation Status (July 10, 2026)
+### Phase 10 — Performance & Technical UX (Week 5)
 
-All sprints implemented in codebase. Frontend and backend **build successfully**.
+| # | Task | Why |
+|---|------|-----|
+| 10.1 | **WebSocket reconnection UX** — show "Reconnecting…" banner, queue bets, sync state on reconnect | Crash players lose trust on disconnect |
+| 10.2 | **Error boundaries per game** — already exist; add user-friendly retry UI | Graceful degradation |
+| 10.3 | **Loading skeletons** for all game panels | Perceived performance |
+| 10.4 | **Sound system upgrade** — separate volume controls per category (SFX, music, UI); fix coinflip loss sound | Polish |
+| 10.5 | **Canvas performance** for CrashChart — requestAnimationFrame throttle, offscreen buffer | Smooth on low-end devices |
+| 10.6 | **Code-split game bundles** — ensure each game loads < 100kb gzipped initial | Fast tab switching |
 
-### New / modified files
+---
 
-| Area | Files |
-|------|-------|
-| Crash UX | `CrashChart.tsx`, `CrashGame.tsx`, `CrashHistoryModal.tsx`, `useSocket.tsx`, `crash.ts` |
-| Shared | `BetAmountControls.tsx`, `RecentResultsStrip.tsx`, `crashColors.ts`, `limboSlider.ts` |
-| Coinflip | `CoinflipGame.tsx`, `coinflip/Coin3D.tsx` |
-| Limbo | `LimboGame.tsx` |
-| Sounds | `useSound.ts` (+ flip, limboTick, limboWin, limboBust) |
-| Solana Kit | `solana.ts` — frontend uses `@solana/web3.js`; backend uses `@solana/web3.js` (compat reverted — Alchemy HTTPS) |
-| Pump.fun | `backend/src/routes/token.ts`, `frontend/src/lib/pump.ts`, `pages/LaunchToken.tsx`, `pages/SiteToken.tsx` |
-| Routing | `App.tsx` — `?tab=token`, `?tab=launch` |
-| API | `GET /api/crash/round/:id`, `POST /api/token/upload-metadata`, `GET /api/token/orbit` |
+### Phase 11 — Testing & Quality Assurance (Ongoing)
 
-### Cross-game polish (July 10 — pass 2)
+| # | Task | Why |
+|---|------|-----|
+| 11.1 | **Playwright E2E for each game** — place bet, see result, verify fairness link | Currently zero game E2E |
+| 11.2 | **Visual regression tests** — screenshot comparison for game states | Catch UI breaks |
+| 11.3 | **Component unit tests** — BetAmountControls, AutoCashoutControl, limboSlider math | Regression safety |
+| 11.4 | **Mobile device matrix** — iPhone SE, iPhone 15, Pixel, iPad | Thumb-zone validation |
+| 11.5 | **Load testing** — 100+ concurrent crash players | WebSocket stability |
+| 11.6 | **Accessibility audit** — WCAG 2.1 AA: contrast, focus rings, screen reader labels | Legal + inclusive |
 
-- [x] Crash uses shared `BetAmountControls` + `1` SOL preset
-- [x] Win celebration particles (Crash cashout, Coinflip, Limbo)
-- [x] Loading spinners on flip/roll buttons
-- [x] Limbo roll green/red color on outcome
-- [x] Coin3D crown + Orbit orbit branding
-- [x] Crash chart grid multiplier labels
-- [x] Fairness deep links from Limbo/Coinflip/Crash
-- [x] Mobile nav: Launch tab + 44px touch targets
-- [x] Frontend `solana.ts` reverted to `@solana/web3.js` (compat breaks Alchemy on server)
+---
 
-- [x] `GET /api/coinflip/recent` — persists recent flips strip across refresh
-- [x] Custodial coinflip fairness verify link
-- [x] SiteToken bonding curve explainer + Pump.fun buy CTA
+### Phase 12 — Landing & Marketing Pages (Week 5–6)
 
-### Deploy notes
+| # | Task | Why |
+|---|------|-----|
+| 12.1 | **Hero redesign** — embed live Crash spectator in hero (not just text "Crash. Limbo") | Show, don't tell |
+| 12.2 | **Game preview cards** — hover/tap to see animated preview of each game | Conversion |
+| 12.3 | **Social proof section** — total volume, players online, biggest win today | Trust |
+| 12.4 | **Comparison table** — Orbit vs. traditional casinos (speed, fairness, custody) | Education |
+| 12.5 | **SEO meta + OG images** per game route | Discoverability |
+| 12.6 | **Fix title typo** — live site shows "Crash.Limbo" (missing space/Flip) | Brand polish |
+| 12.7 | **Contact links** — X [@OrbitSolCasino](https://x.com/OrbitSolCasino), email orbitsolanacasino@gmail.com in footer and support surfaces | Correct support channels |
 
-1. Set `PUBLIC_API_URL=https://orbit-casino.com` on ECS so metadata URIs resolve correctly.
-2. Optional: `ORBIT_TOKEN_MINT=<mint>` after mainnet launch.
-3. Pump launch requires Phantom + SOL for tx fees; mint keypair signs client-side (`partialSign`).
-4. Run `npm run aws:deploy` to push to production when ready.
+---
+
+## Priority Matrix
+
+```
+                    IMPACT
+                 High │  P4 Crash mobile      P7 Fairness modal
+                      │  P4 Cash-out button    P2 Guest/demo mode
+                      │  P3 Optimistic balance
+                      │  P2 Connect modal
+                 Low  │  P12 Landing polish   P9 Social features
+                      └────────────────────────────────────────
+                         Low              High
+                              EFFORT
+```
+
+**Do first (highest ROI):**
+1. Crash mobile layout + cash-out button (Phase 4.2, 4.9)
+2. In-game fairness modal (Phase 7.1, 7.4)
+3. Guest/demo spectator mode (Phase 2.1)
+4. Connect modal unification (Phase 2.3, 2.4)
+5. Optimistic balance + tx status (Phase 3.1, 3.2)
+6. Clean URL routing (Phase 1.7)
+
+---
+
+## Competitive Benchmark Targets
+
+| Feature | Stake | Shuffle | Orbit (current) | Orbit (target) |
+|---------|-------|---------|-----------------|----------------|
+| Guest game view | Yes | Yes | No | Yes |
+| Inline fairness verify | Yes | Yes | Separate tab | In-game modal |
+| Crash dual bet | Yes | Yes | Single | Dual |
+| Crash focus mode | Yes | Partial | No | Yes |
+| Auto-bet strategies | Yes | Yes | Auto-cashout only | Full |
+| Client seed control | Yes | Yes | Backend only | User-facing |
+| Mobile thumb-zone CTAs | Yes | Yes | Partial | Full |
+| Tx status tracking | Yes | Yes | Basic toasts | Rich banners |
+| 60fps crash chart | Yes | Yes | Canvas (good) | Optimized |
+
+---
+
+## Estimated Timeline
+
+| Phase | Duration | Deliverable |
+|-------|----------|-------------|
+| 1–2 | 2 weeks | Design system + onboarding + routing |
+| 3–4 | 2 weeks | Wallet flows + Crash perfection |
+| 5–6 | 1.5 weeks | Limbo + Coinflip perfection |
+| 7–8 | 1.5 weeks | Trust UX + mobile overhaul |
+| 9–10 | 1.5 weeks | Social, performance |
+| 11–12 | 1 week | Testing + landing polish |
+| **Total** | **~9 weeks** | Production-grade UX |
+
+---
+
+## Summary
+
+Orbit Solana Casino has a solid technical foundation — three working games, provably-fair backend, on-chain integration, and a cohesive visual identity. The gap is **UX maturity**: the product needs to feel as fast, transparent, and thumb-friendly as Stake or Shuffle, with fairness surfaced at the moment of play, crash optimized for split-second decisions, and wallet flows that never leave the user guessing.
+
+This plan is **60 specific tasks** across **12 phases**. Start with **Crash mobile + cash-out**, **in-game fairness modal**, and **guest demo mode** — those three changes alone will dramatically improve first impressions and retention.

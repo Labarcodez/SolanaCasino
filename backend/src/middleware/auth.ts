@@ -29,13 +29,15 @@ export function requireAuth(
   next();
 }
 
-export function requireAuthSocket(
+export function attachSocketAuth(
   socket: Socket,
   next: (err?: Error) => void,
 ): void {
   const token = socket.handshake.auth?.token as string | undefined;
   if (!token) {
-    next(new Error("Authentication required"));
+    socket.data.isSpectator = true;
+    socket.data.walletAddress = null;
+    next();
     return;
   }
 
@@ -45,8 +47,17 @@ export function requireAuthSocket(
     return;
   }
 
+  socket.data.isSpectator = false;
   socket.data.walletAddress = payload.walletAddress;
   next();
+}
+
+/** @deprecated Use attachSocketAuth — kept for imports that expect strict auth */
+export function requireAuthSocket(
+  socket: Socket,
+  next: (err?: Error) => void,
+): void {
+  attachSocketAuth(socket, next);
 }
 
 export function requireMatchingWallet(

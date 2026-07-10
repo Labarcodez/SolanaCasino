@@ -18,6 +18,7 @@ import { BetAmountControls } from "./BetAmountControls";
 import { RecentResultsStrip } from "./RecentResultsStrip";
 import { SoundToggle } from "./SoundToggle";
 import { WinCelebration } from "./WinCelebration";
+import { FairnessModal } from "./FairnessModal";
 import { GameActionSpinner } from "./GameActionSpinner";
 import { Coin3D } from "./coinflip/Coin3D";
 import { fairnessUrl } from "../lib/fairnessLink";
@@ -64,6 +65,7 @@ export function CoinflipGame({
     serverSeed: string;
     clientSeed: string;
   } | null>(null);
+  const [fairnessOpen, setFairnessOpen] = useState(false);
   const onChain = config?.onChainEnabled ?? false;
 
   useEffect(() => {
@@ -200,6 +202,14 @@ export function CoinflipGame({
             ) : undefined
           }
         />
+        <button
+          type="button"
+          className="btn btn-outline btn-sm fairness-trigger"
+          onClick={() => setFairnessOpen(true)}
+          data-testid="coinflip-fairness-button"
+        >
+          Fairness
+        </button>
         <SoundToggle muted={muted} onToggle={toggleMute} />
       </div>
 
@@ -277,6 +287,12 @@ export function CoinflipGame({
           </p>
         )}
       </div>
+
+      <FairnessModal
+        open={fairnessOpen}
+        onClose={() => setFairnessOpen(false)}
+        initialGame="coinflip"
+      />
     </div>
   );
 }

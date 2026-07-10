@@ -1,5 +1,5 @@
-import { lazy, Suspense, useCallback, useMemo, useState } from "react";
-import { Routes, Route, Navigate, useSearchParams } from "react-router-dom";
+import { lazy, Suspense, useState } from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { Header } from "./components/Header";
 import { Landing } from "./components/Landing";
 import { BetHistoryPanel } from "./components/BetHistoryPanel";
@@ -19,6 +19,8 @@ import { ConfigErrorScreen } from "./components/ConfigErrorScreen";
 import { GameErrorBoundary } from "./components/GameErrorBoundary";
 import type { UserProfile } from "./lib/api";
 import { shortenAddress } from "./lib/api";
+import { useGameTab } from "./hooks/useGameTab";
+import { GuestGameShell, isGuestGameTab } from "./components/GuestGameShell";
 
 const CrashArena = lazy(() =>
   import("./components/CrashArena").then((m) => ({ default: m.CrashArena })),
@@ -93,39 +95,28 @@ function TabLoader() {
 
 const isDev = import.meta.env.DEV;
 
-type GameTab =
-  | "crash"
-  | "coinflip"
-  | "limbo"
-  | "leaderboard"
-  | "tournament"
-  | "fairness"
-  | "profile"
-  | "wallet"
-  | "token"
-  | "launch"
-  | "admin";
-
-const GAME_TABS = new Set<GameTab>([
-  "crash",
-  "coinflip",
-  "limbo",
-  "leaderboard",
-  "tournament",
-  "fairness",
-  "profile",
-  "wallet",
-  "token",
-  "launch",
-  "admin",
-]);
-
-function parseGameTab(value: string | null): GameTab {
-  if (value && GAME_TABS.has(value as GameTab)) {
-    return value as GameTab;
-  }
-  return "crash";
+function CasinoApp() {
+  return (
+    <CasinoUserProvider>
+      <CasinoRoot />
+    </CasinoUserProvider>
+  );
 }
+
+const CASINO_ROUTES = [
+  "/",
+  "/crash",
+  "/coinflip",
+  "/limbo",
+  "/leaderboard",
+  "/tournament",
+  "/fairness",
+  "/profile",
+  "/wallet",
+  "/token",
+  "/launch",
+  "/admin",
+] as const;
 
 function CasinoContent() {
   const {
@@ -155,17 +146,7 @@ function CasinoContent() {
     creditDepositBySignature,
   } = useCasino();
   const { connected: wsConnected } = useSocket();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = useMemo(
-    () => parseGameTab(searchParams.get("tab")),
-    [searchParams],
-  );
-  const setActiveTab = useCallback(
-    (tab: GameTab) => {
-      setSearchParams(tab === "crash" ? {} : { tab }, { replace: true });
-    },
-    [setSearchParams],
-  );
+  const { activeTab, setActiveTab } = useGameTab();
   const [profileOpen, setProfileOpen] = useState(false);
 
   const balanceSol = profile?.balanceSol ?? 0;
@@ -205,6 +186,33 @@ function CasinoContent() {
               </button>
             </div>
           </div>
+          <SiteFooter />
+        </div>
+      );
+    }
+
+    if (isGuestGameTab(activeTab)) {
+      return (
+        <GuestGameShell
+          activeTab={activeTab}
+          onChainEnabled={onChainEnabled}
+        />
+      );
+    }
+
+    if (activeTab === "fairness") {
+      return (
+        <div className="app">
+          <AnimatedBackground />
+          <Header connected={false} onChainEnabled={onChainEnabled} />
+          <LiveActivityMarquee />
+          <main className="main-content">
+            <div className="container">
+              <Suspense fallback={<TabLoader />}>
+                <FairnessPanel />
+              </Suspense>
+            </div>
+          </main>
           <SiteFooter />
         </div>
       );
@@ -528,8 +536,9 @@ function CasinoContent() {
 
 function CasinoRoot() {
   const { isAuthenticated } = useCasino();
+  const socketMode = isAuthenticated ? "authenticated" : "spectator";
   return (
-    <SocketProvider enabled={isAuthenticated}>
+    <SocketProvider mode={socketMode}>
       <CasinoContent />
     </SocketProvider>
   );
@@ -556,14 +565,10 @@ export default function App() {
         ) : (
           <Route path="/preview*" element={<Navigate to="/" replace />} />
         )}
-        <Route
-          path="/*"
-          element={
-            <CasinoUserProvider>
-              <CasinoRoot />
-            </CasinoUserProvider>
-          }
-        />
+        {CASINO_ROUTES.map((path) => (
+          <Route key={path} path={path} element={<CasinoApp />} />
+        ))}
+        <Route path="/*" element={<Navigate to="/crash" replace />} />
       </Routes>
     </Suspense>
   );

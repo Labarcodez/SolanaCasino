@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSocket } from "../hooks/useSocket";
 
-export function ChatPanel() {
+export function ChatPanel({ spectator = false }: { spectator?: boolean }) {
   const { chatMessages, sendChat, onlineCount, connected } = useSocket();
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -61,16 +61,16 @@ export function ChatPanel() {
       <form className="chat-input-row" onSubmit={handleSend}>
         <input
           className="input chat-input"
-          placeholder="Type a message..."
+          placeholder={spectator ? "Connect wallet to chat" : "Type a message..."}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           maxLength={200}
-          disabled={!connected || sending}
+          disabled={spectator || !connected || sending}
         />
         <button
           type="submit"
           className="btn btn-primary btn-sm"
-          disabled={!connected || sending || !input.trim()}
+          disabled={spectator || !connected || sending || !input.trim()}
         >
           Send
         </button>

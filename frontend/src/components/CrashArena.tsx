@@ -2,6 +2,7 @@ import { ChatPanel } from "./ChatPanel";
 import { CrashGame } from "./CrashGame";
 import { LiveBetsPanel } from "./LiveBetsPanel";
 import { useSocket } from "../hooks/useSocket";
+import { useState } from "react";
 
 interface CrashArenaProps {
   balanceSol: number;
@@ -9,6 +10,7 @@ interface CrashArenaProps {
   maxBetSol: number;
   onChainEnabled?: boolean;
   onBalanceUpdate: (balance: number) => void;
+  spectator?: boolean;
 }
 
 export function CrashArena({
@@ -17,13 +19,17 @@ export function CrashArena({
   maxBetSol,
   onChainEnabled,
   onBalanceUpdate,
+  spectator = false,
 }: CrashArenaProps) {
   const { crashState } = useSocket();
+  const [focusMode, setFocusMode] = useState(false);
 
   return (
-    <div className="crash-arena">
+    <div
+      className={`crash-arena ${focusMode ? "crash-arena--focus" : ""} ${spectator ? "crash-arena--spectator" : ""}`.trim()}
+    >
       <div className="crash-arena-chat">
-        <ChatPanel />
+        <ChatPanel spectator={spectator} />
       </div>
 
       <div className="crash-arena-main">
@@ -32,6 +38,9 @@ export function CrashArena({
           minBetSol={minBetSol}
           maxBetSol={maxBetSol}
           onBalanceUpdate={onBalanceUpdate}
+          spectator={spectator}
+          focusMode={focusMode}
+          onFocusModeChange={setFocusMode}
         />
       </div>
 

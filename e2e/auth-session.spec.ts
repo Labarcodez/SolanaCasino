@@ -18,11 +18,11 @@ test.describe("Session persistence", () => {
   });
 
   test("keeps wallet tab in the URL after refresh", async ({ page }) => {
-    await page.goto("/?tab=wallet");
-    await expect(page).toHaveURL(/tab=wallet/);
+    await page.goto("/wallet");
+    await expect(page).toHaveURL(/\/wallet$/);
 
     await page.reload();
-    await expect(page).toHaveURL(/tab=wallet/);
+    await expect(page).toHaveURL(/\/wallet$/);
   });
 
   test("landing page loads for new visitors", async ({ page }) => {

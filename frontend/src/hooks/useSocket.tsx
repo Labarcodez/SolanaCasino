@@ -72,12 +72,14 @@ const SocketContext = createContext<SocketContextValue>({
   sendChat: async () => ({ success: false, error: "Not connected" }),
 });
 
+export type SocketMode = "authenticated" | "spectator" | "off";
+
 export function SocketProvider({
   children,
-  enabled,
+  mode,
 }: {
   children: React.ReactNode;
-  enabled: boolean;
+  mode: SocketMode;
 }) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [crashState, setCrashState] = useState<CrashRoundState | null>(null);
@@ -89,18 +91,22 @@ export function SocketProvider({
   const connectErrorShown = useRef(false);
 
   useEffect(() => {
-    if (!enabled) {
+    if (mode === "off") {
       setSocket(null);
       setConnected(false);
       return;
     }
 
     const token = getAuthToken();
-    if (!token) return;
+    if (mode === "authenticated" && !token) {
+      setSocket(null);
+      setConnected(false);
+      return;
+    }
 
     const s = io(API_URL || window.location.origin, {
       transports: ["websocket", "polling"],
-      auth: { token },
+      auth: mode === "authenticated" && token ? { token } : {},
     });
 
     s.on("connect", () => {
@@ -176,13 +182,13 @@ export function SocketProvider({
     return () => {
       s.disconnect();
     };
-  }, [enabled, toast]);
+  }, [mode, toast]);
 
   const sendChat = useCallback(
     (message: string): Promise<{ success: boolean; error?: string }> => {
       return new Promise((resolve) => {
-        if (!socket || !enabled) {
-          resolve({ success: false, error: "Not connected" });
+        if (!socket || mode !== "authenticated") {
+          resolve({ success: false, error: "Connect wallet to chat" });
           return;
         }
         socket.emit(
@@ -194,7 +200,7 @@ export function SocketProvider({
         );
       });
     },
-    [socket, enabled],
+    [socket, mode],
   );
 
   return (
@@ -219,11 +225,12 @@ export function useSocket() {
 }
 
 export function useCrashSubscription(enabled: boolean) {
-  const { socket, crashState } = useSocket();
+  const { socket, crashState, connected } = useSocket();
+  const canPlay = enabled && connected;
 
   const subscribe = useCallback(() => {
-    if (enabled) socket?.emit("crash:subscribe");
-  }, [socket, enabled]);
+    if (connected) socket?.emit("crash:subscribe");
+  }, [socket, connected]);
 
   useEffect(() => {
     subscribe();
@@ -235,7 +242,7 @@ export function useCrashSubscription(enabled: boolean) {
       autoCashout?: number,
     ): Promise<{ success: boolean; balanceSol?: number; error?: string }> => {
       return new Promise((resolve) => {
-        if (!socket || !enabled) {
+        if (!socket || !canPlay) {
           resolve({ success: false, error: "Not connected" });
           return;
         }
@@ -253,7 +260,7 @@ export function useCrashSubscription(enabled: boolean) {
         );
       });
     },
-    [socket, enabled, subscribe],
+    [socket, canPlay, subscribe],
   );
 
   const cashout = useCallback((): Promise<{
@@ -262,7 +269,7 @@ export function useCrashSubscription(enabled: boolean) {
     error?: string;
   }> => {
     return new Promise((resolve) => {
-      if (!socket || !enabled) {
+      if (!socket || !canPlay) {
         resolve({ success: false, error: "Not connected" });
         return;
       }
@@ -274,7 +281,7 @@ export function useCrashSubscription(enabled: boolean) {
         },
       );
     });
-  }, [socket, enabled, subscribe]);
+  }, [socket, canPlay, subscribe]);
 
-  return { crashState, placeBet, cashout, subscribe };
+  return { crashState, placeBet, cashout, subscribe, canPlay };
 }

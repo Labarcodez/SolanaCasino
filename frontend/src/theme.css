@@ -1462,3 +1462,180 @@ body {
 .site-footer-social a:hover {
   color: var(--accent-bright);
 }
+
+/* Guest spectator */
+.guest-game-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  max-width: var(--container-max);
+  margin: 0 auto;
+  padding: var(--space-xl) var(--space-lg) var(--space-md);
+}
+
+.guest-game-eyebrow {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--solana-green);
+  margin: 0 0 8px;
+}
+
+.guest-game-banner h1 {
+  margin: 0 0 8px;
+  font-size: clamp(1.5rem, 4vw, 2rem);
+}
+
+.guest-game-banner p {
+  margin: 0;
+  color: var(--text-muted);
+  max-width: 520px;
+}
+
+.guest-game-nav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-bottom: var(--space-md);
+}
+
+.guest-game-preview {
+  text-align: center;
+  padding: var(--space-xl);
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.guest-game-preview-icon {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--space-md);
+  color: var(--accent-bright);
+}
+
+.guest-game-preview-rtp {
+  font-family: var(--font-mono);
+  color: var(--solana-green);
+  font-weight: 700;
+}
+
+.guest-game-preview-cta {
+  margin-top: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.guest-game-preview-hint {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.spectator-connect-banner {
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  margin-bottom: 12px;
+}
+
+.spectator-connect-banner p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+/* Crash focus + mobile cash-out */
+.crash-arena--focus .crash-arena-chat,
+.crash-arena--focus .crash-arena-bets {
+  display: none;
+}
+
+.crash-focus-toggle.active {
+  border-color: var(--solana-green);
+  color: var(--solana-green);
+}
+
+.btn-cashout-hero {
+  min-height: 52px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  box-shadow: 0 0 24px rgba(0, 255, 163, 0.25);
+}
+
+.crash-bet-actions {
+  position: relative;
+}
+
+.fairness-modal {
+  max-width: 720px;
+  width: calc(100% - 32px);
+  max-height: min(90vh, 860px);
+  overflow: auto;
+  margin: 24px;
+  padding: var(--space-lg);
+}
+
+.fairness-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: var(--space-md);
+}
+
+.fairness-modal-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.fairness-panel-embedded {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+@media (max-width: 768px) {
+  .crash-arena {
+    gap: 12px;
+  }
+
+  .crash-bet-controls {
+    position: sticky;
+    bottom: calc(72px + env(safe-area-inset-bottom));
+    z-index: 20;
+    padding: 12px;
+    margin: 0 -4px;
+    border-radius: var(--radius-md);
+    background: rgba(10, 8, 18, 0.92);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+  }
+
+  .crash-bet-actions {
+    flex-direction: column;
+  }
+
+  .btn-cashout-hero {
+    order: -1;
+    min-height: 56px;
+    font-size: 1.15rem;
+  }
+
+  .crash-arena-chat,
+  .crash-arena-bets {
+    min-height: 280px;
+  }
+
+  .guest-game-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

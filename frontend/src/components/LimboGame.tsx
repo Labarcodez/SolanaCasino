@@ -17,6 +17,7 @@ import { BetAmountControls } from "./BetAmountControls";
 import { RecentResultsStrip } from "./RecentResultsStrip";
 import { SoundToggle } from "./SoundToggle";
 import { WinCelebration } from "./WinCelebration";
+import { FairnessModal } from "./FairnessModal";
 import { GameActionSpinner } from "./GameActionSpinner";
 import { fairnessUrl } from "../lib/fairnessLink";
 import { prepareTransaction, solscanTxUrl } from "../lib/utils";
@@ -68,6 +69,7 @@ export function LimboGame({
   const [celebrateWin, setCelebrateWin] = useState(false);
   const [recentRolls, setRecentRolls] = useState<RollRecord[]>([]);
   const tickRef = useRef<number | null>(null);
+  const [fairnessOpen, setFairnessOpen] = useState(false);
   const [lastResult, setLastResult] = useState<{
     won: boolean;
     roll: number;
@@ -267,6 +269,14 @@ export function LimboGame({
             ) : undefined
           }
         />
+        <button
+          type="button"
+          className="btn btn-outline btn-sm fairness-trigger"
+          onClick={() => setFairnessOpen(true)}
+          data-testid="limbo-fairness-button"
+        >
+          Fairness
+        </button>
         <SoundToggle muted={muted} onToggle={toggleMute} />
       </div>
 
@@ -424,6 +434,12 @@ export function LimboGame({
           )}
         </div>
       </div>
+
+      <FairnessModal
+        open={fairnessOpen}
+        onClose={() => setFairnessOpen(false)}
+        initialGame="limbo"
+      />
     </div>
   );
 }

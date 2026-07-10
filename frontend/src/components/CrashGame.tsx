@@ -22,12 +22,16 @@ import { SoundToggle } from "./SoundToggle";
 import { WinFeed } from "./WinFeed";
 import { BetAmountControls } from "./BetAmountControls";
 import { WinCelebration } from "./WinCelebration";
+import { FairnessModal } from "./FairnessModal";
 
 interface CrashGameProps {
   balanceSol: number;
   minBetSol: number;
   maxBetSol: number;
   onBalanceUpdate: (balance: number) => void;
+  spectator?: boolean;
+  focusMode?: boolean;
+  onFocusModeChange?: (focused: boolean) => void;
 }
 
 export function CrashGame({
@@ -35,8 +39,11 @@ export function CrashGame({
   minBetSol,
   maxBetSol,
   onBalanceUpdate,
+  spectator = false,
+  focusMode = false,
+  onFocusModeChange,
 }: CrashGameProps) {
-  const { crashState, placeBet, cashout } = useCrashSubscription(true);
+  const { crashState, placeBet, cashout } = useCrashSubscription(!spectator);
   const { recentCashouts } = useSocket();
   const { config, walletAddress, signAndSendTx, refresh } = useCasino();
   const { toast } = useToast();
@@ -54,6 +61,7 @@ export function CrashGame({
     crashPoint: number;
   } | null>(null);
   const [celebrateWin, setCelebrateWin] = useState(false);
+  const [fairnessOpen, setFairnessOpen] = useState(false);
   const settledRoundRef = useRef<string | null>(null);
   const lastPhaseRef = useRef<string>("betting");
   const lastTickRef = useRef(0);
@@ -270,8 +278,27 @@ export function CrashGame({
               {crashState!.bets.length} in round
             </span>
           )}
+          <button
+            type="button"
+            className={`btn btn-outline btn-sm crash-focus-toggle ${focusMode ? "active" : ""}`}
+            onClick={() => onFocusModeChange?.(!focusMode)}
+            aria-pressed={focusMode}
+            data-testid="crash-focus-toggle"
+          >
+            {focusMode ? "Show panels" : "Focus"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm fairness-trigger"
+            onClick={() => setFairnessOpen(true)}
+            data-testid="crash-fairness-button"
+          >
+            Fairness
+          </button>
           <SoundToggle muted={muted} onToggle={toggleMute} />
-          <span className={`phase-badge ${phase}`}>{phase}</span>
+          <span className={`phase-badge ${phase}`} data-testid="crash-phase-badge">
+            {phase}
+          </span>
         </div>
       </div>
 
@@ -317,14 +344,20 @@ export function CrashGame({
         phase={phase}
       />
 
-      <div className="bet-controls">
+      <div className={`bet-controls crash-bet-controls ${spectator ? "crash-bet-controls--spectator" : ""}`}>
+        {spectator && (
+          <div className="spectator-connect-banner" data-testid="spectator-connect-banner">
+            <p>Connect your wallet to place bets and cash out.</p>
+          </div>
+        )}
+
         <BetAmountControls
           balanceSol={balanceSol}
           minBetSol={minBetSol}
           maxBetSol={maxBetSol}
           amount={betAmount}
           onAmountChange={setBetAmount}
-          disabled={hasActiveBet}
+          disabled={hasActiveBet || spectator}
         />
 
         <AutoCashoutControl
@@ -332,30 +365,34 @@ export function CrashGame({
           value={autoCashoutValue}
           onEnabledChange={setAutoCashoutEnabled}
           onValueChange={setAutoCashoutValue}
-          disabled={hasActiveBet}
+          disabled={hasActiveBet || spectator}
           onChain={onChain}
         />
 
-        <div className="bet-actions">
+        <div className="bet-actions crash-bet-actions">
           <button
             type="button"
             className="btn btn-primary"
             onClick={handleBet}
-            disabled={loading || hasActiveBet || !canBet}
+            disabled={spectator || loading || hasActiveBet || !canBet}
+            data-testid="crash-place-bet"
           >
-            {hasActiveBet
-              ? "Bet locked in"
-              : pendingBet !== null
-                ? "Queued for next round"
-                : phase !== "betting"
-                  ? "Bet next round"
-                  : "Place bet"}
+            {spectator
+              ? "Connect to bet"
+              : hasActiveBet
+                ? "Bet locked in"
+                : pendingBet !== null
+                  ? "Queued for next round"
+                  : phase !== "betting"
+                    ? "Bet next round"
+                    : "Place bet"}
           </button>
           <button
             type="button"
-            className="btn btn-success"
+            className="btn btn-success btn-cashout-hero"
             onClick={handleCashout}
-            disabled={loading || phase !== "running" || !hasActiveBet}
+            disabled={spectator || loading || phase !== "running" || !hasActiveBet}
+            data-testid="crash-cashout"
           >
             {phase === "running"
               ? `Cash out @ ${multiplier.toFixed(2)}x`
@@ -363,6 +400,12 @@ export function CrashGame({
           </button>
         </div>
       </div>
+
+      <FairnessModal
+        open={fairnessOpen}
+        onClose={() => setFairnessOpen(false)}
+        initialGame="crash"
+      />
 
       <CrashHistoryModal
         round={selectedRound}

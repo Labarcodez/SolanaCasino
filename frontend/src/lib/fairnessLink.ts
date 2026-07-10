@@ -8,7 +8,7 @@ export function fairnessUrl(params: {
   crashPoint?: number;
   targetMultiplier?: number;
 }): string {
-  const q = new URLSearchParams({ tab: "fairness", verify: params.game });
+  const q = new URLSearchParams({ verify: params.game });
   if (params.roundId) q.set("roundId", params.roundId);
   if (params.betId) q.set("betId", params.betId);
   if (params.serverSeed) q.set("serverSeed", params.serverSeed);
@@ -18,5 +18,5 @@ export function fairnessUrl(params: {
   if (params.targetMultiplier !== undefined) {
     q.set("target", String(params.targetMultiplier));
   }
-  return `/?${q.toString()}`;
+  return `/fairness?${q.toString()}`;
 }

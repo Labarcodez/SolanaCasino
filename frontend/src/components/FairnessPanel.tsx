@@ -6,10 +6,18 @@ import { PageHeader } from "./PageHeader";
 
 type FairnessTab = "crash" | "limbo" | "coinflip";
 
-export function FairnessPanel() {
+interface FairnessPanelProps {
+  embedded?: boolean;
+  initialGame?: FairnessTab;
+}
+
+export function FairnessPanel({
+  embedded = false,
+  initialGame = "crash",
+}: FairnessPanelProps) {
   const { crashState } = useSocket();
   const [searchParams] = useSearchParams();
-  const [tab, setTab] = useState<FairnessTab>("crash");
+  const [tab, setTab] = useState<FairnessTab>(initialGame);
   const [serverSeed, setServerSeed] = useState("");
   const [serverSeedHash, setServerSeedHash] = useState("");
   const [roundId, setRoundId] = useState("");
@@ -21,6 +29,10 @@ export function FairnessPanel() {
   const [coinflipExpected, setCoinflipExpected] = useState<"heads" | "tails">("heads");
   const [result, setResult] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
+
+  useEffect(() => {
+    setTab(initialGame);
+  }, [initialGame]);
 
   useEffect(() => {
     const verify = searchParams.get("verify");
@@ -126,11 +138,13 @@ export function FairnessPanel() {
   const verified = result?.startsWith("Verified");
 
   return (
-    <div className="card">
-      <PageHeader
-        title="Provably Fair"
-        subtitle="Independently verify any game outcome using published seeds"
-      />
+    <div className={`card ${embedded ? "fairness-panel-embedded" : ""}`.trim()}>
+      {!embedded && (
+        <PageHeader
+          title="Provably Fair"
+          subtitle="Independently verify any game outcome using published seeds"
+        />
+      )}
 
       <div className="fairness-tabs">
         {(["crash", "limbo", "coinflip"] as FairnessTab[]).map((t) => (

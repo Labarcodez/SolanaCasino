@@ -16,7 +16,7 @@ import { crashEngine } from "./services/crash.js";
 import { startCrashKeeper } from "./services/crashKeeper.js";
 import { startBetIndexer } from "./services/indexer.js";
 import { getOrCreateUser } from "./db/index.js";
-import { requireAuthSocket } from "./middleware/auth.js";
+import { attachSocketAuth } from "./middleware/auth.js";
 import { checkRpcHealth } from "./services/solana.js";
 import { getRecentChatMessages, sendChatMessage } from "./services/chat.js";
 import { isCasinoPaused } from "./services/pause.js";
@@ -74,11 +74,18 @@ function broadcastOnlineCount(): void {
   io.emit("site:online", { count: io.engine.clientsCount });
 }
 
-io.use(requireAuthSocket);
+io.use(attachSocketAuth);
 
 io.on("connection", (socket) => {
-  const walletAddress = socket.data.walletAddress as string;
-  socket.emit("crash:state", crashEngine.getFullStateForWallet(walletAddress));
+  const isSpectator = Boolean(socket.data.isSpectator);
+  const walletAddress = socket.data.walletAddress as string | null;
+
+  socket.emit(
+    "crash:state",
+    isSpectator || !walletAddress
+      ? crashEngine.getState()
+      : crashEngine.getFullStateForWallet(walletAddress),
+  );
   socket.emit("chat:history", getRecentChatMessages());
   broadcastOnlineCount();
 
@@ -87,7 +94,12 @@ io.on("connection", (socket) => {
   });
 
   socket.on("crash:subscribe", () => {
-    socket.emit("crash:state", crashEngine.getFullStateForWallet(walletAddress));
+    socket.emit(
+      "crash:state",
+      isSpectator || !walletAddress
+        ? crashEngine.getState()
+        : crashEngine.getFullStateForWallet(walletAddress),
+    );
   });
 
   socket.on(
@@ -97,6 +109,9 @@ io.on("connection", (socket) => {
       callback?: (response: unknown) => void,
     ) => {
       try {
+        if (isSpectator || !walletAddress) {
+          throw new Error("Connect wallet to place bets");
+        }
         if (await isCasinoPaused()) {
           throw new Error("Casino is paused");
         }
@@ -146,6 +161,9 @@ io.on("connection", (socket) => {
 
   socket.on("crash:cashout", async (callback?: (response: unknown) => void) => {
     try {
+      if (isSpectator || !walletAddress) {
+        throw new Error("Connect wallet to cash out");
+      }
       if (await isCasinoPaused()) {
         throw new Error("Casino is paused");
       }
@@ -179,6 +197,9 @@ io.on("connection", (socket) => {
     "chat:send",
     (data: { message: string }, callback?: (response: unknown) => void) => {
       try {
+        if (isSpectator || !walletAddress) {
+          throw new Error("Connect wallet to chat");
+        }
         const msg = sendChatMessage(walletAddress, data.message);
         io.emit("chat:message", msg);
         callback?.({ success: true, message: msg });
