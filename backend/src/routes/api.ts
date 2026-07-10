@@ -720,13 +720,6 @@ apiRouter.post(
         return;
       }
 
-      if (isAnchorEnabled()) {
-        res.status(400).json({
-          error: "Use on-chain coinflip via /api/coinflip/prepare",
-        });
-        return;
-      }
-
       if (!amountSol || !choice) {
         res.status(400).json({
           error: "amountSol and choice required",
@@ -781,13 +774,6 @@ apiRouter.post(
 
       if (!walletAddress || walletAddress !== req.walletAddress) {
         res.status(403).json({ error: "Unauthorized bet" });
-        return;
-      }
-
-      if (isAnchorEnabled()) {
-        res.status(400).json({
-          error: "Use on-chain limbo via /api/limbo/prepare",
-        });
         return;
       }
 

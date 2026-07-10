@@ -4,7 +4,6 @@ interface AutoCashoutControlProps {
   onEnabledChange: (enabled: boolean) => void;
   onValueChange: (value: string) => void;
   disabled?: boolean;
-  onChain?: boolean;
 }
 
 const PRESETS = ["1.5", "2", "3", "5", "10"];
@@ -15,7 +14,6 @@ export function AutoCashoutControl({
   onEnabledChange,
   onValueChange,
   disabled,
-  onChain,
 }: AutoCashoutControlProps) {
   return (
     <div className="auto-cashout">
@@ -29,9 +27,6 @@ export function AutoCashoutControl({
           />
           <span>Auto cashout</span>
         </label>
-        {onChain && (
-          <span className="auto-cashout-hint">Keeper executes on-chain</span>
-        )}
       </div>
 
       {enabled && (

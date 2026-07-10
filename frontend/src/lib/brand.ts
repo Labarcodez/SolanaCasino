@@ -4,7 +4,7 @@ export const BRAND = {
   shortName: "Orbit",
   tagline: "Crash. Limbo. Flip. Win on Solana.",
   description:
-    "Non-custodial Solana casino with provably fair crash, limbo, and coinflip. Connect with Phantom, Google, or Apple.",
+    "Deposit-first Solana casino with provably fair crash, limbo, and coinflip. Connect with Phantom, Google, or Apple.",
   domain: "orbit-casino.com",
   twitter: "@OrbitSolCasino",
   twitterUrl: "https://x.com/OrbitSolCasino",
@@ -44,7 +44,7 @@ export const GAMES = [
 
 export const TRUST_BADGES = [
   { label: "Provably fair", icon: "shield" },
-  { label: "Non-custodial", icon: "wallet" },
+  { label: "Deposit-first", icon: "wallet" },
   { label: "Mainnet SOL", icon: "chain" },
   { label: "Instant payouts", icon: "bolt" },
 ] as const;

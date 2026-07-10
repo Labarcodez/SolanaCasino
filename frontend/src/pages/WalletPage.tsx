@@ -1,7 +1,7 @@
 import { PageHeader } from "../components/PageHeader";
 import { WalletPanel } from "../components/WalletPanel";
 import { BetHistoryPanel } from "../components/BetHistoryPanel";
-import type { WalletActionPhase } from "../hooks/useCasinoUser";
+import type { PendingWalletTx, WalletActionPhase } from "../hooks/useCasinoUser";
 
 interface WalletPageProps {
   walletAddress: string;
@@ -13,6 +13,7 @@ interface WalletPageProps {
   onChainEnabled: boolean;
   loading: boolean;
   walletActionPhase?: WalletActionPhase;
+  pendingWalletTx?: PendingWalletTx | null;
   rpcProvider?: "alchemy" | "helius" | "custom" | "public";
   alchemyConfigured?: boolean;
   cluster?: string;
@@ -43,6 +44,7 @@ export function WalletPage({
   onChainEnabled,
   loading,
   walletActionPhase,
+  pendingWalletTx,
   error,
   rpcProvider,
   alchemyConfigured,
@@ -68,6 +70,7 @@ export function WalletPage({
         onChainEnabled={onChainEnabled}
         loading={loading}
         walletActionPhase={walletActionPhase}
+        pendingWalletTx={pendingWalletTx}
         rpcProvider={rpcProvider}
         alchemyConfigured={alchemyConfigured}
         cluster={cluster}

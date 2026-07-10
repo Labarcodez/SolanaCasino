@@ -43,8 +43,8 @@ test.describe("Guest crash spectator", () => {
   test("shows connect banner and disabled betting", async ({ page }) => {
     await page.goto("/crash");
     await expect(page.getByTestId("spectator-connect-banner")).toBeVisible();
-    await expect(page.getByTestId("crash-place-bet")).toBeDisabled();
-    await expect(page.getByTestId("crash-cashout")).toBeDisabled();
+    await expect(page.getByTestId("crash-place-bet-0")).toBeDisabled();
+    await expect(page.getByTestId("crash-cashout-0")).toBeDisabled();
   });
 
   test("receives live crash phase updates", async ({ page }) => {
@@ -79,5 +79,10 @@ test.describe("Fairness deep links", () => {
   test("opens fairness panel from /fairness route", async ({ page }) => {
     await page.goto("/fairness?verify=limbo");
     await expect(page.getByRole("button", { name: "Verify Limbo" })).toBeVisible();
+  });
+
+  test("opens fairness panel from /verify route", async ({ page }) => {
+    await page.goto("/verify?verify=crash");
+    await expect(page.getByRole("button", { name: "Verify Crash" })).toBeVisible();
   });
 });

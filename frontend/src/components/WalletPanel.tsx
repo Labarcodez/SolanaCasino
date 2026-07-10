@@ -2,7 +2,8 @@ import { useState } from "react";
 import { formatSol } from "../lib/api";
 import { solscanTxUrl } from "../lib/utils";
 import { useToast } from "./ui/Toast";
-import type { WalletActionPhase } from "../hooks/useCasinoUser";
+import type { PendingWalletTx, WalletActionPhase } from "../hooks/useCasinoUser";
+import { TxStatusBanner } from "./TxStatusBanner";
 
 interface WalletPanelProps {
   balanceSol: number;
@@ -13,6 +14,7 @@ interface WalletPanelProps {
   onChainEnabled?: boolean;
   loading: boolean;
   walletActionPhase?: WalletActionPhase;
+  pendingWalletTx?: PendingWalletTx | null;
   onDeposit: (amount: number) => Promise<{ amountSol: number; signature?: string }>;
   onWithdraw: (amount: number) => Promise<{
     signature?: string;
@@ -38,6 +40,7 @@ export function WalletPanel({
   onChainEnabled,
   loading,
   walletActionPhase = "idle",
+  pendingWalletTx = null,
   onDeposit,
   onWithdraw,
   error,
@@ -151,6 +154,13 @@ export function WalletPanel({
         </div>
       </div>
 
+      <TxStatusBanner
+        phase={walletActionPhase}
+        flow={pendingWalletTx?.flow ?? "idle"}
+        signature={pendingWalletTx?.signature}
+        amountSol={pendingWalletTx?.amountSol}
+      />
+
       <div className="actions">
         <div className="wallet-mode-toggle">
           <button
@@ -209,8 +219,8 @@ export function WalletPanel({
 
         <p className="wallet-hint">
           {onChainEnabled
-            ? "On-chain mode: funds go to the vault PDA via Anchor program."
-            : "You'll sign a SOL transfer to the casino wallet."}
+            ? "Deposit-first: fund your vault once, then bet instantly from casino balance."
+            : "Deposit SOL to your casino balance — one signature, then instant bets."}
         </p>
 
         {!withdrawalsEnabled && mode === "withdraw" && (

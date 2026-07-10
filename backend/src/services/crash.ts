@@ -22,12 +22,15 @@ export type CrashPhase = "betting" | "running" | "crashed" | "cooldown";
 export interface CrashBet {
   id: string;
   walletAddress: string;
+  slot: 0 | 1;
   amountLamports: number;
   autoCashout?: number;
   cashedOut: boolean;
   cashoutMultiplier?: number;
   payoutLamports: number;
 }
+
+export const MAX_CRASH_BETS_PER_PLAYER = 2;
 
 export interface CrashRoundState {
   id: string;
@@ -163,12 +166,9 @@ export class CrashGameEngine extends EventEmitter {
     walletAddress: string,
     amountLamports: number,
     autoCashout?: number,
+    slot: 0 | 1 = 0,
   ): CrashBet {
-    if (this.onChain) {
-      throw new Error("Place bets on-chain via your wallet");
-    }
-
-    if (!this.onChain && isLegacyPausedSync()) {
+    if (isLegacyPausedSync()) {
       throw new Error("Casino is paused");
     }
 
@@ -184,11 +184,19 @@ export class CrashGameEngine extends EventEmitter {
       throw new Error("Insufficient balance");
     }
 
-    const existing = this.round.bets.find(
+    if (slot !== 0 && slot !== 1) {
+      throw new Error("Invalid bet slot");
+    }
+
+    const activeBets = this.round.bets.filter(
       (b) => b.walletAddress === walletAddress && !b.cashedOut,
     );
-    if (existing) {
-      throw new Error("You already have an active bet this round");
+    if (activeBets.length >= MAX_CRASH_BETS_PER_PLAYER) {
+      throw new Error("Maximum two bets per round");
+    }
+    const slotTaken = activeBets.some((b) => b.slot === slot);
+    if (slotTaken) {
+      throw new Error(`Bet ${slot === 0 ? "A" : "B"} already placed this round`);
     }
 
     updateBalance(walletAddress, -amountLamports);
@@ -196,6 +204,7 @@ export class CrashGameEngine extends EventEmitter {
     const bet: CrashBet = {
       id: uuidv4(),
       walletAddress,
+      slot,
       amountLamports,
       autoCashout,
       cashedOut: false,
@@ -207,20 +216,17 @@ export class CrashGameEngine extends EventEmitter {
     return bet;
   }
 
-  cashout(walletAddress: string): CrashBet {
-    if (this.onChain) {
-      throw new Error("Cash out on-chain via your wallet");
-    }
-
+  cashout(walletAddress: string, slot: 0 | 1 = 0): CrashBet {
     if (this.round.phase !== "running") {
       throw new Error("Can only cash out during active round");
     }
 
     const bet = this.round.bets.find(
-      (b) => b.walletAddress === walletAddress && !b.cashedOut,
+      (b) =>
+        b.walletAddress === walletAddress && !b.cashedOut && b.slot === slot,
     );
     if (!bet) {
-      throw new Error("No active bet to cash out");
+      throw new Error(`No active bet in slot ${slot === 0 ? "A" : "B"}`);
     }
 
     return this.processCashout(bet, this.round.multiplier);

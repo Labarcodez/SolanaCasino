@@ -36,6 +36,7 @@ interface CrashChartProps {
   phase: CrashPhase;
   crashPoint?: number;
   startedAt?: number;
+  autoCashoutTarget?: number;
 }
 
 interface ChartEngine {
@@ -58,6 +59,7 @@ interface ChartEngine {
   scrollTime: number;
   lastPulseAt: number;
   frame: number;
+  autoCashoutTarget?: number;
 }
 
 const PAD = 28;
@@ -67,6 +69,7 @@ export function CrashChart({
   phase,
   crashPoint,
   startedAt,
+  autoCashoutTarget,
 }: CrashChartProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -99,6 +102,7 @@ export function CrashChart({
     engine.targetMult = multiplier;
     engine.phase = phase;
     engine.crashPoint = crashPoint ?? multiplier;
+    engine.autoCashoutTarget = autoCashoutTarget;
     if (startedAt) engine.startedAt = startedAt;
 
     if (phase === "running" && engine.lastPhase !== "running") {
@@ -133,7 +137,7 @@ export function CrashChart({
     }
 
     engine.lastPhase = phase;
-  }, [multiplier, phase, crashPoint, startedAt]);
+  }, [multiplier, phase, crashPoint, startedAt, autoCashoutTarget]);
 
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -234,6 +238,25 @@ export function CrashChart({
         ctx.fillRect(0, 0, width, height);
         engine.crashFlash = Math.max(0, engine.crashFlash - 0.04);
       }
+    };
+
+    const drawAutoCashoutLine = () => {
+      const engine = engineRef.current;
+      const target = engine.autoCashoutTarget;
+      if (!target || engine.phase !== "running" || target > engine.viewportMax) return;
+
+      const y = multiplierToY(target, engine.viewportMax, height, PAD);
+      ctx.setLineDash([8, 6]);
+      ctx.strokeStyle = "rgba(251, 191, 36, 0.55)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(PAD, y);
+      ctx.lineTo(width - PAD, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = "10px 'JetBrains Mono', ui-monospace, monospace";
+      ctx.fillStyle = "rgba(251, 191, 36, 0.85)";
+      ctx.fillText(`Auto ${target.toFixed(2)}x`, width - PAD - 72, y - 6);
     };
 
     const drawBettingIdle = () => {
@@ -466,6 +489,7 @@ export function CrashChart({
       }
 
       if (engine.phase === "running" || engine.phase === "crashed") {
+        drawAutoCashoutLine();
         drawCurve(timeWindow);
         if (engine.pendingBurst) {
           const pts = engine.trail;

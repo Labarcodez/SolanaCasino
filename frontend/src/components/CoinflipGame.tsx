@@ -1,18 +1,11 @@
 import { useState, useEffect } from "react";
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import {
-  confirmCoinflip,
   fetchCoinflipRecent,
-  fetchUser,
   formatSol,
   playCoinflip,
-  prepareCoinflip,
-  revealCoinflip,
 } from "../lib/api";
-import { useCasino } from "../hooks/CasinoUserProvider";
 import { useToast } from "./ui/Toast";
 import { useSound } from "../hooks/useSound";
-import { prepareTransaction, solscanTxUrl } from "../lib/utils";
 import { PageHeader } from "./PageHeader";
 import { BetAmountControls } from "./BetAmountControls";
 import { RecentResultsStrip } from "./RecentResultsStrip";
@@ -22,10 +15,6 @@ import { FairnessModal } from "./FairnessModal";
 import { GameActionSpinner } from "./GameActionSpinner";
 import { Coin3D } from "./coinflip/Coin3D";
 import { fairnessUrl } from "../lib/fairnessLink";
-import {
-  buildCoinflipBetTransaction,
-  ensurePlayerInitialized,
-} from "../lib/anchor";
 
 interface CoinflipGameProps {
   walletAddress: string;
@@ -48,7 +37,6 @@ export function CoinflipGame({
   maxBetSol,
   onBalanceUpdate,
 }: CoinflipGameProps) {
-  const { config, signAndSendTx, refresh } = useCasino();
   const { toast } = useToast();
   const { muted, toggleMute, play } = useSound();
   const [betAmount, setBetAmount] = useState("0.01");
@@ -66,7 +54,6 @@ export function CoinflipGame({
     clientSeed: string;
   } | null>(null);
   const [fairnessOpen, setFairnessOpen] = useState(false);
-  const onChain = config?.onChainEnabled ?? false;
 
   useEffect(() => {
     fetchCoinflipRecent()
@@ -97,89 +84,33 @@ export function CoinflipGame({
     play("flip");
 
     try {
-      if (onChain) {
-        await ensurePlayerInitialized(walletAddress, signAndSendTx);
-        const prepared = await prepareCoinflip(walletAddress);
-        const revealed = await revealCoinflip(walletAddress, prepared.prepareId);
-        const tx = await buildCoinflipBetTransaction(
-          walletAddress,
-          Math.floor(amount * LAMPORTS_PER_SOL),
-          choice,
-          revealed.clientSeed,
-          revealed.serverSeed,
-          revealed.serverSeedHash,
-        );
-        await prepareTransaction(walletAddress, tx);
-        const { signature } = await signAndSendTx(tx);
-
-        const flipResult = await confirmCoinflip({
-          walletAddress,
-          amountSol: amount,
-          choice,
-          clientSeed: revealed.clientSeed,
-          serverSeed: revealed.serverSeed,
-          signature,
-        });
-
-        await new Promise((r) => setTimeout(r, 1200));
-        setResult({ flipResult: flipResult.result, won: flipResult.won });
-        setRecentFlips((prev) =>
-          [
-            {
-              id: signature,
-              result: flipResult.result,
-              won: flipResult.won,
-            },
-            ...prev,
-          ].slice(0, 10),
-        );
-        play(flipResult.won ? "win" : "limboBust");
-        if (flipResult.won) setCelebrateWin(true);
-        setLastFairness({
-          betId: signature,
-          serverSeed: revealed.serverSeed,
-          clientSeed: revealed.clientSeed,
-        });
-        await refresh();
-        const updated = await fetchUser(walletAddress);
-        onBalanceUpdate(updated.balanceSol);
-
-        toast(
-          flipResult.won
-            ? `You won! Result: ${flipResult.result}`
-            : `Lost — it was ${flipResult.result}`,
-          flipResult.won ? "success" : "info",
-          { label: "View tx", href: solscanTxUrl(signature) },
-        );
-      } else {
-        const flipResult = await playCoinflip(walletAddress, amount, choice);
-        await new Promise((r) => setTimeout(r, 1200));
-        setResult({ flipResult: flipResult.result, won: flipResult.won });
-        setRecentFlips((prev) =>
-          [
-            {
-              id: `${Date.now()}`,
-              result: flipResult.result,
-              won: flipResult.won,
-            },
-            ...prev,
-          ].slice(0, 10),
-        );
-        play(flipResult.won ? "win" : "limboBust");
-        if (flipResult.won) setCelebrateWin(true);
-        setLastFairness({
-          betId: flipResult.betId,
-          serverSeed: flipResult.serverSeed,
-          clientSeed: flipResult.clientSeed,
-        });
-        onBalanceUpdate(flipResult.balanceSol);
-        toast(
-          flipResult.won
-            ? `Won ${formatSol(flipResult.payoutSol)} SOL!`
-            : `Lost — ${flipResult.result}`,
-          flipResult.won ? "success" : "info",
-        );
-      }
+      const flipResult = await playCoinflip(walletAddress, amount, choice);
+      await new Promise((r) => setTimeout(r, 1200));
+      setResult({ flipResult: flipResult.result, won: flipResult.won });
+      setRecentFlips((prev) =>
+        [
+          {
+            id: flipResult.betId,
+            result: flipResult.result,
+            won: flipResult.won,
+          },
+          ...prev,
+        ].slice(0, 10),
+      );
+      play(flipResult.won ? "win" : "limboBust");
+      if (flipResult.won) setCelebrateWin(true);
+      setLastFairness({
+        betId: flipResult.betId,
+        serverSeed: flipResult.serverSeed,
+        clientSeed: flipResult.clientSeed,
+      });
+      onBalanceUpdate(flipResult.balanceSol);
+      toast(
+        flipResult.won
+          ? `Won ${formatSol(flipResult.payoutSol)} SOL!`
+          : `Lost — ${flipResult.result}`,
+        flipResult.won ? "success" : "info",
+      );
     } catch (err) {
       toast(err instanceof Error ? err.message : "Flip failed", "error");
     } finally {
@@ -193,14 +124,6 @@ export function CoinflipGame({
         <PageHeader
           title="Coinflip"
           subtitle="50/50 instant flips · commit-reveal fairness"
-          badge={
-            onChain ? (
-              <span className="on-chain-badge">
-                <span className="on-chain-dot" />
-                On-Chain
-              </span>
-            ) : undefined
-          }
         />
         <button
           type="button"
@@ -281,11 +204,6 @@ export function CoinflipGame({
           </a>
         )}
 
-        {onChain && (
-          <p className="coinflip-fairness-note">
-            Commit-reveal seeds verified on-chain via Anchor program
-          </p>
-        )}
       </div>
 
       <FairnessModal

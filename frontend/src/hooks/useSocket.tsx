@@ -15,6 +15,7 @@ export type CrashPhase = "betting" | "running" | "crashed" | "cooldown";
 export interface CrashBetView {
   id: string;
   walletAddress: string;
+  slot?: 0 | 1;
   amountLamports: number;
   cashedOut: boolean;
   cashoutMultiplier?: number;
@@ -240,6 +241,7 @@ export function useCrashSubscription(enabled: boolean) {
     (
       amountSol: number,
       autoCashout?: number,
+      slot: 0 | 1 = 0,
     ): Promise<{ success: boolean; balanceSol?: number; error?: string }> => {
       return new Promise((resolve) => {
         if (!socket || !canPlay) {
@@ -248,7 +250,7 @@ export function useCrashSubscription(enabled: boolean) {
         }
         socket.emit(
           "crash:bet",
-          { amountSol, autoCashout },
+          { amountSol, autoCashout, slot },
           (response: {
             success: boolean;
             balanceSol?: number;
@@ -263,7 +265,8 @@ export function useCrashSubscription(enabled: boolean) {
     [socket, canPlay, subscribe],
   );
 
-  const cashout = useCallback((): Promise<{
+  const cashout = useCallback(
+    (slot: 0 | 1 = 0): Promise<{
     success: boolean;
     balanceSol?: number;
     error?: string;
@@ -275,6 +278,7 @@ export function useCrashSubscription(enabled: boolean) {
       }
       socket.emit(
         "crash:cashout",
+        { slot },
         (response: { success: boolean; balanceSol?: number; error?: string }) => {
           resolve(response);
           subscribe();

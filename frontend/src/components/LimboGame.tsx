@@ -1,15 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import {
-  confirmLimbo,
-  fetchUser,
   formatSol,
   playLimbo,
-  prepareLimbo,
-  revealLimbo,
 } from "../lib/api";
-import { useCasino } from "../hooks/CasinoUserProvider";
 import { useToast } from "./ui/Toast";
 import { useSound } from "../hooks/useSound";
 import { PageHeader } from "./PageHeader";
@@ -20,12 +14,7 @@ import { WinCelebration } from "./WinCelebration";
 import { FairnessModal } from "./FairnessModal";
 import { GameActionSpinner } from "./GameActionSpinner";
 import { fairnessUrl } from "../lib/fairnessLink";
-import { prepareTransaction, solscanTxUrl } from "../lib/utils";
 import { sliderToTarget, targetToSlider } from "../lib/limboSlider";
-import {
-  buildLimboBetTransaction,
-  ensurePlayerInitialized,
-} from "../lib/anchor";
 
 interface LimboGameProps {
   walletAddress: string;
@@ -55,10 +44,8 @@ export function LimboGame({
   limboMinTarget = 1.01,
   limboMaxTarget = 1000,
   limboHouseEdge = 0.02,
-  onChainEnabled,
   onBalanceUpdate,
 }: LimboGameProps) {
-  const { signAndSendTx, refresh } = useCasino();
   const { toast } = useToast();
   const { muted, toggleMute, play } = useSound();
   const [betAmount, setBetAmount] = useState("0.01");
@@ -148,96 +135,36 @@ export function LimboGame({
     play("bet");
 
     try {
-      if (onChainEnabled) {
-        await ensurePlayerInitialized(walletAddress, signAndSendTx);
-        const prepared = await prepareLimbo(walletAddress, targetNum);
-        const revealed = await revealLimbo(walletAddress, prepared.prepareId);
-        const tx = await buildLimboBetTransaction(
-          walletAddress,
-          Math.floor(amount * LAMPORTS_PER_SOL),
-          targetNum,
-          revealed.clientSeed,
-          revealed.serverSeed,
-          revealed.serverSeedHash,
-        );
-        await prepareTransaction(walletAddress, tx);
-        const { signature } = await signAndSendTx(tx);
-
-        const result = await confirmLimbo({
-          walletAddress,
-          amountSol: amount,
-          targetMultiplier: targetNum,
-          clientSeed: revealed.clientSeed,
-          serverSeed: revealed.serverSeed,
-          signature,
-        });
-
-        animateRoll(result.resultMultiplier, result.won);
-        await new Promise((r) => setTimeout(r, 1200));
-        setLastResult({
-          won: result.won,
-          roll: result.roll,
-          resultMultiplier: result.resultMultiplier,
-          serverSeed: result.serverSeed,
-          betId: result.betId,
-          clientSeed: result.clientSeed,
-          signature,
-        });
-        setRecentRolls((prev) =>
-          [
-            {
-              id: result.betId,
-              multiplier: result.resultMultiplier,
-              won: result.won,
-            },
-            ...prev,
-          ].slice(0, 10),
-        );
-        play(result.won ? "limboWin" : "limboBust");
-        if (result.won) setCelebrateWin(true);
-        await refresh();
-        const updated = await fetchUser(walletAddress);
-        onBalanceUpdate(updated.balanceSol);
-
-        toast(
-          result.won
-            ? `Hit ${targetNum.toFixed(2)}x — won ${formatSol(result.payoutSol)} SOL!`
-            : `Busted at ${result.resultMultiplier.toFixed(2)}x`,
-          result.won ? "success" : "info",
-          { label: "View tx", href: solscanTxUrl(signature) },
-        );
-      } else {
-        const result = await playLimbo(walletAddress, amount, targetNum);
-        animateRoll(result.resultMultiplier, result.won);
-        await new Promise((r) => setTimeout(r, 1200));
-        setLastResult({
-          won: result.won,
-          roll: result.roll,
-          resultMultiplier: result.resultMultiplier,
-          serverSeed: result.serverSeed,
-          betId: result.betId,
-          clientSeed: result.clientSeed,
-        });
-        setRecentRolls((prev) =>
-          [
-            {
-              id: result.betId,
-              multiplier: result.resultMultiplier,
-              won: result.won,
-            },
-            ...prev,
-          ].slice(0, 10),
-        );
-        play(result.won ? "limboWin" : "limboBust");
-        if (result.won) setCelebrateWin(true);
-        onBalanceUpdate(result.balanceSol);
-        toast(
-          result.won
-            ? `Hit ${targetNum.toFixed(2)}x — won ${formatSol(result.payoutSol)} SOL!`
-            : `Busted at ${result.resultMultiplier.toFixed(2)}x`,
-          result.won ? "success" : "info",
-        );
-      }
+      const result = await playLimbo(walletAddress, amount, targetNum);
+      animateRoll(result.resultMultiplier, result.won);
+      await new Promise((r) => setTimeout(r, 1200));
+      setLastResult({
+        won: result.won,
+        roll: result.roll,
+        resultMultiplier: result.resultMultiplier,
+        serverSeed: result.serverSeed,
+        betId: result.betId,
+        clientSeed: result.clientSeed,
+      });
+      setRecentRolls((prev) =>
+        [
+          {
+            id: result.betId,
+            multiplier: result.resultMultiplier,
+            won: result.won,
+          },
+          ...prev,
+        ].slice(0, 10),
+      );
+      play(result.won ? "limboWin" : "limboBust");
+      if (result.won) setCelebrateWin(true);
+      onBalanceUpdate(result.balanceSol);
+      toast(
+        result.won
+          ? `Hit ${targetNum.toFixed(2)}x — won ${formatSol(result.payoutSol)} SOL!`
+          : `Busted at ${result.resultMultiplier.toFixed(2)}x`,
+        result.won ? "success" : "info",
+      );
     } catch (err) {
       toast(err instanceof Error ? err.message : "Limbo failed", "error");
     } finally {
@@ -260,14 +187,6 @@ export function LimboGame({
         <PageHeader
           title="Limbo"
           subtitle={`Pick your target · ${((1 - limboHouseEdge) * 100).toFixed(0)}% RTP · 2% house edge`}
-          badge={
-            onChainEnabled ? (
-              <span className="on-chain-badge">
-                <span className="on-chain-dot" />
-                On-Chain
-              </span>
-            ) : undefined
-          }
         />
         <button
           type="button"

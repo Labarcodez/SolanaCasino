@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Header } from "./Header";
 import { AnimatedBackground } from "./AnimatedBackground";
 import { LiveActivityMarquee } from "./LiveActivityMarquee";
+import { SocketStatusBanner } from "./SocketStatusBanner";
 import { SiteFooter } from "./SiteFooter";
 import { WalletConnectButton } from "./WalletConnectButton";
 import { GameErrorBoundary } from "./GameErrorBoundary";
@@ -44,6 +45,7 @@ export function GuestGameShell({
       <AnimatedBackground />
       <Header connected={false} onChainEnabled={onChainEnabled} />
       <LiveActivityMarquee />
+      <SocketStatusBanner />
 
       <div className="guest-game-banner">
         <div className="guest-game-banner-copy">

@@ -38,7 +38,7 @@ export function LiveActivityMarquee() {
       : [
           "Orbit Solana Casino — provably fair Solana gaming",
           "Crash · Limbo · Coinflip — play with Phantom",
-          "Non-custodial vault · instant devnet payouts",
+          "Deposit-first vault · instant devnet payouts",
         ];
 
   const doubled = [...messages, ...messages];

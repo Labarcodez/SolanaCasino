@@ -17,7 +17,6 @@ export function CrashArena({
   balanceSol,
   minBetSol,
   maxBetSol,
-  onChainEnabled,
   onBalanceUpdate,
   spectator = false,
 }: CrashArenaProps) {
@@ -48,7 +47,6 @@ export function CrashArena({
         <LiveBetsPanel
           bets={crashState?.bets ?? []}
           phase={crashState?.phase ?? "betting"}
-          onChainEnabled={onChainEnabled}
         />
       </div>
     </div>

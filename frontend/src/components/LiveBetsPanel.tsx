@@ -5,13 +5,11 @@ import type { CrashBetView } from "../hooks/useSocket";
 interface LiveBetsPanelProps {
   bets: CrashBetView[];
   phase: string;
-  onChainEnabled?: boolean;
 }
 
 export function LiveBetsPanel({
   bets,
   phase,
-  onChainEnabled,
 }: LiveBetsPanelProps) {
   const totalPot = bets.reduce((sum, b) => sum + b.amountLamports, 0) / LAMPORTS_PER_SOL;
 
@@ -24,12 +22,6 @@ export function LiveBetsPanel({
           <span className="live-bets-pot">{formatSol(totalPot)} SOL</span>
         </div>
       </div>
-
-      {onChainEnabled && bets.length === 0 && (
-        <p className="panel-hint">
-          On-chain mode — bets settle via wallet transactions.
-        </p>
-      )}
 
       {bets.length === 0 ? (
         <div className="empty-state">

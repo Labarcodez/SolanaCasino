@@ -21,6 +21,7 @@ import type { UserProfile } from "./lib/api";
 import { shortenAddress } from "./lib/api";
 import { useGameTab } from "./hooks/useGameTab";
 import { GuestGameShell, isGuestGameTab } from "./components/GuestGameShell";
+import { SocketStatusBanner } from "./components/SocketStatusBanner";
 
 const CrashArena = lazy(() =>
   import("./components/CrashArena").then((m) => ({ default: m.CrashArena })),
@@ -111,6 +112,7 @@ const CASINO_ROUTES = [
   "/leaderboard",
   "/tournament",
   "/fairness",
+  "/verify",
   "/profile",
   "/wallet",
   "/token",
@@ -137,6 +139,7 @@ function CasinoContent() {
     reloadConfig,
     loading,
     walletActionPhase,
+    pendingWalletTx,
     error,
     deposit,
     withdraw,
@@ -320,6 +323,7 @@ function CasinoContent() {
       )}
 
       <PauseBanner paused={config?.casinoPaused ?? false} />
+      <SocketStatusBanner />
       <LiveActivityMarquee />
       <TreasuryBar />
 
@@ -434,6 +438,7 @@ function CasinoContent() {
               onChainEnabled={onChainEnabled}
               loading={loading}
               walletActionPhase={walletActionPhase}
+              pendingWalletTx={pendingWalletTx}
               error={error}
               rpcProvider={config.rpcProvider}
               alchemyConfigured={config.alchemyConfigured}

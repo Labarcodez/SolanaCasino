@@ -47,6 +47,7 @@ const PATH_TO_TAB = new Map<string, GameTab>(
 );
 
 PATH_TO_TAB.set("/", "crash");
+PATH_TO_TAB.set("/verify", "fairness");
 
 export function parseGameTab(value: string | null): GameTab {
   if (value && GAME_TABS.has(value as GameTab)) {

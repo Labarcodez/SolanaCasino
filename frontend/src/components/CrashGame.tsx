@@ -1,28 +1,19 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useCrashSubscription, useSocket } from "../hooks/useSocket";
-import { useCasino } from "../hooks/CasinoUserProvider";
 import { useToast } from "../components/ui/Toast";
 import { useSound } from "../hooks/useSound";
-import { confirmCrashBet } from "../lib/api";
-import { prepareTransaction, solscanTxUrl } from "../lib/utils";
-import {
-  buildCashoutTransaction,
-  buildPlaceBetTransaction,
-  buildSettleBetTransaction,
-  ensurePlayerInitialized,
-} from "../lib/anchor";
 import { PageHeader } from "./PageHeader";
 import { CrashChart } from "./CrashChart";
 import { BettingCountdown } from "./BettingCountdown";
 import { CrashFairnessBar } from "./CrashFairnessBar";
-import { AutoCashoutControl } from "./AutoCashoutControl";
 import { CrashHistoryModal } from "./CrashHistoryModal";
 import { SoundToggle } from "./SoundToggle";
 import { WinFeed } from "./WinFeed";
-import { BetAmountControls } from "./BetAmountControls";
 import { WinCelebration } from "./WinCelebration";
 import { FairnessModal } from "./FairnessModal";
+import { CrashBetStatusCard } from "./CrashBetStatusCard";
+import { CrashBetSlot, type CrashBetSlotIndex } from "./CrashBetSlot";
 
 interface CrashGameProps {
   balanceSol: number;
@@ -32,6 +23,26 @@ interface CrashGameProps {
   spectator?: boolean;
   focusMode?: boolean;
   onFocusModeChange?: (focused: boolean) => void;
+}
+
+interface SlotUiState {
+  betAmount: string;
+  autoCashoutEnabled: boolean;
+  autoCashoutValue: string;
+  pendingBet: number | null;
+  cashingOut: boolean;
+}
+
+const DEFAULT_SLOT: SlotUiState = {
+  betAmount: "0.01",
+  autoCashoutEnabled: false,
+  autoCashoutValue: "2",
+  pendingBet: null,
+  cashingOut: false,
+};
+
+function betSlot(bet: { slot?: 0 | 1 } | undefined): CrashBetSlotIndex {
+  return bet?.slot === 1 ? 1 : 0;
 }
 
 export function CrashGame({
@@ -45,38 +56,75 @@ export function CrashGame({
 }: CrashGameProps) {
   const { crashState, placeBet, cashout } = useCrashSubscription(!spectator);
   const { recentCashouts } = useSocket();
-  const { config, walletAddress, signAndSendTx, refresh } = useCasino();
   const { toast } = useToast();
   const { muted, toggleMute, play } = useSound();
 
-  const [betAmount, setBetAmount] = useState("0.01");
-  const [loading, setLoading] = useState(false);
-  const [onChainBetActive, setOnChainBetActive] = useState(false);
-  const [onChainCashedOut, setOnChainCashedOut] = useState(false);
-  const [autoCashoutEnabled, setAutoCashoutEnabled] = useState(false);
-  const [autoCashoutValue, setAutoCashoutValue] = useState("2");
-  const [pendingBet, setPendingBet] = useState<number | null>(null);
+  const [slots, setSlots] = useState<[SlotUiState, SlotUiState]>([
+    { ...DEFAULT_SLOT, autoCashoutValue: "1.5" },
+    { ...DEFAULT_SLOT, autoCashoutValue: "5" },
+  ]);
+  const [loadingSlot, setLoadingSlot] = useState<CrashBetSlotIndex | null>(
+    null,
+  );
   const [selectedRound, setSelectedRound] = useState<{
     roundId: string;
     crashPoint: number;
   } | null>(null);
   const [celebrateWin, setCelebrateWin] = useState(false);
   const [fairnessOpen, setFairnessOpen] = useState(false);
-  const settledRoundRef = useRef<string | null>(null);
   const lastPhaseRef = useRef<string>("betting");
   const lastTickRef = useRef(0);
 
   const phase = crashState?.phase ?? "betting";
   const multiplier = crashState?.multiplier ?? 1.0;
-  const onChain = config?.onChainEnabled ?? false;
-  const myBet = crashState?.myBets?.find((b) => !b.cashedOut);
-  const hasActiveBet = onChain ? onChainBetActive && !onChainCashedOut : !!myBet;
+
+  const myBetForSlot = useCallback(
+    (slot: CrashBetSlotIndex) =>
+      crashState?.myBets?.find(
+        (b) => !b.cashedOut && betSlot(b) === slot,
+      ),
+    [crashState?.myBets],
+  );
+
+  const hasActiveBetForSlot = (slot: CrashBetSlotIndex) =>
+    !!myBetForSlot(slot);
+
+  const updateSlot = (
+    slot: CrashBetSlotIndex,
+    patch: Partial<SlotUiState>,
+  ) => {
+    setSlots((prev) => {
+      const next: [SlotUiState, SlotUiState] = [...prev] as [
+        SlotUiState,
+        SlotUiState,
+      ];
+      next[slot] = { ...next[slot], ...patch };
+      return next;
+    });
+  };
+
+  const chartAutoTarget = (() => {
+    for (const slot of [0, 1] as const) {
+      const ui = slots[slot];
+      if (
+        ui.autoCashoutEnabled &&
+        parseFloat(ui.autoCashoutValue) >= 1.01 &&
+        (hasActiveBetForSlot(slot) || phase === "betting")
+      ) {
+        return parseFloat(ui.autoCashoutValue);
+      }
+    }
+    return undefined;
+  })();
 
   useEffect(() => {
     if (phase === "betting" && lastPhaseRef.current !== "betting") {
-      setOnChainBetActive(false);
-      setOnChainCashedOut(false);
-      settledRoundRef.current = null;
+      setSlots((prev) =>
+        prev.map((s) => ({ ...s, cashingOut: false })) as [
+          SlotUiState,
+          SlotUiState,
+        ],
+      );
     }
     if (phase === "crashed" && lastPhaseRef.current !== "crashed") {
       play("crash");
@@ -98,178 +146,128 @@ export function CrashGame({
   }, [multiplier, phase, play]);
 
   useEffect(() => {
-    if (phase === "betting" && pendingBet !== null && !hasActiveBet) {
-      const amount = pendingBet;
-      setPendingBet(null);
-      void placeBetInternal(amount);
+    if (phase !== "betting") return;
+    for (const slot of [0, 1] as const) {
+      const pending = slots[slot].pendingBet;
+      if (pending !== null && !hasActiveBetForSlot(slot)) {
+        updateSlot(slot, { pendingBet: null });
+        void placeBetInternal(pending, slot);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, pendingBet, hasActiveBet]);
+  }, [phase, slots[0].pendingBet, slots[1].pendingBet]);
 
-  useEffect(() => {
-    if (
-      onChain &&
-      phase === "crashed" &&
-      onChainBetActive &&
-      walletAddress &&
-      crashState?.id &&
-      settledRoundRef.current !== crashState.id
-    ) {
-      settledRoundRef.current = crashState.id;
-      void (async () => {
-        try {
-          const tx = await buildSettleBetTransaction(
-            walletAddress,
-            Number(crashState.id),
-          );
-          await prepareTransaction(walletAddress, tx);
-          const { signature } = await signAndSendTx(tx);
-          await refresh();
-          toast("Bet settled on-chain!", "success", {
-            label: "View on Solscan",
-            href: solscanTxUrl(signature),
-          });
-        } catch (err) {
-          console.error("settle_bet failed:", err);
-          toast("Failed to settle bet", "error");
-        } finally {
-          setOnChainBetActive(false);
-        }
-      })();
-    }
-  }, [
-    phase,
-    onChain,
-    onChainBetActive,
-    walletAddress,
-    crashState?.id,
-    signAndSendTx,
-    refresh,
-    toast,
-  ]);
-
-  const placeBetInternal = async (amount: number) => {
-    setLoading(true);
+  const placeBetInternal = async (
+    amount: number,
+    slot: CrashBetSlotIndex,
+  ) => {
+    setLoadingSlot(slot);
+    const ui = slots[slot];
     try {
-      const autoCashout =
-        autoCashoutEnabled
-          ? parseFloat(autoCashoutValue)
-          : undefined;
+      const autoCashout = ui.autoCashoutEnabled
+        ? parseFloat(ui.autoCashoutValue)
+        : undefined;
 
-      if (onChain && walletAddress) {
-        await ensurePlayerInitialized(walletAddress, signAndSendTx);
-        const roundId = Number(crashState?.id ?? 0);
-        if (!roundId) throw new Error("Round not ready");
-
-        const tx = await buildPlaceBetTransaction(
-          walletAddress,
-          roundId,
-          Math.floor(amount * LAMPORTS_PER_SOL),
-          autoCashout && autoCashout >= 1.01 ? autoCashout : undefined,
-        );
-        await prepareTransaction(walletAddress, tx);
-        const { signature } = await signAndSendTx(tx);
-        setOnChainBetActive(true);
-        await confirmCrashBet({
-          walletAddress,
-          roundId,
-          amountSol: amount,
-          autoCashout: autoCashout && autoCashout >= 1.01 ? autoCashout : undefined,
-          signature,
-        });
-        await refresh();
+      const result = await placeBet(
+        amount,
+        autoCashout && autoCashout >= 1.01 ? autoCashout : undefined,
+        slot,
+      );
+      if (result.success && result.balanceSol !== undefined) {
+        onBalanceUpdate(result.balanceSol);
         play("bet");
-        toast(`Bet placed: ${amount} SOL`, "success", {
-          label: "View tx",
-          href: solscanTxUrl(signature),
-        });
-      } else {
-        const result = await placeBet(
-          amount,
-          autoCashout && autoCashout >= 1.01 ? autoCashout : undefined,
+        const label = slot === 0 ? "A" : "B";
+        toast(
+          autoCashout
+            ? `Bet ${label} placed with auto @ ${autoCashout}x`
+            : `Bet ${label} placed: ${amount} SOL`,
+          "success",
         );
-        if (result.success && result.balanceSol !== undefined) {
-          onBalanceUpdate(result.balanceSol);
-          play("bet");
-          toast(
-            autoCashout
-              ? `Bet placed with auto @ ${autoCashout}x`
-              : `Bet placed: ${amount} SOL`,
-            "success",
-          );
-        } else {
-          toast(result.error ?? "Bet failed", "error");
-        }
+      } else {
+        toast(result.error ?? "Bet failed", "error");
       }
     } catch (err) {
       toast(err instanceof Error ? err.message : "Bet failed", "error");
     } finally {
-      setLoading(false);
+      setLoadingSlot(null);
     }
   };
 
-  const handleBet = async () => {
-    const amount = parseFloat(betAmount);
+  const handleBet = async (slot: CrashBetSlotIndex) => {
+    const amount = parseFloat(slots[slot].betAmount);
     if (isNaN(amount) || amount < minBetSol || amount > maxBetSol) {
       toast(`Bet must be between ${minBetSol} and ${maxBetSol} SOL`, "error");
       return;
     }
 
     if (phase !== "betting") {
-      setPendingBet(amount);
-      toast("Bet queued for next round", "info");
+      updateSlot(slot, { pendingBet: amount });
+      toast(`Bet ${slot === 0 ? "A" : "B"} queued for next round`, "info");
       return;
     }
 
-    await placeBetInternal(amount);
+    await placeBetInternal(amount, slot);
   };
 
-  const handleCashout = async () => {
-    setLoading(true);
+  const handleCashout = async (slot: CrashBetSlotIndex) => {
+    if (slots[slot].cashingOut) return;
+    updateSlot(slot, { cashingOut: true });
     try {
-      if (onChain && walletAddress && crashState?.id) {
-        const tx = await buildCashoutTransaction(
-          walletAddress,
-          Number(crashState.id),
-        );
-        await prepareTransaction(walletAddress, tx);
-        const { signature } = await signAndSendTx(tx);
-        setOnChainCashedOut(true);
-        await refresh();
+      const result = await cashout(slot);
+      if (result.success && result.balanceSol !== undefined) {
+        onBalanceUpdate(result.balanceSol);
         play("cashout");
         play("win");
         setCelebrateWin(true);
-        toast(`Cashed out at ${multiplier.toFixed(2)}x!`, "success", {
-          label: "View tx",
-          href: solscanTxUrl(signature),
-        });
+        toast(
+          `Bet ${slot === 0 ? "A" : "B"} cashed out at ${multiplier.toFixed(2)}x!`,
+          "success",
+        );
       } else {
-        const result = await cashout();
-        if (result.success && result.balanceSol !== undefined) {
-          onBalanceUpdate(result.balanceSol);
-          play("cashout");
-          play("win");
-          setCelebrateWin(true);
-          toast(`Cashed out at ${multiplier.toFixed(2)}x!`, "success");
-        } else {
-          toast(result.error ?? "Cashout failed", "error");
-        }
+        toast(result.error ?? "Cashout failed", "error");
       }
     } catch (err) {
       toast(err instanceof Error ? err.message : "Cashout failed", "error");
     } finally {
-      setLoading(false);
+      updateSlot(slot, { cashingOut: false });
     }
   };
 
-  const canBet = !hasActiveBet && phase !== "crashed";
+  const canBetForSlot = (slot: CrashBetSlotIndex) =>
+    !hasActiveBetForSlot(slot) && phase !== "crashed";
+
+  useEffect(() => {
+    if (spectator) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      if (e.code === "Space" && phase === "running") {
+        e.preventDefault();
+        if (hasActiveBetForSlot(0) && !slots[0].cashingOut) {
+          void handleCashout(0);
+        } else if (hasActiveBetForSlot(1) && !slots[1].cashingOut) {
+          void handleCashout(1);
+        }
+      }
+      if (e.code === "Enter" && canBetForSlot(0) && loadingSlot === null) {
+        e.preventDefault();
+        void handleBet(0);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spectator, phase, slots, loadingSlot]);
 
   return (
     <div className="card card-glow crash-game-card">
       <div className="crash-header">
         <PageHeader
           title="Crash"
-          subtitle="Ride the multiplier · cash out before the bust"
+          subtitle="Dual bet · independent auto-cashout per panel"
         />
         <div className="crash-header-actions">
           <WinFeed cashouts={recentCashouts} />
@@ -333,9 +331,33 @@ export function CrashGame({
             phase={phase}
             crashPoint={crashState?.crashPoint}
             startedAt={crashState?.startedAt}
+            autoCashoutTarget={chartAutoTarget}
           />
         </div>
       </div>
+
+      {!spectator && (
+        <div className="crash-bet-status-grid">
+          {([0, 1] as const).map((slot) => {
+            const bet = myBetForSlot(slot);
+            const active = hasActiveBetForSlot(slot);
+            if (!active && phase !== "crashed") return null;
+            const amountSol = bet
+              ? bet.amountLamports / LAMPORTS_PER_SOL
+              : parseFloat(slots[slot].betAmount) || 0;
+            return (
+              <CrashBetStatusCard
+                key={slot}
+                betAmountSol={amountSol}
+                multiplier={multiplier}
+                phase={phase}
+                visible
+                cashingOut={slots[slot].cashingOut}
+              />
+            );
+          })}
+        </div>
+      )}
 
       <CrashFairnessBar
         roundId={crashState?.id}
@@ -345,61 +367,59 @@ export function CrashGame({
         phase={phase}
       />
 
-      <div className={`bet-controls crash-bet-controls ${spectator ? "crash-bet-controls--spectator" : ""}`}>
+      <div
+        className={`bet-controls crash-bet-controls crash-dual-bet ${spectator ? "crash-bet-controls--spectator" : ""}`}
+      >
         {spectator && (
-          <div className="spectator-connect-banner" data-testid="spectator-connect-banner">
+          <div
+            className="spectator-connect-banner"
+            data-testid="spectator-connect-banner"
+          >
             <p>Connect your wallet to place bets and cash out.</p>
           </div>
         )}
 
-        <BetAmountControls
-          balanceSol={balanceSol}
-          minBetSol={minBetSol}
-          maxBetSol={maxBetSol}
-          amount={betAmount}
-          onAmountChange={setBetAmount}
-          disabled={hasActiveBet || spectator}
-        />
-
-        <AutoCashoutControl
-          enabled={autoCashoutEnabled}
-          value={autoCashoutValue}
-          onEnabledChange={setAutoCashoutEnabled}
-          onValueChange={setAutoCashoutValue}
-          disabled={hasActiveBet || spectator}
-          onChain={onChain}
-        />
-
-        <div className="bet-actions crash-bet-actions">
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={handleBet}
-            disabled={spectator || loading || hasActiveBet || !canBet}
-            data-testid="crash-place-bet"
-          >
-            {spectator
-              ? "Connect to bet"
-              : hasActiveBet
-                ? "Bet locked in"
-                : pendingBet !== null
-                  ? "Queued for next round"
-                  : phase !== "betting"
-                    ? "Bet next round"
-                    : "Place bet"}
-          </button>
-          <button
-            type="button"
-            className="btn btn-success btn-cashout-hero"
-            onClick={handleCashout}
-            disabled={spectator || loading || phase !== "running" || !hasActiveBet}
-            data-testid="crash-cashout"
-          >
-            {phase === "running"
-              ? `Cash out @ ${multiplier.toFixed(2)}x`
-              : "Cash out"}
-          </button>
+        <div className="crash-dual-bet-grid">
+          {([0, 1] as const).map((slot) => (
+            <CrashBetSlot
+              key={slot}
+              slot={slot}
+              label={slot === 0 ? "Bet A" : "Bet B"}
+              balanceSol={balanceSol}
+              minBetSol={minBetSol}
+              maxBetSol={maxBetSol}
+              amount={slots[slot].betAmount}
+              onAmountChange={(v) => updateSlot(slot, { betAmount: v })}
+              autoCashoutEnabled={slots[slot].autoCashoutEnabled}
+              autoCashoutValue={slots[slot].autoCashoutValue}
+              onAutoCashoutEnabledChange={(v) =>
+                updateSlot(slot, { autoCashoutEnabled: v })
+              }
+              onAutoCashoutValueChange={(v) =>
+                updateSlot(slot, { autoCashoutValue: v })
+              }
+              hasActiveBet={hasActiveBetForSlot(slot)}
+              canBet={canBetForSlot(slot)}
+              canCashout={
+                phase === "running" && hasActiveBetForSlot(slot)
+              }
+              cashingOut={slots[slot].cashingOut}
+              phase={phase}
+              multiplier={multiplier}
+              pendingQueued={slots[slot].pendingBet !== null}
+              spectator={spectator}
+              loading={loadingSlot === slot}
+              onPlaceBet={() => void handleBet(slot)}
+              onCashout={() => void handleCashout(slot)}
+            />
+          ))}
         </div>
+
+        {!spectator && (
+          <p className="crash-shortcuts-hint" aria-hidden="true">
+            Space = cash out Bet A (or B) · Enter = place Bet A
+          </p>
+        )}
       </div>
 
       <FairnessModal

@@ -24,6 +24,14 @@ import { useSolana } from "@phantom/react-sdk";
 
 export type WalletActionPhase = "idle" | "signing" | "confirming";
 
+export type WalletTxFlow = "idle" | "deposit" | "withdraw";
+
+export interface PendingWalletTx {
+  flow: Exclude<WalletTxFlow, "idle">;
+  amountSol: number;
+  signature?: string;
+}
+
 const PENDING_DEPOSIT_KEY = "solcasino_pending_deposit";
 
 interface PendingDeposit {
@@ -78,6 +86,7 @@ export function useCasinoUser() {
   const [configLoading, setConfigLoading] = useState(true);
   const [configError, setConfigError] = useState<string | null>(null);
   const [walletActionPhase, setWalletActionPhase] = useState<WalletActionPhase>("idle");
+  const [pendingWalletTx, setPendingWalletTx] = useState<PendingWalletTx | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const walletLoading = walletActionPhase !== "idle";
@@ -198,14 +207,23 @@ export function useCasinoUser() {
 
       setWalletActionPhase("signing");
       setError(null);
+      setPendingWalletTx({ flow: "deposit", amountSol });
       try {
         if (config?.onChainEnabled) {
+          setWalletActionPhase("signing");
           const result = await depositOnChain(
             walletAddress!,
             amountSol,
             signAndSendTx,
           );
+          setPendingWalletTx({
+            flow: "deposit",
+            amountSol,
+            signature: result.signature,
+          });
+          setWalletActionPhase("confirming");
           patchProfileBalance(result.balanceSol);
+          setPendingWalletTx(null);
           await refresh();
           return { signature: result.signature, success: true, amountSol, balanceSol: result.balanceSol };
         }
@@ -235,22 +253,27 @@ export function useCasinoUser() {
         const signResult = await signAndSendTx(tx);
         const signature = signResult.signature;
 
+        patchProfileBalance((profile?.balanceSol ?? 0) + amountSol);
         savePendingDeposit(signature, walletAddress!);
+        setPendingWalletTx({ flow: "deposit", amountSol, signature });
         setWalletActionPhase("confirming");
         const depositResult = await verifyDeposit(signature, walletAddress!);
         clearPendingDeposit();
         patchProfileBalance(depositResult.balanceSol);
+        setPendingWalletTx(null);
         await refresh();
         return { signature, ...depositResult };
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Deposit failed";
         setError(msg);
+        setPendingWalletTx(null);
+        await refresh();
         throw err;
       } finally {
         setWalletActionPhase("idle");
       }
     },
-    [assertWalletReady, walletAddress, config, signAndSendTx, refresh, patchProfileBalance],
+    [assertWalletReady, walletAddress, config, signAndSendTx, refresh, patchProfileBalance, profile?.balanceSol],
   );
 
   const withdrawFunds = useCallback(
@@ -261,36 +284,47 @@ export function useCasinoUser() {
 
       setWalletActionPhase("signing");
       setError(null);
+      setPendingWalletTx({ flow: "withdraw", amountSol });
       try {
         if (config?.onChainEnabled) {
           assertWalletReady();
+          patchProfileBalance(Math.max(0, (profile?.balanceSol ?? 0) - amountSol));
           const result = await withdrawOnChain(
             walletAddress,
             amountSol,
             signAndSendTx,
           );
           patchProfileBalance(result.balanceSol);
+          setPendingWalletTx({
+            flow: "withdraw",
+            amountSol,
+            signature: result.signature,
+          });
           await refresh();
+          setPendingWalletTx(null);
           return { signature: result.signature, balanceSol: result.balanceSol };
         }
 
+        patchProfileBalance(Math.max(0, (profile?.balanceSol ?? 0) - amountSol));
         setWalletActionPhase("confirming");
         const result = await withdraw(walletAddress, amountSol);
         if (result.balanceSol !== undefined) {
           patchProfileBalance(result.balanceSol);
         }
         await refresh();
+        setPendingWalletTx(null);
         return result;
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Withdrawal failed";
         setError(msg);
+        setPendingWalletTx(null);
         await refresh();
         throw err;
       } finally {
         setWalletActionPhase("idle");
       }
     },
-    [walletAddress, isAuthenticated, config, signAndSendTx, refresh, patchProfileBalance, assertWalletReady],
+    [walletAddress, isAuthenticated, config, signAndSendTx, refresh, patchProfileBalance, assertWalletReady, profile?.balanceSol],
   );
 
   const creditDepositBySignature = useCallback(
@@ -340,6 +374,7 @@ export function useCasinoUser() {
     reloadConfig: loadConfig,
     loading: walletLoading,
     walletActionPhase,
+    pendingWalletTx,
     error,
     deposit,
     withdraw: withdrawFunds,

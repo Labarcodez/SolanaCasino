@@ -105,7 +105,7 @@ io.on("connection", (socket) => {
   socket.on(
     "crash:bet",
     async (
-      data: { amountSol: number; autoCashout?: number },
+      data: { amountSol: number; autoCashout?: number; slot?: 0 | 1 },
       callback?: (response: unknown) => void,
     ) => {
       try {
@@ -134,6 +134,7 @@ io.on("connection", (socket) => {
           walletAddress,
           solToLamports(data.amountSol),
           data.autoCashout,
+          data.slot === 1 ? 1 : 0,
         );
 
         const user = getOrCreateUser(walletAddress);
@@ -159,7 +160,20 @@ io.on("connection", (socket) => {
     },
   );
 
-  socket.on("crash:cashout", async (callback?: (response: unknown) => void) => {
+  socket.on(
+    "crash:cashout",
+    async (
+      data: { slot?: 0 | 1 } | ((response: unknown) => void) | undefined,
+      callback?: (response: unknown) => void,
+    ) => {
+    let slot: 0 | 1 = 0;
+    let ack = callback;
+    if (typeof data === "function") {
+      ack = data;
+    } else if (data?.slot === 1) {
+      slot = 1;
+    }
+
     try {
       if (isSpectator || !walletAddress) {
         throw new Error("Connect wallet to cash out");
@@ -170,14 +184,14 @@ io.on("connection", (socket) => {
       if (!checkSocketRateLimit(walletAddress)) {
         throw new Error("Too many requests — slow down");
       }
-      const bet = crashEngine.cashout(walletAddress);
+      const bet = crashEngine.cashout(walletAddress, slot);
       const user = getOrCreateUser(walletAddress);
       const response = {
         success: true,
         bet,
         balanceSol: lamportsToSol(user.balance_lamports),
       };
-      callback?.(response);
+      ack?.(response);
       io.emit("crash:state", crashEngine.getState());
       io.emit("crash:player_cashout", {
         walletAddress:
@@ -186,7 +200,7 @@ io.on("connection", (socket) => {
         payoutSol: lamportsToSol(bet.payoutLamports),
       });
     } catch (err) {
-      callback?.({
+      ack?.({
         success: false,
         error: err instanceof Error ? err.message : "Cashout failed",
       });
