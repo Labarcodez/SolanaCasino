@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { UserRow } from "./types.js";
+import { runMigrations } from "./migrations.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = process.env.SQLITE_PATH
@@ -16,12 +17,7 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-export const db = new Database(dbPath);
-
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
-
-db.exec(`
+const SCHEMA = `
   CREATE TABLE IF NOT EXISTS users (
     wallet_address TEXT PRIMARY KEY,
     balance_lamports INTEGER NOT NULL DEFAULT 0,
@@ -101,9 +97,49 @@ db.exec(`
     signature TEXT NOT NULL,
     registered_at TEXT DEFAULT (datetime('now'))
   );
-`);
+`;
 
-import { runMigrations } from "./migrations.js";
+function backupCorruptDbFiles(targetPath: string): void {
+  const stamp = Date.now();
+  for (const suffix of ["", "-wal", "-shm"]) {
+    const file = `${targetPath}${suffix}`;
+    if (fs.existsSync(file)) {
+      fs.renameSync(file, `${file}.corrupt-${stamp}`);
+    }
+  }
+}
+
+function openDatabase(): Database.Database {
+  const tryOpen = (): Database.Database => {
+    const database = new Database(dbPath);
+    const integrity = database.pragma("integrity_check", {
+      simple: true,
+    }) as string;
+    if (integrity !== "ok") {
+      database.close();
+      throw new Error(`SQLite integrity check failed: ${integrity}`);
+    }
+    return database;
+  };
+
+  try {
+    return tryOpen();
+  } catch (err) {
+    console.error(
+      `SQLite at ${dbPath} is corrupt or unreadable — backing up and reinitializing:`,
+      err instanceof Error ? err.message : err,
+    );
+    backupCorruptDbFiles(dbPath);
+    return new Database(dbPath);
+  }
+}
+
+export const db = openDatabase();
+
+db.pragma("journal_mode = WAL");
+db.pragma("foreign_keys = ON");
+
+db.exec(SCHEMA);
 runMigrations();
 
 export function getOrCreateUser(walletAddress: string): UserRow {
