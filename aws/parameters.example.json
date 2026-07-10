@@ -1,0 +1,30 @@
+[
+  {
+    "ParameterKey": "ProjectName",
+    "ParameterValue": "orbit-casino"
+  },
+  {
+    "ParameterKey": "JwtSecret",
+    "ParameterValue": "REPLACE_WITH_OPENSSL_RAND_HEX_32"
+  },
+  {
+    "ParameterKey": "AlchemyApiKey",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "CasinoWalletPrivateKey",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "CasinoWalletAddress",
+    "ParameterValue": "C9W7nGv2ZBJp4zcmtvBHkrtTPhB1FQ7JaNNPRNhiA4Ze"
+  },
+  {
+    "ParameterKey": "AdminWallet",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "SolanaCluster",
+    "ParameterValue": "mainnet-beta"
+  }
+]

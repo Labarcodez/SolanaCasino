@@ -234,18 +234,18 @@ docker compose up -d --build
 # App available at http://localhost:3001
 ```
 
-## Azure Deployment (recommended for mainnet)
+## AWS Deployment (recommended for mainnet)
 
-Use **Microsoft Azure free credits** with **GitHub import** — push to `main` auto-deploys.
+Run on **ECS Fargate + EFS** — Docker container with **persistent SQLite** (balances survive redeploys).
 
-**Quick path:** [docs/AZURE-DEPLOY.md](docs/AZURE-DEPLOY.md) → **Option A — Import from GitHub**
+**Quick path:** [docs/AWS-DEPLOY.md](docs/AWS-DEPLOY.md)
 
-1. Azure Portal → deploy `azure/main.bicep` (persistent SQLite on Azure Files)
-2. Web App → **Deployment Center** → connect **Labarcodez/SolanaCasino**
-3. Add GitHub Actions secrets (`AZURE_*` from portal)
-4. Push to `main` → live
+```powershell
+aws configure          # one-time
+npm run aws:deploy     # deploy stack + build + push to ECR
+```
 
-Local CLI alternative: `npm run azure:deploy`
+Recommended region for US Midwest: **us-east-2** (Ohio). GitHub Actions auto-deploy: `.github/workflows/aws-deploy.yml`.
 
 ## API Reference
 

@@ -1,0 +1,410 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Orbit Solana Casino — ECS Fargate + EFS (persistent SQLite) + ALB + ECR
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: orbit-casino
+    Description: Prefix for AWS resource names
+
+  JwtSecret:
+    Type: String
+    NoEcho: true
+    MinLength: 32
+
+  AlchemyApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+
+  CasinoWalletPrivateKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+
+  CasinoWalletAddress:
+    Type: String
+    Default: C9W7nGv2ZBJp4zcmtvBHkrtTPhB1FQ7JaNNPRNhiA4Ze
+
+  AdminWallet:
+    Type: String
+    Default: ""
+
+  SolanaCluster:
+    Type: String
+    Default: mainnet-beta
+
+  ProgramId:
+    Type: String
+    Default: Be5brMe2AvA68zEdiFKxa6KfYJdeQAeY12eWtZiC41vU
+
+  BrandName:
+    Type: String
+    Default: Orbit Solana Casino
+
+  DesiredCount:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    MaxValue: 4
+
+  TaskCpu:
+    Type: String
+    Default: "512"
+    AllowedValues: ["256", "512", "1024", "2048"]
+
+  TaskMemory:
+    Type: String
+    Default: "1024"
+    AllowedValues: ["512", "1024", "2048", "4096"]
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.42.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-vpc"
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: 10.42.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-public-a"
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: 10.42.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-public-b"
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-igw"
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-public-rt"
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetARouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetBRouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  EcrRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${ProjectName}"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [{
+              "rulePriority": 1,
+              "description": "Keep last 5 images",
+              "selection": {
+                "tagStatus": "any",
+                "countType": "imageCountMoreThan",
+                "countNumber": 5
+              },
+              "action": { "type": "expire" }
+            }]
+          }
+
+  EfsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: EFS NFS from Fargate tasks
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref ServiceSecurityGroup
+
+  ServiceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Orbit casino Fargate tasks
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3001
+          ToPort: 3001
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Public ALB for Orbit casino
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  FileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      PerformanceMode: generalPurpose
+      ThroughputMode: bursting
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-data"
+
+  MountTargetA:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref FileSystem
+      SubnetId: !Ref PublicSubnetA
+      SecurityGroups:
+        - !Ref EfsSecurityGroup
+
+  MountTargetB:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref FileSystem
+      SubnetId: !Ref PublicSubnetB
+      SecurityGroups:
+        - !Ref EfsSecurityGroup
+
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${ProjectName}-cluster"
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/ecs/${ProjectName}"
+      RetentionInDays: 14
+
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${ProjectName}-alb"
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${ProjectName}-tg"
+      Port: 3001
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: ip
+      HealthCheckPath: /api/health
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: "200"
+
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn:
+      - MountTargetA
+      - MountTargetB
+    Properties:
+      Family: !Sub "${ProjectName}-task"
+      Cpu: !Ref TaskCpu
+      Memory: !Ref TaskMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      Volumes:
+        - Name: casino-data
+          EFSVolumeConfiguration:
+            FilesystemId: !Ref FileSystem
+            TransitEncryption: ENABLED
+            AuthorizationConfig:
+              IAM: DISABLED
+      ContainerDefinitions:
+        - Name: orbit-casino
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ProjectName}:latest"
+          Essential: true
+          PortMappings:
+            - ContainerPort: 3001
+              Protocol: tcp
+          MountPoints:
+            - SourceVolume: casino-data
+              ContainerPath: /app/backend/data
+              ReadOnly: false
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: orbit
+          Environment:
+            - Name: NODE_ENV
+              Value: production
+            - Name: SERVE_FRONTEND
+              Value: "true"
+            - Name: PORT
+              Value: "3001"
+            - Name: SQLITE_PATH
+              Value: /app/backend/data/casino.db
+            - Name: SOLANA_CLUSTER
+              Value: !Ref SolanaCluster
+            - Name: SOLANA_RPC_FALLBACK
+              Value: https://solana.drpc.org
+            - Name: PROGRAM_ID
+              Value: !Ref ProgramId
+            - Name: CASINO_WALLET_ADDRESS
+              Value: !Ref CasinoWalletAddress
+            - Name: ADMIN_WALLET
+              Value: !Ref AdminWallet
+            - Name: BRAND_NAME
+              Value: !Ref BrandName
+            - Name: MIN_BET_SOL
+              Value: "0.001"
+            - Name: MIN_WITHDRAW_SOL
+              Value: "0.01"
+            - Name: FRONTEND_URL
+              Value: !Sub "http://${LoadBalancer.DNSName}"
+            - Name: JWT_SECRET
+              Value: !Ref JwtSecret
+            - Name: ALCHEMY_API_KEY
+              Value: !Ref AlchemyApiKey
+            - Name: CASINO_WALLET_PRIVATE_KEY
+              Value: !Ref CasinoWalletPrivateKey
+
+  EcsService:
+    Type: AWS::ECS::Service
+    DependsOn: HttpListener
+    Properties:
+      ServiceName: !Sub "${ProjectName}-service"
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref TaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      HealthCheckGracePeriodSeconds: 120
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - !Ref PublicSubnetA
+            - !Ref PublicSubnetB
+          SecurityGroups:
+            - !Ref ServiceSecurityGroup
+      LoadBalancers:
+        - ContainerName: orbit-casino
+          ContainerPort: 3001
+          TargetGroupArn: !Ref TargetGroup
+
+Outputs:
+  LoadBalancerUrl:
+    Description: Public URL (set custom domain + HTTPS when ready)
+    Value: !Sub "http://${LoadBalancer.DNSName}"
+
+  HealthCheckUrl:
+    Description: Health endpoint
+    Value: !Sub "http://${LoadBalancer.DNSName}/api/health"
+
+  ConfigUrl:
+    Description: Config endpoint
+    Value: !Sub "http://${LoadBalancer.DNSName}/api/config"
+
+  EcrRepositoryUri:
+    Description: Push Docker images here
+    Value: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ProjectName}"
+
+  EcsClusterName:
+    Value: !Ref EcsCluster
+
+  EcsServiceName:
+    Value: !GetAtt EcsService.Name
+
+  EfsFileSystemId:
+    Value: !Ref FileSystem
