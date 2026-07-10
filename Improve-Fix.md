@@ -2,7 +2,73 @@
 
 **Site:** [orbit-casino.com](https://orbit-casino.com/)  
 **X:** [@OrbitSolCasino](https://x.com/OrbitSolCasino)  
-**Email:** orbitsolanacasino@gmail.com
+**Email:** orbitsolanacasino@gmail.com  
+**Discord:** https://discord.gg/tXHWmuQkS
+
+---
+
+## Competitor Research — SolPump & Rugs.fun (Jul 2026)
+
+### [SolPump](https://solpump.io/) — What makes it “fully functioning”
+
+| Capability | SolPump | Orbit (current) | Gap priority |
+|------------|---------|-----------------|--------------|
+| **Wallet model** | Non-custodial — bet directly from Phantom/Backpack/Solflare; no in-game balance | Custodial SQLite **or** Anchor PDA vault (deposit-first) | **P0** — architectural |
+| **Crash game** | Rocket flies across screen; multiplier climbs; dual bet; auto-cashout; advanced betting | Single bet; auto-cashout; canvas chart + rocket FX (v2) | **P1** |
+| **Other games** | Crash, Coinflip, **Futures** | Crash, Limbo, Coinflip | P2 |
+| **Rewards loop** | Hourly chat airdrops, daily free case, `$SOLPUMP` earn-by-wagering | VIP rakeback, affiliate, weekly tournament | **P1** |
+| **Chat** | Live chat tied to airdrop eligibility (0.001 SOL wager/hour) | Auth-gated chat, no rewards | **P1** |
+| **Provably fair** | On-chain + verify; marketed as 100% fair | Commit-reveal + API verify + in-game modal | Partial — client seed UX |
+| **Token** | Native `$SOLPUMP` with wager rewards | Pump.fun launch page only | P2 |
+| **Jackpot** | Pooled 60s jackpot mode | None | P3 |
+
+Sources: [SolPump](https://solpump.io/), [DappRadar](https://dappradar.com/dapp/solpump), [ProvenCrypto review](https://provencrypto.com/solpump-review/)
+
+### [Rugs.fun](https://rugs.fun/) — What makes it “fully functioning”
+
+| Capability | Rugs.fun | Orbit (current) | Gap priority |
+|------------|----------|-----------------|--------------|
+| **Game identity** | Fake **candlestick trading chart** — buy/sell before rug | Classic exponential crash curve | **P2** (different product) |
+| **Retention** | XP per bet, RugPass tiers, crates (Iron→Celestial), daily tasks | VIP rakeback only | **P1** |
+| **Community** | Rugpool jackpot, Piggy Bank (Tier 25), referral crates | Tournament + affiliate | P2 |
+| **Visual drama** | Chart wicks, god candles, rug flash to ~0 | Rocket + starfield canvas (v2) | Ongoing polish |
+| **Verify page** | Public `/verify` tool with algorithm shown | In-app FairnessPanel only | P2 |
+| **Provably fair** | Server seed + game ID only (no client seed) | Same pattern + optional client seed (custodial) | Orbit is comparable |
+
+Sources: [Rugs.fun verify](https://rugs.fun/verify), [beginner guide](https://medium.com/@tripwireonfire/how-to-play-rugs-fun-a-beginners-guide-to-the-basics-of-the-best-web3-game-on-solana-e103ba44a793)
+
+### What Orbit must build to match competitor “full product” feel
+
+**Tier 1 — Ship next (2–3 weeks)**  
+1. **Dual bet panel** (Bet A / Bet B) — SolPump table stakes  
+2. **Hourly chat airdrop** — wager gate + % of volume to pool  
+3. **Daily free case** — onboarding hook like SolPump daily case  
+4. **XP + level system** — bet → XP → crate keys (Rugs.fun loop)  
+5. **Crash power UX** — sticky PnL card, “cashing out…” state, keyboard Space = cashout  
+6. **Client seed editor** — user sets seed before bet (trust parity)
+
+**Tier 2 — Core product depth (3–5 weeks)**  
+7. **Direct wallet betting mode** — optional non-custodial path (bet per tx, no deposit)  
+8. **Auto-bet strategies** — stop-on-win/loss, N rounds, martingale toggle  
+9. **Transaction history UI** — deposits, bets, withdrawals with Solscan links  
+10. **Public `/verify` page** — standalone like Rugs.fun  
+11. **Landing hero** — embed live crash spectator
+
+**Tier 3 — Differentiation (5+ weeks)**  
+12. **Orbit token earn loop** — wager → token rewards (SolPump model)  
+13. **Jackpot / pooled rounds** — SolPump jackpot mode  
+14. **Rug-style chart mode** (optional second crash skin) — candlestick variant  
+15. **Battle pass / achievements** — Rugs.fun RugPass equivalent
+
+### Crash visual direction (SolPump + Rugs.fun inspired)
+
+| Element | SolPump | Rugs.fun | Orbit v2 (implemented) |
+|---------|---------|----------|------------------------|
+| Hero motion | Rocket flies screen | Candle wicks pump/dump | Canvas rocket + exhaust flame |
+| Background | Dark space | Trading terminal | Parallax starfield + nebula |
+| Speed feel | Streak lines at high mult | Volatility spikes | Speed streaks + pulse rings |
+| Crash moment | Rocket explodes | Chart rugs to 0 | Particle burst + red flash + border pulse |
+| Multiplier | Large center text | PnL % overlay | Dynamic color + scale pulse |
 
 ---
 
@@ -234,17 +300,20 @@ Trust is the competitive moat for crypto casinos.
 
 ## Competitive Benchmark Targets
 
-| Feature | Stake | Shuffle | Orbit (current) | Orbit (target) |
-|---------|-------|---------|-----------------|----------------|
-| Guest game view | Yes | Yes | No | Yes |
-| Inline fairness verify | Yes | Yes | Separate tab | In-game modal |
-| Crash dual bet | Yes | Yes | Single | Dual |
-| Crash focus mode | Yes | Partial | No | Yes |
-| Auto-bet strategies | Yes | Yes | Auto-cashout only | Full |
-| Client seed control | Yes | Yes | Backend only | User-facing |
-| Mobile thumb-zone CTAs | Yes | Yes | Partial | Full |
-| Tx status tracking | Yes | Yes | Basic toasts | Rich banners |
-| 60fps crash chart | Yes | Yes | Canvas (good) | Optimized |
+| Feature | SolPump | Rugs.fun | Stake | Orbit (current) | Orbit (target) |
+|---------|---------|----------|-------|-----------------|----------------|
+| Guest game view | Yes | Yes | Yes | Yes (spectator) | Yes |
+| Non-custodial bet | Yes | Deposit model | N/A | No (deposit-first) | Optional mode |
+| Inline fairness verify | Yes | Yes (/verify) | Yes | In-game modal | + public /verify |
+| Crash dual bet | Yes | — | Yes | Single | Dual |
+| Crash rocket/visual | Yes | Candlestick | Yes | Rocket FX v2 | + rug skin option |
+| Hourly airdrop | Yes | Partial | — | No | Yes |
+| XP / crates / daily case | Partial | Yes | — | No | Yes |
+| Auto-bet strategies | Yes | — | Yes | Auto-cashout only | Full |
+| Client seed control | Yes | No | Yes | Backend only | User-facing |
+| Token earn loop | $SOLPUMP | — | — | Pump launch only | Wager rewards |
+| Mobile thumb-zone CTAs | Yes | Yes | Yes | Partial | Full |
+| Tx status tracking | On-chain | Basic | Yes | Basic toasts | Rich banners |
 
 ---
 
