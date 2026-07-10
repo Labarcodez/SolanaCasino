@@ -28,7 +28,7 @@
     "docker:build": "docker compose build",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
-    "aws:deploy": "powershell -ExecutionPolicy Bypass -File scripts/aws-deploy.ps1",
+    "aws:deploy": "pwsh -ExecutionPolicy Bypass -File scripts/aws-deploy.ps1",
     "aws:build": "node scripts/aws-build.mjs",
     "screenshots": "node scripts/capture-screenshots.mjs",
     "verify": "bash scripts/verify.sh"
