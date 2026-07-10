@@ -24,7 +24,7 @@ The repo no longer includes Azure config. Delete any Azure resources manually so
 
 You can also disable/delete the Azure MCP plugin in Cursor — it is no longer needed for this project.
 
-**Render** (`orbit-solana-casino.onrender.com`) stays live until AWS is verified — then disable Render to avoid running two production backends.
+**Production URL:** http://orbit-casino-alb-737118565.us-east-2.elb.amazonaws.com
 
 ---
 
@@ -144,14 +144,9 @@ After changing `FRONTEND_URL` (custom domain), update the stack parameter or tas
 
 ---
 
-## Migrate from Render
+## Post-migration
 
-1. Deploy AWS (Option A)
-2. Test deposit/withdraw on the ALB URL
-3. Point domain to AWS ALB
-4. Disable Render service
-
-Render SQLite does **not** migrate — use Wallet **“Credit deposit”** for any stuck txs first.
+Production runs on AWS only. If you still have a Render service from an earlier deploy, delete it in the [Render dashboard](https://dashboard.render.com) so you are not billed or serving two backends.
 
 ---
 

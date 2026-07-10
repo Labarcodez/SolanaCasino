@@ -43,7 +43,6 @@ export const config = {
   casinoWalletPrivateKey: process.env.CASINO_WALLET_PRIVATE_KEY ?? "",
   frontendUrl:
     process.env.FRONTEND_URL ??
-    process.env.RENDER_EXTERNAL_URL ??
     "http://localhost:5173",
   jwtSecret:
     process.env.JWT_SECRET ??

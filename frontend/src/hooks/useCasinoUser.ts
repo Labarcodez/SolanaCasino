@@ -207,7 +207,7 @@ export function useCasinoUser() {
           config.rpcProvider === "public"
         ) {
           throw new Error(
-            "Deposits unavailable: server is not connected to Alchemy. Set ALCHEMY_API_KEY in Render and redeploy.",
+            "Deposits unavailable: server is not connected to Alchemy. Set ALCHEMY_API_KEY in production env and redeploy.",
           );
         }
 

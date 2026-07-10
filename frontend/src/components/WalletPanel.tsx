@@ -57,7 +57,7 @@ export function WalletPanel({
   const handleAction = async () => {
     if (mode === "deposit" && rpcMisconfigured) {
       toast(
-        "Deposits are unavailable — the server is not connected to Alchemy. Add ALCHEMY_API_KEY in Render and redeploy.",
+        "Deposits are unavailable — the server is not connected to Alchemy. Set ALCHEMY_API_KEY in production env and redeploy.",
         "error",
       );
       return;
@@ -65,7 +65,7 @@ export function WalletPanel({
 
     if (mode === "withdraw" && !withdrawalsEnabled) {
       toast(
-        "Withdrawals are unavailable — the server payout wallet is not configured. Add CASINO_WALLET_PRIVATE_KEY in Render and redeploy.",
+        "Withdrawals are unavailable — the server payout wallet is not configured. Set CASINO_WALLET_PRIVATE_KEY in production env and redeploy.",
         "error",
       );
       return;
@@ -208,8 +208,8 @@ export function WalletPanel({
         {rpcMisconfigured && mode === "deposit" && (
           <p className="wallet-hint warning">
             Server RPC is not connected to Alchemy (using public mainnet RPC). Deposits will not
-            confirm reliably until <code>ALCHEMY_API_KEY</code> is set in Render environment
-            variables and the app is redeployed.
+            confirm reliably until <code>ALCHEMY_API_KEY</code> is set in production
+            environment variables and the app is redeployed.
           </p>
         )}
 

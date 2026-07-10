@@ -260,7 +260,7 @@ async function start(): Promise<void> {
       !process.env.HELIUS_RPC_URL
     ) {
       console.error(
-        "CRITICAL: ALCHEMY_API_KEY is not set — using public mainnet RPC. Deposits will be unreliable. Add ALCHEMY_API_KEY in Render env vars and redeploy.",
+        "CRITICAL: ALCHEMY_API_KEY is not set — using public mainnet RPC. Deposits will be unreliable. Set ALCHEMY_API_KEY in production env and redeploy.",
       );
     }
   }
