@@ -1,252 +1,427 @@
-import { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
-import { getCrashColors } from "../lib/crashColors";
+import { useEffect, useRef } from "react";
+import type { CrashPhase } from "../hooks/useSocket";
+import {
+  computeTimeWindow,
+  computeViewportMax,
+  elapsedToX,
+  getCrashPalette,
+  multiplierAtElapsedMs,
+  multiplierToY,
+  spawnCrashParticles,
+  stepParticles,
+  type TrailPoint,
+} from "../lib/crashCurve";
 
 interface CrashChartProps {
   multiplier: number;
-  phase: "betting" | "running" | "crashed" | "cooldown";
+  phase: CrashPhase;
   crashPoint?: number;
+  startedAt?: number;
 }
 
-interface Point {
-  x: number;
-  y: number;
+interface ChartEngine {
+  targetMult: number;
+  displayMult: number;
+  viewportMax: number;
+  phase: CrashPhase;
+  crashPoint: number;
+  startedAt: number;
+  trail: TrailPoint[];
+  particles: ReturnType<typeof spawnCrashParticles>;
+  crashFlash: number;
+  lastPhase: CrashPhase;
+  pendingBurst: boolean;
+  frozenTimeWindow: number;
 }
 
-interface CrackLine {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-  opacity: number;
-}
+const PAD = 28;
 
-export function CrashChart({ multiplier, phase, crashPoint }: CrashChartProps) {
+export function CrashChart({
+  multiplier,
+  phase,
+  crashPoint,
+  startedAt,
+}: CrashChartProps) {
+  const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const pointsRef = useRef<Point[]>([]);
-  const animRef = useRef<number>(0);
-  const [rocketPos, setRocketPos] = useState({ x: 0, y: 0, angle: -45 });
-  const [crackLines, setCrackLines] = useState<CrackLine[]>([]);
-  const [particles, setParticles] = useState<
-    { id: number; x: number; y: number; vx: number; vy: number; life: number }[]
-  >([]);
-  const crackTriggeredRef = useRef(false);
-  const particleIdRef = useRef(0);
+  const labelRef = useRef<HTMLDivElement>(null);
+  const sublabelRef = useRef<HTMLParagraphElement>(null);
+  const engineRef = useRef<ChartEngine>({
+    targetMult: 1,
+    displayMult: 1,
+    viewportMax: 2.5,
+    phase: "betting",
+    crashPoint: 1,
+    startedAt: 0,
+    trail: [],
+    particles: [],
+    crashFlash: 0,
+    lastPhase: "betting",
+    pendingBurst: false,
+    frozenTimeWindow: 4500,
+  });
 
   useEffect(() => {
+    const engine = engineRef.current;
+    engine.targetMult = multiplier;
+    engine.phase = phase;
+    engine.crashPoint = crashPoint ?? multiplier;
+    if (startedAt) engine.startedAt = startedAt;
+
+    if (phase === "running" && engine.lastPhase !== "running") {
+      engine.trail = [{ mult: 1, elapsedMs: 0 }];
+      engine.displayMult = 1;
+      engine.viewportMax = 2.5;
+      engine.startedAt = startedAt ?? Date.now();
+    }
+
     if (phase === "betting" || phase === "cooldown") {
-      pointsRef.current = [];
-      crackTriggeredRef.current = false;
-      setCrackLines([]);
-      setParticles([]);
+      engine.trail = [];
+      engine.particles = [];
+      engine.displayMult = 1;
+      engine.viewportMax = 2.5;
+      engine.crashFlash = 0;
+      engine.frozenTimeWindow = 4500;
     }
-  }, [phase]);
+
+    if (phase === "crashed" && engine.lastPhase !== "crashed") {
+      engine.crashFlash = 1;
+      engine.pendingBurst = true;
+      engine.displayMult = engine.crashPoint;
+      const last = engine.trail[engine.trail.length - 1];
+      if (last) {
+        engine.frozenTimeWindow = computeTimeWindow(last.elapsedMs);
+      }
+    }
+
+    engine.lastPhase = phase;
+  }, [multiplier, phase, crashPoint, startedAt]);
 
   useEffect(() => {
-    if (phase !== "crashed" || crackTriggeredRef.current) return;
-    crackTriggeredRef.current = true;
-
-    const last = pointsRef.current[pointsRef.current.length - 1];
-    if (!last) return;
-
-    const lines: CrackLine[] = [];
-    for (let i = 0; i < 4; i++) {
-      const angle = (Math.PI / 4) * i + Math.random() * 0.5;
-      const len = 30 + Math.random() * 50;
-      lines.push({
-        x1: last.x,
-        y1: last.y,
-        x2: last.x + Math.cos(angle) * len,
-        y2: last.y + Math.sin(angle) * len,
-        opacity: 1,
-      });
-    }
-    setCrackLines(lines);
-
-    const burst = Array.from({ length: 10 }, () => {
-      const a = Math.random() * Math.PI * 2;
-      const speed = 2 + Math.random() * 4;
-      return {
-        id: particleIdRef.current++,
-        x: last.x,
-        y: last.y,
-        vx: Math.cos(a) * speed,
-        vy: Math.sin(a) * speed,
-        life: 1,
-      };
-    });
-    setParticles(burst);
-
-    const fadeTimer = setInterval(() => {
-      setCrackLines((prev) =>
-        prev
-          .map((l) => ({ ...l, opacity: l.opacity - 0.08 }))
-          .filter((l) => l.opacity > 0),
-      );
-      setParticles((prev) =>
-        prev
-          .map((p) => ({
-            ...p,
-            x: p.x + p.vx,
-            y: p.y + p.vy,
-            vy: p.vy + 0.15,
-            life: p.life - 0.06,
-          }))
-          .filter((p) => p.life > 0),
-      );
-    }, 40);
-
-    return () => clearInterval(fadeTimer);
-  }, [phase]);
-
-  useEffect(() => {
+    const wrap = wrapRef.current;
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!wrap || !canvas) return;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const draw = () => {
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
+    let width = 0;
+    let height = 0;
+    let dpr = 1;
+    let rafId = 0;
+
+    const resize = () => {
+      const rect = wrap.getBoundingClientRect();
+      width = Math.max(rect.width, 1);
+      height = Math.max(rect.height, 1);
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.floor(width * dpr);
+      canvas.height = Math.floor(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-      const w = rect.width;
-      const h = rect.height;
-      const pad = 24;
-
-      ctx.clearRect(0, 0, w, h);
-
-      ctx.strokeStyle = "rgba(42, 47, 66, 0.5)";
-      ctx.lineWidth = 1;
-      ctx.fillStyle = "rgba(148, 163, 184, 0.45)";
-      ctx.font = "10px ui-monospace, monospace";
-      const maxMult = Math.max(multiplier, crashPoint ?? 2, 10);
-      for (let i = 1; i <= 4; i++) {
-        const y = pad + ((h - pad * 2) * i) / 5;
-        ctx.beginPath();
-        ctx.moveTo(pad, y);
-        ctx.lineTo(w - pad, y);
-        ctx.stroke();
-        const labelMult = 1 + ((maxMult - 1) * (5 - i)) / 5;
-        ctx.fillText(`${labelMult.toFixed(1)}x`, pad + 4, y - 4);
-      }
-
-      if (phase === "running" || phase === "crashed") {
-        const t = pointsRef.current.length;
-        const x = pad + Math.min(t * 2.5, w - pad * 2);
-        const maxMult = Math.max(multiplier, crashPoint ?? 2, 2);
-        const y =
-          h -
-          pad -
-          ((multiplier - 1) / (maxMult - 1 + 0.01)) * (h - pad * 2);
-        pointsRef.current.push({ x, y: Math.max(pad, y) });
-        if (pointsRef.current.length > 200) {
-          pointsRef.current.shift();
-        }
-
-        const pts = pointsRef.current;
-        const colors = getCrashColors(multiplier, phase === "crashed");
-
-        if (pts.length > 1) {
-          ctx.beginPath();
-          ctx.moveTo(pts[0].x, pts[0].y);
-          for (let i = 1; i < pts.length; i++) {
-            const xc = (pts[i].x + pts[i - 1].x) / 2;
-            const yc = (pts[i].y + pts[i - 1].y) / 2;
-            ctx.quadraticCurveTo(pts[i - 1].x, pts[i - 1].y, xc, yc);
-          }
-          ctx.strokeStyle = colors.stroke;
-          ctx.lineWidth = 3;
-          ctx.lineCap = "round";
-          ctx.shadowColor = colors.glow;
-          ctx.shadowBlur = 14;
-          ctx.stroke();
-          ctx.shadowBlur = 0;
-
-          const last = pts[pts.length - 1];
-          ctx.lineTo(last.x, h - pad);
-          ctx.lineTo(pts[0].x, h - pad);
-          ctx.closePath();
-          const fillGrad = ctx.createLinearGradient(0, pad, 0, h);
-          fillGrad.addColorStop(0, colors.fillTop);
-          fillGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
-          ctx.fillStyle = fillGrad;
-          ctx.fill();
-
-          const prev = pts[pts.length - 2];
-          const angle =
-            (Math.atan2(last.y - prev.y, last.x - prev.x) * 180) / Math.PI;
-          setRocketPos({ x: last.x, y: last.y, angle });
-        }
-
-        crackLines.forEach((line) => {
-          ctx.beginPath();
-          ctx.moveTo(line.x1, line.y1);
-          ctx.lineTo(line.x2, line.y2);
-          ctx.strokeStyle = `rgba(255, 59, 92, ${line.opacity})`;
-          ctx.lineWidth = 2;
-          ctx.stroke();
-        });
-
-        particles.forEach((p) => {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 3 * p.life, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(255, 120, 80, ${p.life})`;
-          ctx.fill();
-        });
-      }
-
-      animRef.current = requestAnimationFrame(draw);
     };
 
-    animRef.current = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(animRef.current);
-  }, [multiplier, phase, crashPoint, crackLines, particles]);
+    const ro = new ResizeObserver(resize);
+    ro.observe(wrap);
+    resize();
 
-  const displayText =
-    phase === "betting"
-      ? "Place your bets"
-      : phase === "cooldown"
-        ? "Next round starting..."
-        : `${multiplier.toFixed(2)}x`;
+    const drawGrid = (timeWindow: number) => {
+      const engine = engineRef.current;
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.08)";
+      ctx.lineWidth = 1;
+      ctx.font = "10px 'JetBrains Mono', ui-monospace, monospace";
+      ctx.fillStyle = "rgba(148, 163, 184, 0.35)";
 
-  const pulseScale =
-    phase === "running" ? Math.min(1.08, 1 + (multiplier - 1) * 0.008) : 1;
+      const lines = 5;
+      for (let i = 0; i <= lines; i++) {
+        const y = PAD + ((height - PAD * 2) * i) / lines;
+        ctx.beginPath();
+        ctx.moveTo(PAD, y);
+        ctx.lineTo(width - PAD, y);
+        ctx.stroke();
+
+        const labelMult =
+          1 + ((engine.viewportMax - 1) * (lines - i)) / lines;
+        ctx.fillText(`${labelMult.toFixed(1)}x`, PAD + 6, y - 5);
+      }
+
+      ctx.strokeStyle = "rgba(139, 92, 246, 0.06)";
+      const cols = 6;
+      for (let i = 0; i <= cols; i++) {
+        const x = PAD + ((width - PAD * 2) * i) / cols;
+        ctx.beginPath();
+        ctx.moveTo(x, PAD);
+        ctx.lineTo(x, height - PAD);
+        ctx.stroke();
+      }
+
+      if (engine.phase === "running" && engine.trail.length > 1) {
+        const elapsed =
+          engine.trail[engine.trail.length - 1]?.elapsedMs ?? 0;
+        const scrollX = elapsedToX(elapsed, timeWindow, width, PAD) - PAD;
+        if (scrollX > width * 0.55) {
+          ctx.strokeStyle = "rgba(0, 255, 163, 0.04)";
+          ctx.setLineDash([4, 8]);
+          const originX = PAD - (scrollX - width * 0.55);
+          ctx.beginPath();
+          ctx.moveTo(originX, PAD);
+          ctx.lineTo(originX, height - PAD);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+    };
+
+    const drawBackground = () => {
+      const bg = ctx.createLinearGradient(0, 0, 0, height);
+      bg.addColorStop(0, "rgba(12, 10, 22, 0.95)");
+      bg.addColorStop(1, "rgba(6, 7, 11, 0.98)");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, width, height);
+
+      const engine = engineRef.current;
+      if (engine.crashFlash > 0) {
+        ctx.fillStyle = `rgba(255, 59, 92, ${engine.crashFlash * 0.22})`;
+        ctx.fillRect(0, 0, width, height);
+        engine.crashFlash = Math.max(0, engine.crashFlash - 0.045);
+      }
+    };
+
+    const drawBettingIdle = () => {
+      const y = multiplierToY(1, 2.5, height, PAD);
+      const pulse = 0.35 + Math.sin(performance.now() / 400) * 0.15;
+      ctx.strokeStyle = `rgba(59, 130, 246, ${pulse})`;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 10]);
+      ctx.beginPath();
+      ctx.moveTo(PAD, y);
+      ctx.lineTo(width - PAD, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    };
+
+    const drawHeadMarker = (
+      headX: number,
+      headY: number,
+      angle: number,
+      palette: ReturnType<typeof getCrashPalette>,
+    ) => {
+      ctx.save();
+      ctx.translate(headX, headY);
+      ctx.rotate(angle);
+      ctx.beginPath();
+      ctx.moveTo(10, 0);
+      ctx.lineTo(-6, -5);
+      ctx.lineTo(-3, 0);
+      ctx.lineTo(-6, 5);
+      ctx.closePath();
+      ctx.fillStyle = palette.head;
+      ctx.shadowColor = palette.glow;
+      ctx.shadowBlur = 14;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    };
+
+    const drawCurve = (timeWindow: number) => {
+      const engine = engineRef.current;
+      const palette = getCrashPalette(
+        engine.displayMult,
+        engine.phase === "crashed",
+      );
+      const pts = engine.trail;
+      if (pts.length < 2) return;
+
+      const toX = (point: TrailPoint) =>
+        elapsedToX(point.elapsedMs, timeWindow, width, PAD);
+      const toY = (mult: number) =>
+        multiplierToY(mult, engine.viewportMax, height, PAD);
+
+      ctx.beginPath();
+      ctx.moveTo(toX(pts[0]), toY(pts[0].mult));
+      for (let i = 1; i < pts.length; i++) {
+        ctx.lineTo(toX(pts[i]), toY(pts[i].mult));
+      }
+
+      const last = pts.length - 1;
+      const headX = toX(pts[last]);
+      const headY = toY(pts[last].mult);
+
+      ctx.strokeStyle = palette.stroke;
+      ctx.lineWidth = 3;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.shadowColor = palette.glow;
+      ctx.shadowBlur = 16;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      ctx.lineTo(headX, height - PAD);
+      ctx.lineTo(toX(pts[0]), height - PAD);
+      ctx.closePath();
+      const fill = ctx.createLinearGradient(0, PAD, 0, height);
+      fill.addColorStop(0, palette.fillTop);
+      fill.addColorStop(1, "rgba(0, 0, 0, 0)");
+      ctx.fillStyle = fill;
+      ctx.fill();
+
+      const prev =
+        pts.length > 2 ? pts[pts.length - 2] : pts[pts.length - 1];
+      const prevX = toX(prev);
+      const prevY = toY(prev.mult);
+      const angle = Math.atan2(headY - prevY, headX - prevX);
+
+      const headGlow = ctx.createRadialGradient(
+        headX,
+        headY,
+        0,
+        headX,
+        headY,
+        28,
+      );
+      headGlow.addColorStop(0, palette.glow);
+      headGlow.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = headGlow;
+      ctx.beginPath();
+      ctx.arc(headX, headY, 28, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(headX, headY, 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = palette.head;
+      ctx.shadowColor = palette.glow;
+      ctx.shadowBlur = 10;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      if (engine.phase === "running") {
+        drawHeadMarker(headX, headY, angle, palette);
+      }
+    };
+
+    const drawParticles = () => {
+      const engine = engineRef.current;
+      engine.particles = stepParticles(engine.particles);
+      for (const p of engine.particles) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 90, 110, ${p.life * 0.9})`;
+        ctx.fill();
+      }
+    };
+
+    const updateLabel = () => {
+      const engine = engineRef.current;
+      const label = labelRef.current;
+      const sub = sublabelRef.current;
+      if (!label) return;
+
+      label.className = `crash-multiplier-lg ${engine.phase}`;
+
+      if (engine.phase === "betting") {
+        label.textContent = "Place your bets";
+        label.style.color = "";
+        label.style.textShadow = "";
+      } else if (engine.phase === "cooldown") {
+        label.textContent = "Next round starting...";
+        label.style.color = "";
+        label.style.textShadow = "";
+      } else {
+        label.textContent = `${engine.displayMult.toFixed(2)}x`;
+        const palette = getCrashPalette(
+          engine.displayMult,
+          engine.phase === "crashed",
+        );
+        label.style.color = palette.head;
+        label.style.textShadow = `0 0 24px ${palette.glow}, 0 0 48px ${palette.glow}`;
+      }
+
+      if (sub) {
+        if (engine.phase === "crashed") {
+          sub.textContent = `Crashed at ${engine.crashPoint.toFixed(2)}x`;
+          sub.hidden = false;
+        } else {
+          sub.hidden = true;
+        }
+      }
+    };
+
+    const tick = () => {
+      const engine = engineRef.current;
+      let timeWindow = engine.frozenTimeWindow;
+
+      if (engine.phase === "running" && engine.startedAt > 0) {
+        const elapsed = Date.now() - engine.startedAt;
+        engine.displayMult = multiplierAtElapsedMs(elapsed);
+        engine.viewportMax = computeViewportMax(
+          Math.max(engine.targetMult, engine.displayMult),
+          engine.viewportMax,
+        );
+        engine.trail.push({ mult: engine.displayMult, elapsedMs: elapsed });
+        timeWindow = computeTimeWindow(elapsed);
+        engine.frozenTimeWindow = timeWindow;
+
+        const trimBefore = elapsed - timeWindow * 1.05;
+        while (
+          engine.trail.length > 2 &&
+          engine.trail[0].elapsedMs < trimBefore
+        ) {
+          engine.trail.shift();
+        }
+      } else if (engine.phase === "crashed") {
+        timeWindow = engine.frozenTimeWindow;
+      }
+
+      ctx.clearRect(0, 0, width, height);
+      drawBackground();
+      drawGrid(timeWindow);
+
+      if (engine.phase === "betting" || engine.phase === "cooldown") {
+        drawBettingIdle();
+      }
+
+      if (engine.phase === "running" || engine.phase === "crashed") {
+        drawCurve(timeWindow);
+        if (engine.pendingBurst) {
+          const pts = engine.trail;
+          if (pts.length > 0) {
+            const last = pts[pts.length - 1];
+            const headX = elapsedToX(last.elapsedMs, timeWindow, width, PAD);
+            const headY = multiplierToY(
+              last.mult,
+              engine.viewportMax,
+              height,
+              PAD,
+            );
+            engine.particles = spawnCrashParticles(headX, headY);
+          }
+          engine.pendingBurst = false;
+        }
+        drawParticles();
+      }
+
+      updateLabel();
+      rafId = requestAnimationFrame(tick);
+    };
+
+    rafId = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      ro.disconnect();
+    };
+  }, []);
 
   return (
-    <div className="crash-chart-wrap">
-      <canvas ref={canvasRef} className="crash-chart-canvas" />
-      {phase === "running" && rocketPos.x > 0 && (
-        <div
-          className="crash-rocket-tracked"
-          style={{
-            left: rocketPos.x,
-            top: rocketPos.y,
-            transform: `translate(-50%, -50%) rotate(${rocketPos.angle - 45}deg)`,
-          }}
-          aria-hidden="true"
-        >
-          🚀
-        </div>
-      )}
+    <div ref={wrapRef} className="crash-chart-wrap">
+      <canvas ref={canvasRef} className="crash-chart-canvas" aria-hidden="true" />
       <div className="crash-chart-overlay">
-        <motion.div
+        <div
+          ref={labelRef}
           className={`crash-multiplier-lg ${phase}`}
-          key={phase === "running" ? Math.floor(multiplier * 10) : phase}
-          initial={{ scale: 0.95 }}
-          animate={{ scale: pulseScale }}
-          transition={{ duration: 0.1 }}
           aria-live="polite"
           aria-atomic="true"
-        >
-          {displayText}
-        </motion.div>
-        {phase === "crashed" && crashPoint && (
-          <p className="crash-crashed-label">Crashed at {crashPoint.toFixed(2)}x</p>
-        )}
+        />
+        <p ref={sublabelRef} className="crash-crashed-label" hidden />
       </div>
     </div>
   );

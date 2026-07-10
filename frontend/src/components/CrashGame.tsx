@@ -332,6 +332,7 @@ export function CrashGame({
             multiplier={multiplier}
             phase={phase}
             crashPoint={crashState?.crashPoint}
+            startedAt={crashState?.startedAt}
           />
         </div>
       </div>

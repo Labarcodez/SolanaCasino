@@ -887,11 +887,17 @@ input:focus-visible,
 /* Crash chart */
 .crash-chart-wrap {
   position: relative;
-  height: 340px;
-  border-radius: var(--radius);
+  height: min(42vh, 400px);
+  min-height: 280px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  border: 1px solid var(--border);
-  background: rgba(10, 11, 15, 0.6);
+  border: 1px solid var(--glass-border);
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(139, 92, 246, 0.08), transparent 70%),
+    rgba(6, 7, 11, 0.92);
+  box-shadow:
+    inset 0 0 80px rgba(0, 0, 0, 0.55),
+    0 8px 32px rgba(0, 0, 0, 0.35);
 }
 
 .crash-chart-canvas {
@@ -920,7 +926,11 @@ input:focus-visible,
 
 .crash-multiplier-lg.running {
   color: var(--solana-green);
-  text-shadow: 0 0 60px var(--solana-green-glow);
+  text-shadow:
+    0 0 24px var(--solana-green-glow),
+    0 0 64px rgba(0, 255, 163, 0.35);
+  font-variant-numeric: tabular-nums;
+  transition: color 0.2s ease, text-shadow 0.2s ease;
 }
 
 .crash-multiplier-lg.crashed {

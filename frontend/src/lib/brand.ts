@@ -8,7 +8,7 @@ export const BRAND = {
   domain: "orbit-casino.com",
   twitter: "@OrbitSolCasino",
   twitterUrl: "https://x.com/OrbitSolCasino",
-  discord: "https://discord.gg/orbitcasino",
+  discord: "https://discord.gg/tXHWmuQkS",
   docs: "https://docs.orbitcasino.app",
   supportEmail: "orbitsolanacasino@gmail.com",
   rtp: "95%",
