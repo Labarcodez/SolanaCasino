@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ConnectButton } from "@phantom/react-sdk";
+import { WalletConnectButton } from "./WalletConnectButton";
 import { PROGRAM_ID } from "../lib/api";
 import { isMobileBrowser, isPortalConfigured } from "../lib/phantomProviders";
 import { shortenAddress, solscanAccountUrl } from "../lib/utils";
@@ -81,7 +81,7 @@ export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
         <p>{BRAND.description}</p>
 
         <div className="landing-auth">
-          <ConnectButton />
+          <WalletConnectButton />
           <div className="landing-auth-methods">
             {portalReady ? (
               <>

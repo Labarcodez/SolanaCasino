@@ -1,4 +1,4 @@
-import { ConnectButton } from "@phantom/react-sdk";
+import { WalletConnectButton } from "./WalletConnectButton";
 import { formatSol } from "../lib/api";
 import { shortenAddress } from "../lib/utils";
 import { OnChainBadge } from "./OnChainBadge";
@@ -66,7 +66,7 @@ export function Header({
               Sign out
             </button>
           )}
-          <ConnectButton />
+          <WalletConnectButton />
         </div>
       </div>
     </header>
