@@ -1,10 +1,16 @@
 import { motion } from "framer-motion";
+import { Suspense, lazy } from "react";
+import { Link } from "react-router-dom";
 import { ConnectTrigger } from "./ConnectTrigger";
 import { PROGRAM_ID } from "../lib/api";
 import { isMobileBrowser, isPortalConfigured } from "../lib/phantomProviders";
 import { shortenAddress, solscanAccountUrl } from "../lib/utils";
 import { BRAND, GAMES, TRUST_BADGES } from "../lib/brand";
 import { CrashIcon, CoinflipIcon, LimboIcon, FairnessIcon } from "./icons/GameIcons";
+
+const CrashArena = lazy(() =>
+  import("./CrashArena").then((m) => ({ default: m.CrashArena })),
+);
 
 interface LandingProps {
   socialLoginEnabled?: boolean;
@@ -127,6 +133,39 @@ export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
           ))}
         </div>
       </motion.div>
+
+      <motion.section
+        className="landing-crash-hero container"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        aria-label="Live crash preview"
+      >
+        <div className="landing-crash-hero-header">
+          <div>
+            <p className="landing-crash-eyebrow">Live now</p>
+            <h2>Watch crash rounds in real time</h2>
+          </div>
+          <Link to="/crash" className="btn btn-outline btn-sm">
+            Open full game
+          </Link>
+        </div>
+        <Suspense
+          fallback={
+            <div className="landing-crash-skeleton" aria-busy="true">
+              <div className="spinner" />
+            </div>
+          }
+        >
+          <CrashArena
+            balanceSol={0}
+            minBetSol={0.001}
+            maxBetSol={1}
+            spectator
+            onBalanceUpdate={() => {}}
+          />
+        </Suspense>
+      </motion.section>
 
       <motion.div
         className="landing-steps"

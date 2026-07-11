@@ -15,6 +15,7 @@ import { FairnessModal } from "./FairnessModal";
 import { CrashBetStatusCard } from "./CrashBetStatusCard";
 import { CrashBetSlot, type CrashBetSlotIndex } from "./CrashBetSlot";
 import { ConnectTrigger } from "./ConnectTrigger";
+import { CrashAutoBetControl } from "./CrashAutoBetControl";
 
 interface CrashGameProps {
   balanceSol: number;
@@ -73,11 +74,41 @@ export function CrashGame({
   } | null>(null);
   const [celebrateWin, setCelebrateWin] = useState(false);
   const [fairnessOpen, setFairnessOpen] = useState(false);
+  const [autoBetEnabled, setAutoBetEnabled] = useState(false);
+  const [autoBetRounds, setAutoBetRounds] = useState("10");
+  const [autoBetStopProfit, setAutoBetStopProfit] = useState("");
+  const [autoBetStopLoss, setAutoBetStopLoss] = useState("");
+  const [autoBetRoundsLeft, setAutoBetRoundsLeft] = useState<number | null>(null);
+  const autoBetStartBalance = useRef(balanceSol);
   const lastPhaseRef = useRef<string>("betting");
+  const lastAutoBetRoundRef = useRef<string | null>(null);
   const lastTickRef = useRef(0);
 
   const phase = crashState?.phase ?? "betting";
   const multiplier = crashState?.multiplier ?? 1.0;
+  const sessionPnlSol = balanceSol - autoBetStartBalance.current;
+
+  const shouldStopAutoBet = () => {
+    const stopProfit = parseFloat(autoBetStopProfit);
+    const stopLoss = parseFloat(autoBetStopLoss);
+    if (!Number.isNaN(stopProfit) && stopProfit > 0 && sessionPnlSol >= stopProfit) {
+      return "profit target";
+    }
+    if (!Number.isNaN(stopLoss) && stopLoss > 0 && sessionPnlSol <= -stopLoss) {
+      return "loss limit";
+    }
+    if (autoBetRoundsLeft !== null && autoBetRoundsLeft <= 0) {
+      return "round limit";
+    }
+    return null;
+  };
+
+  const disableAutoBet = (reason: string) => {
+    setAutoBetEnabled(false);
+    setAutoBetRoundsLeft(null);
+    lastAutoBetRoundRef.current = null;
+    toast(`Auto-bet stopped (${reason})`, "info");
+  };
 
   const myBetForSlot = useCallback(
     (slot: CrashBetSlotIndex) =>
@@ -157,6 +188,31 @@ export function CrashGame({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, slots[0].pendingBet, slots[1].pendingBet]);
+
+  useEffect(() => {
+    if (spectator || !autoBetEnabled) return;
+    const stopReason = shouldStopAutoBet();
+    if (stopReason) {
+      disableAutoBet(stopReason);
+      return;
+    }
+    if (phase !== "betting") return;
+
+    const roundId = crashState?.id;
+    if (!roundId || lastAutoBetRoundRef.current === roundId) return;
+    if (hasActiveBetForSlot(0) || loadingSlot === 0) return;
+    if (slots[0].pendingBet !== null) return;
+
+    const amount = parseFloat(slots[0].betAmount);
+    if (Number.isNaN(amount) || amount < minBetSol || amount > maxBetSol) return;
+
+    lastAutoBetRoundRef.current = roundId;
+    void placeBetInternal(amount, 0);
+    if (autoBetRoundsLeft !== null) {
+      setAutoBetRoundsLeft((n) => (n === null ? n : Math.max(0, n - 1)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, autoBetEnabled, spectator, crashState?.id]);
 
   const placeBetInternal = async (
     amount: number,
@@ -423,9 +479,36 @@ export function CrashGame({
         </div>
 
         {!spectator && (
-          <p className="crash-shortcuts-hint" aria-hidden="true">
-            Space = cash out Bet A (or B) · Enter = place Bet A
-          </p>
+          <>
+            <CrashAutoBetControl
+              enabled={autoBetEnabled}
+              rounds={autoBetRounds}
+              stopProfitSol={autoBetStopProfit}
+              stopLossSol={autoBetStopLoss}
+              sessionPnlSol={sessionPnlSol}
+              roundsRemaining={autoBetRoundsLeft}
+              disabled={loadingSlot !== null}
+              onEnabledChange={(enabled) => {
+                if (enabled) {
+                  autoBetStartBalance.current = balanceSol;
+                  lastAutoBetRoundRef.current = null;
+                  const total = parseInt(autoBetRounds, 10);
+                  setAutoBetRoundsLeft(
+                    Number.isNaN(total) || total <= 0 ? null : total,
+                  );
+                } else {
+                  setAutoBetRoundsLeft(null);
+                }
+                setAutoBetEnabled(enabled);
+              }}
+              onRoundsChange={setAutoBetRounds}
+              onStopProfitChange={setAutoBetStopProfit}
+              onStopLossChange={setAutoBetStopLoss}
+            />
+            <p className="crash-shortcuts-hint" aria-hidden="true">
+              Space = cash out Bet A (or B) · Enter = place Bet A
+            </p>
+          </>
         )}
       </div>
 

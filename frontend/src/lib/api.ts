@@ -326,6 +326,31 @@ export async function playCoinflip(
   return data;
 }
 
+export type TransactionType = "bet" | "deposit" | "withdrawal";
+
+export interface TransactionRecord {
+  id: string;
+  type: TransactionType;
+  amountSol: number;
+  payoutSol?: number;
+  game?: string;
+  multiplier?: number | null;
+  result?: string | null;
+  signature?: string | null;
+  status?: string;
+  createdAt: string;
+}
+
+export async function fetchTransactions(
+  walletAddress: string,
+  type?: TransactionType,
+): Promise<TransactionRecord[]> {
+  const query = type ? `?type=${type}` : "";
+  const res = await apiFetch(`/api/transactions/${walletAddress}${query}`);
+  if (!res.ok) throw new Error("Failed to load transactions");
+  return res.json();
+}
+
 export interface BetHistory {
   id: string;
   game: string;

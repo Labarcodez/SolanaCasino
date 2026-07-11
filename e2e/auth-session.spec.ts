@@ -11,7 +11,7 @@ test.describe("Session persistence", () => {
       localStorage.setItem("solcasino_auth_token", storedToken);
     }, token);
 
-    await page.goto("/");
+    await page.goto("/crash");
 
     await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
     await expect(page.getByText(TEST_WALLET.slice(0, 4))).toBeVisible();
@@ -26,7 +26,7 @@ test.describe("Session persistence", () => {
   });
 
   test("landing page loads for new visitors", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/leaderboard");
     await expect(page.getByText("Crash. Limbo. Flip.")).toBeVisible();
   });
 });

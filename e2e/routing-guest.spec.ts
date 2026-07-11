@@ -1,6 +1,12 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Clean URL routing", () => {
+  test("redirects / to /crash for guests", async ({ page }) => {
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/crash$/);
+    await expect(page.getByText("Spectator mode")).toBeVisible();
+  });
+
   test("serves crash game at /crash for guests", async ({ page }) => {
     await page.goto("/crash");
     await expect(page).toHaveURL(/\/crash$/);
@@ -83,6 +89,9 @@ test.describe("Fairness deep links", () => {
 
   test("opens fairness panel from /verify route", async ({ page }) => {
     await page.goto("/verify?verify=crash");
+    await expect(
+      page.getByRole("heading", { name: "Provably Fair" }),
+    ).toBeVisible();
     await expect(page.getByRole("button", { name: "Verify Crash" })).toBeVisible();
   });
 });

@@ -1,8 +1,8 @@
 import { lazy, Suspense, useState } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useSearchParams } from "react-router-dom";
 import { Header } from "./components/Header";
 import { Landing } from "./components/Landing";
-import { BetHistoryPanel } from "./components/BetHistoryPanel";
+import { TransactionHistoryPanel } from "./components/TransactionHistoryPanel";
 import { AnimatedBackground } from "./components/AnimatedBackground";
 import { MobileNav } from "./components/MobileNav";
 import { useCasino, CasinoUserProvider } from "./hooks/CasinoUserProvider";
@@ -20,7 +20,7 @@ import { ConfigErrorScreen } from "./components/ConfigErrorScreen";
 import { GameErrorBoundary } from "./components/GameErrorBoundary";
 import type { UserProfile } from "./lib/api";
 import { shortenAddress } from "./lib/api";
-import { useGameTab } from "./hooks/useGameTab";
+import { useGameTab, parseGameTab, tabToPath } from "./hooks/useGameTab";
 import { GuestGameShell, isGuestGameTab } from "./components/GuestGameShell";
 import { SocketStatusBanner } from "./components/SocketStatusBanner";
 import { ZeroBalanceBanner } from "./components/ZeroBalanceBanner";
@@ -110,7 +110,6 @@ function CasinoApp() {
 }
 
 const CASINO_ROUTES = [
-  "/",
   "/crash",
   "/coinflip",
   "/limbo",
@@ -445,7 +444,7 @@ function CasinoContent() {
                 />
               </Suspense>
             </GameErrorBoundary>
-            <BetHistoryPanel walletAddress={walletAddress} />
+            <TransactionHistoryPanel walletAddress={walletAddress} />
           </div>
         ) : activeTab === "wallet" && config && profile ? (
           <Suspense fallback={<TabLoader />}>
@@ -506,7 +505,7 @@ function CasinoContent() {
               )}
             </div>
             <aside className="sidebar-panels">
-              <BetHistoryPanel walletAddress={walletAddress} />
+              <TransactionHistoryPanel walletAddress={walletAddress} />
             </aside>
           </div>
         ) : (
@@ -560,6 +559,22 @@ function CasinoContent() {
   );
 }
 
+function RootRedirect() {
+  const [searchParams] = useSearchParams();
+
+  const legacyTab = searchParams.get("tab");
+  if (legacyTab) {
+    const tab = parseGameTab(legacyTab);
+    const target = tabToPath(tab);
+    const next = new URLSearchParams(searchParams);
+    next.delete("tab");
+    const query = next.toString();
+    return <Navigate to={query ? `${target}?${query}` : target} replace />;
+  }
+
+  return <Navigate to="/crash" replace />;
+}
+
 function CasinoRoot() {
   const { isAuthenticated } = useCasino();
   const socketMode = isAuthenticated ? "authenticated" : "spectator";
@@ -589,8 +604,9 @@ export default function App() {
             <Route path="/preview-admin" element={<ScreenshotPreviewAdmin />} />
           </>
         ) : (
-          <Route path="/preview*" element={<Navigate to="/" replace />} />
+          <Route path="/preview*" element={<Navigate to="/crash" replace />} />
         )}
+        <Route path="/" element={<RootRedirect />} />
         {CASINO_ROUTES.map((path) => (
           <Route key={path} path={path} element={<CasinoApp />} />
         ))}

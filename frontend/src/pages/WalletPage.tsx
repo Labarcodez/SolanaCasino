@@ -1,6 +1,6 @@
 import { PageHeader } from "../components/PageHeader";
 import { WalletPanel } from "../components/WalletPanel";
-import { BetHistoryPanel } from "../components/BetHistoryPanel";
+import { TransactionHistoryPanel } from "../components/TransactionHistoryPanel";
 import type { PendingWalletTx, WalletActionPhase } from "../hooks/useCasinoUser";
 
 interface WalletPageProps {
@@ -96,7 +96,7 @@ export function WalletPage({
           return result;
         }}
       />
-      <BetHistoryPanel walletAddress={walletAddress} />
+      <TransactionHistoryPanel walletAddress={walletAddress} />
     </div>
   );
 }

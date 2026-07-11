@@ -55,9 +55,9 @@ Sources: [SolPump](https://solpump.io/), [crash dual-bet rules](https://crashgam
 6. ~~**Public `/verify` route**~~ ✅ alias to fairness panel
 
 **Tier 2 — Core depth**
-7. **Auto-bet strategies** — stop-on-win/loss, N rounds (Stake auto-mode style, not martingale by default)
-8. **Transaction history UI** — filterable bets/deposits/withdrawals
-9. **Landing hero** — embedded live crash spectator
+7. ~~**Auto-bet strategies**~~ ✅ stop profit/loss, N rounds on Bet A
+8. ~~**Transaction history UI**~~ ✅ filterable bets/deposits/withdrawals
+9. ~~**Landing hero**~~ ✅ embedded live crash spectator
 10. ~~**Mobile crash layout**~~ ✅ chat/bets bottom sheets on mobile
 
 **Tier 3 — Optional**
@@ -132,4 +132,4 @@ Sources: [SolPump](https://solpump.io/), [crash dual-bet rules](https://crashgam
 
 ## Summary
 
-Orbit competes on **game feel + trust + deposit UX**, not gamification loops or non-custodial wallet betting. Unified connect modal and mobile crash sheets are live. Next wins: **auto-bet strategies**, **tx history**, and **landing hero**.
+Orbit competes on **game feel + trust + deposit UX**, not gamification loops or non-custodial wallet betting. Tier 2 is live: **auto-bet**, **tx history**, **landing crash hero**, and **`/` → `/crash` redirect**. Next: leaderboard/tournament nav polish and auth game E2E.

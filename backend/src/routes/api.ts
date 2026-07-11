@@ -1096,6 +1096,118 @@ apiRouter.get("/tournament", (_req, res) => {
 });
 
 apiRouter.get(
+  "/transactions/:walletAddress",
+  requireAuth,
+  requireMatchingWallet,
+  (req, res) => {
+    const walletAddress = req.params.walletAddress;
+    const typeFilter = req.query.type as string | undefined;
+
+    const bets = db
+      .prepare(
+        `SELECT id, game, amount_lamports, payout_lamports, multiplier, result, created_at
+         FROM bets WHERE wallet_address = ? ORDER BY created_at DESC LIMIT 50`,
+      )
+      .all(walletAddress) as Array<{
+        id: string;
+        game: string;
+        amount_lamports: number;
+        payout_lamports: number;
+        multiplier: number | null;
+        result: string | null;
+        created_at: string;
+      }>;
+
+    const deposits = db
+      .prepare(
+        `SELECT id, amount_lamports, signature, status, created_at
+         FROM deposits WHERE wallet_address = ? ORDER BY created_at DESC LIMIT 50`,
+      )
+      .all(walletAddress) as Array<{
+        id: string;
+        amount_lamports: number;
+        signature: string;
+        status: string;
+        created_at: string;
+      }>;
+
+    const withdrawals = db
+      .prepare(
+        `SELECT id, amount_lamports, signature, status, created_at
+         FROM withdrawals WHERE wallet_address = ? ORDER BY created_at DESC LIMIT 50`,
+      )
+      .all(walletAddress) as Array<{
+        id: string;
+        amount_lamports: number;
+        signature: string | null;
+        status: string;
+        created_at: string;
+      }>;
+
+    const records: Array<{
+      id: string;
+      type: string;
+      amountSol: number;
+      payoutSol?: number;
+      game?: string;
+      multiplier?: number | null;
+      result?: string | null;
+      signature?: string | null;
+      status?: string;
+      createdAt: string;
+    }> = [];
+
+    if (!typeFilter || typeFilter === "bet") {
+      for (const b of bets) {
+        records.push({
+          id: b.id,
+          type: "bet",
+          amountSol: lamportsToSol(b.amount_lamports),
+          payoutSol: lamportsToSol(b.payout_lamports),
+          game: b.game,
+          multiplier: b.multiplier,
+          result: b.result,
+          createdAt: b.created_at,
+        });
+      }
+    }
+
+    if (!typeFilter || typeFilter === "deposit") {
+      for (const d of deposits) {
+        records.push({
+          id: d.id,
+          type: "deposit",
+          amountSol: lamportsToSol(d.amount_lamports),
+          signature: d.signature,
+          status: d.status,
+          createdAt: d.created_at,
+        });
+      }
+    }
+
+    if (!typeFilter || typeFilter === "withdrawal") {
+      for (const w of withdrawals) {
+        records.push({
+          id: w.id,
+          type: "withdrawal",
+          amountSol: lamportsToSol(w.amount_lamports),
+          signature: w.signature,
+          status: w.status,
+          createdAt: w.created_at,
+        });
+      }
+    }
+
+    records.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+
+    res.json(records.slice(0, 50));
+  },
+);
+
+apiRouter.get(
   "/history/:walletAddress",
   requireAuth,
   requireMatchingWallet,

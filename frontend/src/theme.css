@@ -1667,6 +1667,114 @@ body {
   gap: 12px;
 }
 
+.crash-auto-bet {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-border);
+  background: rgba(8, 9, 14, 0.45);
+}
+
+.crash-auto-bet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.crash-auto-bet-remaining {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.crash-auto-bet-fields {
+  margin-top: 10px;
+}
+
+.crash-auto-bet-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.crash-auto-bet-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.crash-auto-bet-pnl {
+  margin: 10px 0 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.transaction-history-panel .transaction-history-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.transaction-history-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.landing-crash-hero {
+  width: 100%;
+  max-width: 960px;
+  margin: 32px auto 0;
+}
+
+.landing-crash-hero-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.landing-crash-eyebrow {
+  margin: 0 0 4px;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-bright);
+}
+
+.landing-crash-hero-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.landing-crash-skeleton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 280px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  background: rgba(8, 9, 14, 0.55);
+}
+
+@media (max-width: 720px) {
+  .crash-auto-bet-row {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-crash-hero-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
 @media (max-width: 720px) {
   .crash-dual-bet-grid {
     grid-template-columns: 1fr;
