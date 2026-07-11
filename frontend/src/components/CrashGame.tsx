@@ -14,6 +14,7 @@ import { WinCelebration } from "./WinCelebration";
 import { FairnessModal } from "./FairnessModal";
 import { CrashBetStatusCard } from "./CrashBetStatusCard";
 import { CrashBetSlot, type CrashBetSlotIndex } from "./CrashBetSlot";
+import { ConnectTrigger } from "./ConnectTrigger";
 
 interface CrashGameProps {
   balanceSol: number;
@@ -376,6 +377,12 @@ export function CrashGame({
             data-testid="spectator-connect-banner"
           >
             <p>Connect your wallet to place bets and cash out.</p>
+            <ConnectTrigger
+              intent="play"
+              label="Connect to bet"
+              size="sm"
+              testId="spectator-connect-trigger"
+            />
           </div>
         )}
 

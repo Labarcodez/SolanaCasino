@@ -51,14 +51,14 @@ Sources: [SolPump](https://solpump.io/), [crash dual-bet rules](https://crashgam
 2. ~~**Crash power UX**~~ ✅ PnL card, cashing out state, shortcuts, auto line on chart
 3. ~~**WebSocket reconnect banner**~~ ✅
 4. ~~**Optimistic balance + tx status banners**~~ ✅ Pending → Confirming + Solscan link
-5. **Unified connect modal** — Phantom / Google / Apple
+5. ~~**Unified connect modal**~~ ✅ Phantom / Google / Apple + sign-in step
 6. ~~**Public `/verify` route**~~ ✅ alias to fairness panel
 
 **Tier 2 — Core depth**
 7. **Auto-bet strategies** — stop-on-win/loss, N rounds (Stake auto-mode style, not martingale by default)
 8. **Transaction history UI** — filterable bets/deposits/withdrawals
 9. **Landing hero** — embedded live crash spectator
-10. **Mobile crash layout** — dual panels stack; chat/bets as bottom sheets
+10. ~~**Mobile crash layout**~~ ✅ chat/bets bottom sheets on mobile
 
 **Tier 3 — Optional**
 11. Jackpot / pooled rounds
@@ -84,7 +84,6 @@ Sources: [SolPump](https://solpump.io/), [crash dual-bet rules](https://crashgam
 - VIP rakeback, affiliate, tournament, 18 E2E tests
 
 ### Gaps
-- Connect modal fragmentation
 - Leaderboard/tournament nav visibility
 - Authenticated game-play E2E
 
@@ -110,11 +109,10 @@ Sources: [SolPump](https://solpump.io/), [crash dual-bet rules](https://crashgam
 
 ## Priority order
 
-1. Unified connect modal
-2. Mobile crash layout (bottom sheets)
-4. Auto-bet strategies (Stake-style auto mode)
-5. Transaction history UI
-6. Landing hero with live crash
+1. Auto-bet strategies (Stake-style auto mode)
+2. Transaction history UI
+3. Landing hero with live crash
+4. Unified connect modal polish (Portal app ID in prod)
 
 ---
 
@@ -134,4 +132,4 @@ Sources: [SolPump](https://solpump.io/), [crash dual-bet rules](https://crashgam
 
 ## Summary
 
-Orbit competes on **game feel + trust + deposit UX**, not gamification loops or non-custodial wallet betting. Dual bet is live. Next wins: **tx status banners**, **connect modal**, and **mobile crash layout**.
+Orbit competes on **game feel + trust + deposit UX**, not gamification loops or non-custodial wallet betting. Unified connect modal and mobile crash sheets are live. Next wins: **auto-bet strategies**, **tx history**, and **landing hero**.

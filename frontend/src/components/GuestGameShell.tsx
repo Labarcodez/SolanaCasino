@@ -5,7 +5,7 @@ import { AnimatedBackground } from "./AnimatedBackground";
 import { LiveActivityMarquee } from "./LiveActivityMarquee";
 import { SocketStatusBanner } from "./SocketStatusBanner";
 import { SiteFooter } from "./SiteFooter";
-import { WalletConnectButton } from "./WalletConnectButton";
+import { ConnectTrigger } from "./ConnectTrigger";
 import { GameErrorBoundary } from "./GameErrorBoundary";
 import { GameIcon } from "./icons/GameIcons";
 import { GAMES } from "../lib/brand";
@@ -56,7 +56,7 @@ export function GuestGameShell({
             outcomes.
           </p>
         </div>
-        <WalletConnectButton />
+        <ConnectTrigger intent="play" label="Connect to play" testId="guest-banner-connect" />
       </div>
 
       <nav className="guest-game-nav container" aria-label="Game preview tabs">
@@ -99,7 +99,7 @@ export function GuestGameShell({
               <p>{gameMeta.desc}</p>
               <p className="guest-game-preview-rtp">{gameMeta.rtp} RTP</p>
               <div className="guest-game-preview-cta">
-                <WalletConnectButton />
+                <ConnectTrigger intent="play" testId="guest-game-connect" />
                 <p className="guest-game-preview-hint">
                   Connect your wallet to play {gameMeta.name.toLowerCase()} with
                   instant settlement.

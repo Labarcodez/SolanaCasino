@@ -67,11 +67,11 @@ test.describe("Guest crash spectator", () => {
     ).not.toBeVisible();
   });
 
-  test("focus mode hides side panels", async ({ page }) => {
+  test("opens connect modal from spectator banner", async ({ page }) => {
     await page.goto("/crash");
-    const arena = page.locator(".crash-arena");
-    await page.getByTestId("crash-focus-toggle").click();
-    await expect(arena).toHaveClass(/crash-arena--focus/);
+    await page.getByTestId("spectator-connect-trigger").click();
+    await expect(page.getByTestId("connect-modal")).toBeVisible();
+    await expect(page.getByTestId("connect-phantom-extension")).toBeVisible();
   });
 });
 

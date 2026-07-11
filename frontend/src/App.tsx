@@ -6,6 +6,7 @@ import { BetHistoryPanel } from "./components/BetHistoryPanel";
 import { AnimatedBackground } from "./components/AnimatedBackground";
 import { MobileNav } from "./components/MobileNav";
 import { useCasino, CasinoUserProvider } from "./hooks/CasinoUserProvider";
+import { ConnectModalProvider } from "./context/ConnectModalContext";
 import { SocketProvider, useSocket } from "./hooks/useSocket";
 import { TreasuryBar } from "./components/TreasuryBar";
 import { LiveActivityMarquee } from "./components/LiveActivityMarquee";
@@ -22,6 +23,8 @@ import { shortenAddress } from "./lib/api";
 import { useGameTab } from "./hooks/useGameTab";
 import { GuestGameShell, isGuestGameTab } from "./components/GuestGameShell";
 import { SocketStatusBanner } from "./components/SocketStatusBanner";
+import { ZeroBalanceBanner } from "./components/ZeroBalanceBanner";
+import { ConnectTrigger } from "./components/ConnectTrigger";
 
 const CrashArena = lazy(() =>
   import("./components/CrashArena").then((m) => ({ default: m.CrashArena })),
@@ -99,7 +102,9 @@ const isDev = import.meta.env.DEV;
 function CasinoApp() {
   return (
     <CasinoUserProvider>
-      <CasinoRoot />
+      <ConnectModalProvider>
+        <CasinoRoot />
+      </ConnectModalProvider>
     </CasinoUserProvider>
   );
 }
@@ -177,8 +182,14 @@ function CasinoContent() {
                 Reconnect the same Phantom wallet to continue playing.
               </p>
               <p className="wallet-hint">
-                Use the Connect button in the header to restore your wallet connection.
+                Reconnect with the same wallet to continue playing.
               </p>
+              <ConnectTrigger
+                intent="play"
+                label="Connect wallet"
+                fullWidth
+                testId="welcome-back-connect"
+              />
               <button
                 type="button"
                 className="btn btn-outline"
@@ -327,6 +338,17 @@ function CasinoContent() {
       <LiveActivityMarquee />
       <TreasuryBar />
 
+      {config &&
+        (activeTab === "crash" ||
+          activeTab === "coinflip" ||
+          activeTab === "limbo") && (
+          <ZeroBalanceBanner
+            balanceSol={balanceSol}
+            minBetSol={config.minBetSol}
+            onGoToWallet={() => setActiveTab("wallet")}
+          />
+        )}
+
       <div className="container">
         <nav className="nav-tabs" aria-label="Game tabs">
           <button
@@ -419,7 +441,6 @@ function CasinoContent() {
                   balanceSol={balanceSol}
                   minBetSol={config.minBetSol}
                   maxBetSol={config.maxBetSol}
-                  onChainEnabled={onChainEnabled}
                   onBalanceUpdate={handleBalanceUpdate}
                 />
               </Suspense>

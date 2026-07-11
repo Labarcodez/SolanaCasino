@@ -66,7 +66,7 @@ export function Header({
               Sign out
             </button>
           )}
-          <WalletConnectButton />
+          {!connected && <WalletConnectButton />}
         </div>
       </div>
     </header>

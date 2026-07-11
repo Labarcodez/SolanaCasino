@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { WalletConnectButton } from "./WalletConnectButton";
+import { ConnectTrigger } from "./ConnectTrigger";
 import { PROGRAM_ID } from "../lib/api";
 import { isMobileBrowser, isPortalConfigured } from "../lib/phantomProviders";
 import { shortenAddress, solscanAccountUrl } from "../lib/utils";
@@ -81,7 +81,7 @@ export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
         <p>{BRAND.description}</p>
 
         <div className="landing-auth">
-          <WalletConnectButton />
+          <ConnectTrigger intent="play" label="Connect to play" size="lg" testId="landing-connect" />
           <div className="landing-auth-methods">
             {portalReady ? (
               <>
