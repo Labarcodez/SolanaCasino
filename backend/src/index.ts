@@ -257,14 +257,58 @@ crashEngine.on("cashout", ({ bet, multiplier }) => {
   });
 });
 
+const LEGACY_TAB_REDIRECTS: Record<string, string> = {
+  crash: "/crash",
+  coinflip: "/coinflip",
+  limbo: "/limbo",
+  leaderboard: "/leaderboard",
+  tournament: "/tournament",
+  fairness: "/fairness",
+  profile: "/profile",
+  wallet: "/wallet",
+  token: "/token",
+  launch: "/launch",
+  admin: "/admin",
+};
+
 const frontendDist = path.join(__dirname, "../../frontend/dist");
 if (config.serveFrontend && fs.existsSync(frontendDist)) {
+  app.get("/", (req, res) => {
+    const tab = req.query.tab;
+    if (typeof tab === "string") {
+      const target = LEGACY_TAB_REDIRECTS[tab];
+      if (target) {
+        const q = new URLSearchParams();
+        for (const [key, value] of Object.entries(req.query)) {
+          if (key === "tab" || value === undefined) continue;
+          if (Array.isArray(value)) {
+            for (const item of value) {
+              if (typeof item === "string") q.append(key, item);
+            }
+          } else if (typeof value === "string") {
+            q.set(key, value);
+          }
+        }
+        const qs = q.toString();
+        res.redirect(302, qs ? `${target}?${qs}` : target);
+        return;
+      }
+    }
+    res.redirect(302, "/crash");
+  });
+
   app.use(
     express.static(frontendDist, {
       maxAge: config.nodeEnv === "production" ? "7d" : 0,
+      setHeaders(res, filePath) {
+        if (filePath.endsWith("index.html")) {
+          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        }
+      },
     }),
   );
   app.get(/^(?!\/api).*/, (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.sendFile(path.join(frontendDist, "index.html"));
   });
   console.log(`Serving frontend from ${frontendDist}`);
