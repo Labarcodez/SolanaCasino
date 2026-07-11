@@ -35,7 +35,7 @@ export function Leaderboard() {
   };
 
   return (
-    <div className="card">
+    <div className="card" data-testid="leaderboard-panel">
       <PageHeader
         title="Leaderboard"
         subtitle="Top players by total wagered. Updates every 30 seconds."

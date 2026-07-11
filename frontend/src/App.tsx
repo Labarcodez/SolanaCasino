@@ -21,7 +21,7 @@ import { GameErrorBoundary } from "./components/GameErrorBoundary";
 import type { UserProfile } from "./lib/api";
 import { shortenAddress } from "./lib/api";
 import { useGameTab, parseGameTab, tabToPath } from "./hooks/useGameTab";
-import { GuestGameShell, isGuestGameTab } from "./components/GuestGameShell";
+import { GuestGameShell, isGuestAccessibleTab } from "./components/GuestGameShell";
 import { SocketStatusBanner } from "./components/SocketStatusBanner";
 import { ZeroBalanceBanner } from "./components/ZeroBalanceBanner";
 import { ConnectTrigger } from "./components/ConnectTrigger";
@@ -204,30 +204,12 @@ function CasinoContent() {
       );
     }
 
-    if (isGuestGameTab(activeTab)) {
+    if (isGuestAccessibleTab(activeTab)) {
       return (
         <GuestGameShell
           activeTab={activeTab}
           onChainEnabled={onChainEnabled}
         />
-      );
-    }
-
-    if (activeTab === "fairness") {
-      return (
-        <div className="app">
-          <AnimatedBackground />
-          <Header connected={false} onChainEnabled={onChainEnabled} />
-          <LiveActivityMarquee />
-          <main className="main-content">
-            <div className="container">
-              <Suspense fallback={<TabLoader />}>
-                <FairnessPanel />
-              </Suspense>
-            </div>
-          </main>
-          <SiteFooter />
-        </div>
       );
     }
 

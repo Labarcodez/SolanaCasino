@@ -1457,3 +1457,35 @@ apiRouter.post("/fairness/verify-limbo", (req, res) => {
     serverSeedHash: hashServerSeed(serverSeed),
   });
 });
+
+if (config.nodeEnv !== "production" && process.env.ENABLE_E2E_HELPERS === "true") {
+  apiRouter.post("/test/mint-session", (req, res) => {
+    const walletAddress = (req.body as { walletAddress?: string }).walletAddress;
+    if (!walletAddress || typeof walletAddress !== "string") {
+      res.status(400).json({ error: "walletAddress required" });
+      return;
+    }
+
+    getOrCreateUser(walletAddress);
+    const token = createSessionToken(walletAddress);
+    res.json({ token, walletAddress });
+  });
+
+  apiRouter.post("/test/seed-balance", requireAuth, (req: AuthenticatedRequest, res) => {
+    const amountSol = Number(
+      (req.body as { amountSol?: number }).amountSol ?? 0.1,
+    );
+    if (!Number.isFinite(amountSol) || amountSol <= 0 || amountSol > 10) {
+      res.status(400).json({ error: "amountSol must be between 0 and 10" });
+      return;
+    }
+
+    const walletAddress = req.walletAddress!;
+    getOrCreateUser(walletAddress);
+    const balanceLamports = updateBalance(
+      walletAddress,
+      solToLamports(amountSol),
+    );
+    res.json({ balanceSol: lamportsToSol(balanceLamports) });
+  });
+}

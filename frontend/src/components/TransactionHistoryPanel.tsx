@@ -51,7 +51,7 @@ export function TransactionHistoryPanel({
   }, [load]);
 
   return (
-    <div className="card transaction-history-panel">
+    <div className="card transaction-history-panel" data-testid="transaction-history-panel">
       <div className="transaction-history-header">
         <h3 className="card-title">Transaction history</h3>
         <div className="transaction-history-filters" role="tablist">

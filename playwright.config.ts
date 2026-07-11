@@ -30,6 +30,7 @@ export default defineConfig({
           ...process.env,
           NODE_ENV: "development",
           SERVE_FRONTEND: "true",
+          ENABLE_E2E_HELPERS: "true",
         },
       },
 });

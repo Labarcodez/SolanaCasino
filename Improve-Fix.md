@@ -84,8 +84,11 @@ Sources: [SolPump](https://solpump.io/), [crash dual-bet rules](https://crashgam
 - VIP rakeback, affiliate, tournament, 18 E2E tests
 
 ### Gaps
-- Leaderboard/tournament nav visibility
-- Authenticated game-play E2E
+- None blocking launch — continue optional Tier 3 polish
+
+### Done (Tier 3 polish)
+- ~~Leaderboard/tournament nav visibility~~ ✅ guest routes + mobile primary nav
+- ~~Authenticated game-play E2E~~ ✅ phantom mock + dev session helpers
 
 ---
 
@@ -132,4 +135,4 @@ Sources: [SolPump](https://solpump.io/), [crash dual-bet rules](https://crashgam
 
 ## Summary
 
-Orbit competes on **game feel + trust + deposit UX**, not gamification loops or non-custodial wallet betting. Tier 2 is live: **auto-bet**, **tx history**, **landing crash hero**, and **`/` → `/crash` redirect**. Next: leaderboard/tournament nav polish and auth game E2E.
+Orbit competes on **game feel + trust + deposit UX**, not gamification loops or non-custodial wallet betting. Tier 2 is live plus **guest leaderboard/tournament**, **mobile nav polish**, and **auth gameplay E2E**.

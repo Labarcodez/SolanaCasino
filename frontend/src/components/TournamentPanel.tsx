@@ -29,7 +29,7 @@ export function TournamentPanel() {
   const hoursLeft = Math.floor((endsIn % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
 
   return (
-    <div className="card tournament-panel">
+    <div className="card tournament-panel" data-testid="tournament-panel">
       <PageHeader
         title="Weekly Tournament"
         subtitle="Top wagerers split the prize pool — prizes auto-paid when the week ends"
