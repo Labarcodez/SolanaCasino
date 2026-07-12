@@ -26,7 +26,11 @@ export function generateOnChainCrashPoint(
   const hash = crypto.createHash("sha256").update(combined).digest("hex");
   const h = parseInt(hash.slice(0, 13), 16);
   const e = Math.pow(2, 52);
-  if (h % 33 === 0) return 1.0;
+  const houseMod = Math.max(
+    2,
+    parseInt(process.env.CRASH_HOUSE_MOD ?? "20", 10) || 20,
+  );
+  if (h % houseMod === 0) return 1.0;
   const result = Math.floor((100 * e - h) / (e - h)) / 100;
   // Cap must match crash curve MAX (multiplierAtElapsedMs) or rounds never end.
   return Math.max(1.0, Math.min(result, 1000));
@@ -47,8 +51,8 @@ export function generateOnChainCoinflipResult(
 }
 
 /**
- * Provably fair crash point generation (95% RTP / 5% house edge).
- * Uses server seed + round id + client seeds combined.
+ * Provably fair crash point generation (~5% house edge).
+ * Instant 1.00× when hash % 20 === 0 (1/20 ≈ 5%).
  */
 export function generateCrashPoint(
   serverSeed: string,
@@ -60,7 +64,12 @@ export function generateCrashPoint(
   const h = parseInt(hash.slice(0, 13), 16);
   const e = Math.pow(2, 52);
 
-  if (h % 33 === 0) {
+  // ~5% house edge (was 33 ≈ 3%). Env override for tuning.
+  const houseMod = Math.max(
+    2,
+    parseInt(process.env.CRASH_HOUSE_MOD ?? "20", 10) || 20,
+  );
+  if (h % houseMod === 0) {
     return 1.0;
   }
 
@@ -91,8 +100,12 @@ export function verifyCrashPoint(
   return generateCrashPoint(serverSeed, roundId, clientSeeds) === crashPoint;
 }
 
-/** Limbo: roll 0–9999, win if roll < winChanceBps. 2% house edge on limbo (98% RTP). */
-export const LIMBO_HOUSE_EDGE = 0.02;
+/** Limbo: roll 0–9999, win if roll < winChanceBps. Default 5% house (95% RTP). */
+export const LIMBO_HOUSE_EDGE = (() => {
+  const raw = parseFloat(process.env.LIMBO_HOUSE_EDGE ?? "0.05");
+  if (Number.isFinite(raw) && raw >= 0 && raw < 0.5) return raw;
+  return 0.05;
+})();
 
 export function generateLimboRoll(
   serverSeed: string,
@@ -168,7 +181,7 @@ export function evaluateOnChainLimboBet(params: {
     params.walletAddress,
     params.clientSeedHex,
   );
-  const edgeBps = params.houseEdgeBps ?? 200;
+  const edgeBps = params.houseEdgeBps ?? Math.floor(LIMBO_HOUSE_EDGE * 10000);
   const targetMilli = Math.floor(params.targetMultiplier * 1000);
   const winChanceBps = Math.floor(((10000 - edgeBps) * 1000) / targetMilli);
   const won = roll < winChanceBps;

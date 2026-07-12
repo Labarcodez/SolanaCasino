@@ -229,7 +229,7 @@ export function Landing({
           <div className="landing-stat-label">Crash RTP</div>
         </div>
         <div className="landing-stat">
-          <div className="landing-stat-value">98%</div>
+          <div className="landing-stat-value">95%</div>
           <div className="landing-stat-label">Limbo RTP</div>
         </div>
         <div className="landing-stat">

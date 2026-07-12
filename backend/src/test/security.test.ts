@@ -378,7 +378,7 @@ async function testLimboRejectsLowTarget(): Promise<void> {
     token,
   );
   assert.equal(limboRes.status, 400);
-  assert.match(limboRes.data.error ?? "", /1\.25x/i);
+  assert.match(limboRes.data.error ?? "", /2x/i);
 }
 
 async function run(): Promise<void> {
@@ -411,7 +411,7 @@ async function run(): Promise<void> {
   console.log("  ✓ pause blocks limbo bets");
 
   await testLimboRejectsLowTarget();
-  console.log("  ✓ limbo rejects target below 1.25x");
+  console.log("  ✓ limbo rejects target below 2x");
 
   await testAdminUsersRequiresAuth();
   console.log("  ✓ admin user balances require admin auth");

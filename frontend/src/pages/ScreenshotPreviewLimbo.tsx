@@ -47,7 +47,7 @@ export function ScreenshotPreviewLimbo() {
           </div>
           <aside className="sidebar-panels">
             <div className="card">
-              <PageHeader title="98% RTP" subtitle="2% house edge volume game" />
+              <PageHeader title="95% RTP" subtitle="5% house edge · 2× min target" />
               <p className="text-muted">Provably fair rolls verified on-chain.</p>
             </div>
           </aside>

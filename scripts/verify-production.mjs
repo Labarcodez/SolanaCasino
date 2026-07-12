@@ -49,10 +49,10 @@ try {
   if (config.ok && config.json) {
     const c = config.json;
     pass("Config", `cluster=${c.cluster}`);
-    if (typeof c.limboMinTarget === "number" && c.limboMinTarget >= 1.25) {
+    if (typeof c.limboMinTarget === "number" && c.limboMinTarget >= 2) {
       pass("Limbo min target", `${c.limboMinTarget}x`);
     } else {
-      fail("Limbo min target", `expected >= 1.25, got ${c.limboMinTarget}`);
+      fail("Limbo min target", `expected >= 2, got ${c.limboMinTarget}`);
     }
     if (c.socialLoginEnabled) {
       pass("Phantom social login", "configured");

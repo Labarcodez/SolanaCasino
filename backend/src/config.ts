@@ -69,7 +69,7 @@ export const config = {
   jwtSecret:
     process.env.JWT_SECRET ??
     "dev-only-change-in-production-do-not-use-in-prod",
-  houseEdge: parseFloat(process.env.HOUSE_EDGE ?? "0.05"),
+  houseEdge: parseFloat(process.env.HOUSE_EDGE ?? "0.06"),
   minBetSol: parseFloat(process.env.MIN_BET_SOL ?? "0.001"),
   maxBetSol: parseFloat(process.env.MAX_BET_SOL ?? "10"),
   minWithdrawSol: parseFloat(process.env.MIN_WITHDRAW_SOL ?? "0.01"),

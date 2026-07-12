@@ -14,11 +14,11 @@ test.describe("Production smoke", () => {
     expect(body.status).toMatch(/ok|degraded/);
   });
 
-  test("API config exposes limbo min target >= 1.25", async ({ request }) => {
+  test("API config exposes limbo min target >= 2", async ({ request }) => {
     const res = await request.get(`${baseURL}/api/config`);
     expect(res.ok()).toBeTruthy();
     const config = await res.json();
-    expect(config.limboMinTarget).toBeGreaterThanOrEqual(1.25);
+    expect(config.limboMinTarget).toBeGreaterThanOrEqual(2);
     expect(config.minBetSol).toBeGreaterThan(0);
   });
 

@@ -220,7 +220,7 @@ export function FairnessPanel({
               className="input"
               type="number"
               step="0.01"
-              min="1.25"
+              min="2"
               value={targetMultiplier}
               onChange={(e) => setTargetMultiplier(e.target.value)}
             />

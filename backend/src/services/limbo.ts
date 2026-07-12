@@ -11,7 +11,11 @@ import { recordAffiliateCommission } from "./affiliate.js";
 import { accrueRakeback } from "./vip.js";
 import { recordTournamentWager } from "./tournament.js";
 
-const MIN_TARGET = 1.25;
+const MIN_TARGET = (() => {
+  const raw = parseFloat(process.env.LIMBO_MIN_TARGET ?? "2");
+  if (Number.isFinite(raw) && raw >= 1.01) return raw;
+  return 2;
+})();
 const MAX_TARGET = 1000;
 
 export function validateLimboTarget(targetMultiplier: number): void {

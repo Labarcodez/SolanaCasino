@@ -17,7 +17,7 @@ const PAGE_SEO: Partial<
   limbo: {
     title: "Limbo",
     description:
-      "Set your target multiplier and roll instant Limbo rounds with 98% RTP on Orbit Solana Casino.",
+      "Set your target multiplier and roll instant Limbo rounds with 95% RTP on Orbit Solana Casino.",
   },
   coinflip: {
     title: "Coinflip",

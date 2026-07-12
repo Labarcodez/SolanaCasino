@@ -32,7 +32,7 @@ interface LimboGameProps {
   spectator?: boolean;
 }
 
-const PRESET_TARGETS = [1.25, 1.5, 2, 3, 5, 10, 50, 100, 1000];
+const PRESET_TARGETS = [2, 3, 5, 10, 25, 50, 100, 1000];
 
 interface RollRecord {
   id: string;
@@ -45,9 +45,9 @@ export function LimboGame({
   balanceSol,
   minBetSol,
   maxBetSol,
-  limboMinTarget = 1.25,
+  limboMinTarget = 2,
   limboMaxTarget = 1000,
-  limboHouseEdge = 0.02,
+  limboHouseEdge = 0.05,
   onBalanceUpdate,
   spectator = false,
 }: LimboGameProps) {
@@ -241,7 +241,7 @@ export function LimboGame({
       <div className="game-header-row">
         <PageHeader
           title="Limbo"
-          subtitle={`${limboMinTarget.toFixed(2)}× min target · ${((1 - limboHouseEdge) * 100).toFixed(0)}% RTP · 2% house edge`}
+          subtitle={`${limboMinTarget.toFixed(2)}× min target · ${((1 - limboHouseEdge) * 100).toFixed(0)}% RTP · ${(limboHouseEdge * 100).toFixed(0)}% house edge`}
         />
         <button
           type="button"
