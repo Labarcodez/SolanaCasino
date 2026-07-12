@@ -2,7 +2,7 @@ import { PublicKey } from "@solana/web3.js";
 
 export const CASINO_WALLET =
   import.meta.env.VITE_CASINO_WALLET ??
-  "C9W7nGv2ZBJp4zcmtvBHkrtTPhB1FQ7JaNNPRNhiA4Ze";
+  "3BSEfRdZsZz87EDafo5rcY87uLt6RCbPqQZsmNMxYfcu";
 
 export const PROGRAM_ID = new PublicKey(
   import.meta.env.VITE_PROGRAM_ID ??
@@ -85,8 +85,9 @@ export interface CasinoConfig {
   limboMaxTarget?: number;
   withdrawalsEnabled: boolean;
   socialLoginEnabled?: boolean;
-  adminWallet?: string;
   casinoPaused?: boolean;
+  bettingBlocked?: boolean;
+  treasurySolvent?: boolean;
 }
 
 export interface UserProfile {
@@ -114,12 +115,42 @@ export interface UserProfile {
   referralLink?: string;
   referredCount?: number;
   pendingCommissionSol?: number;
+  isAdmin?: boolean;
+}
+
+async function readJsonResponse<T>(res: Response): Promise<T> {
+  const text = await res.text();
+  if (!text) {
+    if (!res.ok) {
+      throw new Error(
+        res.status === 429
+          ? "Too many requests. Please wait a minute and try again."
+          : `Request failed (${res.status})`,
+      );
+    }
+    return {} as T;
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    if (res.status === 429) {
+      throw new Error("Too many requests. Please wait a minute and try again.");
+    }
+    const snippet = text.length > 100 ? `${text.slice(0, 100)}…` : text;
+    throw new Error(
+      res.ok
+        ? "Invalid server response"
+        : `Request failed (${res.status}): ${snippet}`,
+    );
+  }
 }
 
 export async function fetchConfig(): Promise<CasinoConfig> {
   const res = await fetch(`${API_URL}/api/config`);
-  if (!res.ok) throw new Error("Failed to load config");
-  return res.json();
+  const data = await readJsonResponse<CasinoConfig & { error?: string }>(res);
+  if (!res.ok) throw new Error(data.error ?? "Failed to load config");
+  return data;
 }
 
 export async function requestAuthNonce(
@@ -130,8 +161,15 @@ export async function requestAuthNonce(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ walletAddress }),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? "Failed to get auth nonce");
+  const data = await readJsonResponse<{
+    nonce: string;
+    message: string;
+    error?: string;
+    code?: string;
+  }>(res);
+  if (!res.ok) {
+    throw new Error(data.error ?? "Failed to get auth nonce");
+  }
   return data;
 }
 
@@ -160,7 +198,13 @@ export async function verifyAuth(
       ...profile,
     }),
   });
-  const data = await res.json();
+  const data = await readJsonResponse<{
+    token: string;
+    walletAddress: string;
+    profile?: { displayName: string; email: string | null; authProvider: string };
+    error?: string;
+    code?: string;
+  }>(res);
   if (!res.ok) throw new Error(data.error ?? "Authentication failed");
   return data;
 }
@@ -339,13 +383,38 @@ export interface TransactionRecord {
   signature?: string | null;
   status?: string;
   createdAt: string;
+  verify?: BetVerifyParams;
+}
+
+export interface BetVerifyParams {
+  game: "crash" | "limbo" | "coinflip";
+  roundId?: string;
+  serverSeed?: string;
+  clientSeed?: string;
+  serverSeedHash?: string;
+  targetMultiplier?: number;
+  crashPoint?: number;
+}
+
+export interface TransactionsPage {
+  items: TransactionRecord[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
 }
 
 export async function fetchTransactions(
   walletAddress: string,
   type?: TransactionType,
-): Promise<TransactionRecord[]> {
-  const query = type ? `?type=${type}` : "";
+  offset = 0,
+  limit = 25,
+): Promise<TransactionsPage> {
+  const params = new URLSearchParams();
+  if (type) params.set("type", type);
+  params.set("offset", String(offset));
+  params.set("limit", String(limit));
+  const query = `?${params.toString()}`;
   const res = await apiFetch(`/api/transactions/${walletAddress}${query}`);
   if (!res.ok) throw new Error("Failed to load transactions");
   return res.json();
@@ -461,6 +530,18 @@ export async function uploadTokenMetadata(
   return res.json();
 }
 
+export interface LimboRecentRoll {
+  id: string;
+  multiplier: number;
+  won: boolean;
+}
+
+export async function fetchLimboRecent(): Promise<LimboRecentRoll[]> {
+  const res = await fetch(`${API_URL}/api/limbo/recent`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
 export interface CoinflipRecentFlip {
   id: string;
   result: "heads" | "tails";
@@ -473,15 +554,98 @@ export async function fetchCoinflipRecent(): Promise<CoinflipRecentFlip[]> {
   return res.json();
 }
 
+export interface OrbitTokenRewardRecent {
+  id: string;
+  winnerWallet: string;
+  claimedSol: number;
+  winnerSol: number;
+  treasuryKeepSol: number;
+  claimSignature: string;
+  payoutSignature: string | null;
+  createdAt: string;
+}
+
+export interface OrbitTokenRewardLottery {
+  enabled: boolean;
+  intervalMs: number;
+  winnerPercent: number;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  recent: OrbitTokenRewardRecent[];
+}
+
 export interface OrbitTokenInfo {
   mint: string | null;
+  launchPlatform: "bags" | "pump";
+  launchStatus: "coming_soon" | "live";
+  treasuryWallet: string;
+  bagsFmUrl: string | null;
+  bagsFmProfileUrl: string;
+  bagsApiConfigured: boolean;
+  bagsCreator: {
+    username: string;
+    displayName: string;
+    picture: string | null;
+    ticker: string | null;
+    profileUrl: string;
+  } | null;
+  bagsLiveStats: {
+    pool: {
+      tokenMint: string;
+      dbcPoolKey: string;
+      dammV2PoolKey: string | null;
+      migrated: boolean;
+    } | null;
+    lifetimeFeesSol: number | null;
+    creators: Array<{
+      wallet: string;
+      isCreator: boolean;
+      royaltyBps: number;
+      provider: string | null;
+      providerUsername: string | null;
+      bagsUsername: string | null;
+    }>;
+  } | null;
+  launchDateLabel: string;
   pumpProgramId: string;
   cluster: string;
+  rewardLottery?: OrbitTokenRewardLottery;
 }
 
 export async function fetchOrbitToken(): Promise<OrbitTokenInfo> {
   const res = await fetch(`${API_URL}/api/token/orbit`);
   if (!res.ok) throw new Error("Failed to load token info");
+  return res.json();
+}
+
+export interface JackpotInfo {
+  poolSol: number;
+  poolLamports: number;
+  contributionBps: number;
+  minCrashMultiplier: number;
+  lastPayout: {
+    roundId: string;
+    walletAddress: string;
+    amountSol: number;
+    cashoutMultiplier: number;
+    crashPoint: number;
+    createdAt: string;
+  } | null;
+}
+
+export async function fetchJackpot(): Promise<JackpotInfo> {
+  const res = await fetch(`${API_URL}/api/jackpot`);
+  if (!res.ok) throw new Error("Failed to load jackpot");
+  return res.json();
+}
+
+export interface CrashStats {
+  hourlyHigh: number;
+}
+
+export async function fetchCrashStats(): Promise<CrashStats> {
+  const res = await fetch(`${API_URL}/api/crash/stats`);
+  if (!res.ok) throw new Error("Failed to load crash stats");
   return res.json();
 }
 
@@ -624,6 +788,90 @@ export async function confirmCrashBet(params: {
   return data;
 }
 
+export interface TreasurySnapshot {
+  casinoWallet: string;
+  treasuryBalanceSol: number;
+  totalUserBalancesSol: number;
+  pendingWithdrawalsSol: number;
+  totalLiabilitiesSol: number;
+  treasurySurplusSol: number;
+  solvent: boolean;
+}
+
+export interface AdminUserBalance {
+  walletAddress: string;
+  displayName: string | null;
+  balanceSol: number;
+  totalWageredSol: number;
+  totalWonSol: number;
+  netPnlSol: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminProfitStats {
+  grossProfitSol: number;
+  rakebackPaidSol: number;
+  affiliatePaidSol: number;
+  jackpotPaidSol: number;
+  tournamentPaidSol: number;
+  netProfitSol: number;
+  handleSol: number;
+  betCount: number;
+  effectiveHoldPercent: number;
+}
+
+export interface AdminFlowStats {
+  depositsSol: number;
+  depositCount: number;
+  withdrawalsSol: number;
+  withdrawalCount: number;
+  netDepositSol: number;
+}
+
+export interface AdminGameStats {
+  game: string;
+  betCount: number;
+  handleSol: number;
+  grossProfitSol: number;
+  winRatePercent: number;
+}
+
+export interface AdminPlayerLeader {
+  walletAddress: string;
+  displayName: string | null;
+  handleSol: number;
+  netPnlSol: number;
+  betCount: number;
+}
+
+export type AdminPeriod = "1d" | "7d" | "30d" | "all";
+
+export interface AdminAnalytics {
+  period: AdminPeriod;
+  profit: AdminProfitStats;
+  flow: AdminFlowStats;
+  games: AdminGameStats[];
+  players: {
+    activeInPeriod: number;
+    newInPeriod: number;
+    total: number;
+  };
+  topWinners: AdminPlayerLeader[];
+  topLosers: AdminPlayerLeader[];
+}
+
+export interface AdminActivityItem {
+  id: string;
+  type: "bet" | "deposit" | "withdrawal";
+  walletAddress: string;
+  displayName: string | null;
+  amountSol: number;
+  payoutSol?: number;
+  detail: string;
+  createdAt: string;
+}
+
 export interface AdminDashboard {
   casinoPaused: boolean;
   onChainEnabled: boolean;
@@ -632,6 +880,12 @@ export interface AdminDashboard {
   totalBets: number;
   handle24hSol: number;
   grossRevenue24hSol: number;
+  netProfit24hSol: number;
+  netProfit7dSol: number;
+  netProfitAllTimeSol: number;
+  profitAllTime: AdminProfitStats;
+  flow7d: AdminFlowStats;
+  games7d: AdminGameStats[];
   pendingWithdrawals: Array<{
     id: string;
     walletAddress: string;
@@ -641,11 +895,63 @@ export interface AdminDashboard {
   tournamentPrizePoolSol: number;
   indexer: { enabled: boolean; lastSignature: string | null; indexedBets: number };
   adminWallet: string;
+  treasury: TreasurySnapshot;
 }
 
 export async function fetchAdminDashboard(): Promise<AdminDashboard> {
   const res = await apiFetch("/api/admin/dashboard");
   if (!res.ok) throw new Error("Failed to load admin dashboard");
+  return res.json();
+}
+
+export async function fetchAdminAnalytics(
+  period: AdminPeriod = "7d",
+): Promise<AdminAnalytics> {
+  const res = await apiFetch(`/api/admin/analytics?period=${period}`);
+  if (!res.ok) throw new Error("Failed to load admin analytics");
+  return res.json();
+}
+
+export async function fetchAdminActivity(params?: {
+  limit?: number;
+  offset?: number;
+  type?: "all" | "bet" | "deposit" | "withdrawal";
+  wallet?: string;
+}): Promise<{
+  items: AdminActivityItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}> {
+  const q = new URLSearchParams();
+  if (params?.limit) q.set("limit", String(params.limit));
+  if (params?.offset) q.set("offset", String(params.offset));
+  if (params?.type) q.set("type", params.type);
+  if (params?.wallet) q.set("wallet", params.wallet);
+  const query = q.toString();
+  const res = await apiFetch(`/api/admin/activity${query ? `?${query}` : ""}`);
+  if (!res.ok) throw new Error("Failed to load admin activity");
+  return res.json();
+}
+
+export async function fetchAdminUsers(params?: {
+  limit?: number;
+  offset?: number;
+  search?: string;
+}): Promise<{
+  users: AdminUserBalance[];
+  total: number;
+  limit: number;
+  offset: number;
+}> {
+  const q = new URLSearchParams();
+  if (params?.limit) q.set("limit", String(params.limit));
+  if (params?.offset) q.set("offset", String(params.offset));
+  if (params?.search) q.set("search", params.search);
+  const query = q.toString();
+  const res = await apiFetch(`/api/admin/users${query ? `?${query}` : ""}`);
+  if (!res.ok) throw new Error("Failed to load user balances");
   return res.json();
 }
 
@@ -702,6 +1008,8 @@ export async function fetchTournament(): Promise<TournamentData> {
 export interface CasinoStats {
   casinoWallet: string;
   casinoBalanceSol: number;
+  totalUserBalancesSol?: number;
+  treasurySurplusSol?: number;
   totalUsers: number;
   totalBets: number;
   handle24hSol: number;

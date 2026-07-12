@@ -4,8 +4,9 @@ import { Link } from "react-router-dom";
 import { ConnectTrigger } from "./ConnectTrigger";
 import { PROGRAM_ID } from "../lib/api";
 import { isMobileBrowser, isPortalConfigured } from "../lib/phantomProviders";
+import { getPhantomBrowseUrl } from "../lib/phantomMobile";
 import { shortenAddress, solscanAccountUrl } from "../lib/utils";
-import { BRAND, GAMES, TRUST_BADGES } from "../lib/brand";
+import { BRAND, GAMES, getTrustBadges, getClusterLabel } from "../lib/brand";
 import { CrashIcon, CoinflipIcon, LimboIcon, FairnessIcon } from "./icons/GameIcons";
 
 const CrashArena = lazy(() =>
@@ -15,6 +16,8 @@ const CrashArena = lazy(() =>
 interface LandingProps {
   socialLoginEnabled?: boolean;
   onChainEnabled?: boolean;
+  cluster?: string;
+  withdrawalsEnabled?: boolean;
 }
 
 const FEATURE_ICONS = {
@@ -31,34 +34,46 @@ const ACCENT_CLASS: Record<string, string> = {
   shield: "feature-card--shield",
 };
 
-const features = [
-  ...GAMES.map((g) => ({
-    icon: g.id as keyof typeof FEATURE_ICONS,
-    title: g.name,
-    desc: g.desc,
-    accent: ACCENT_CLASS[g.accent] ?? "feature-card--violet",
-    rtp: `${g.rtp} RTP`,
-  })),
-  {
-    icon: "shield" as const,
-    title: "Provably Fair",
-    desc: "Every outcome verifiable on-chain. Cryptographic seeds — no trust required.",
-    accent: "feature-card--shield",
-    rtp: "Verifiable",
-  },
-];
-
 const steps = [
-  { n: "01", title: "Connect", desc: "Phantom, Google, or Apple" },
-  { n: "02", title: "Deposit", desc: "SOL to vault PDA" },
+  { n: "01", title: "Connect", desc: "Phantom wallet" },
+  { n: "02", title: "Deposit", desc: "SOL to casino balance" },
   { n: "03", title: "Play", desc: "Crash, limbo & flip" },
-  { n: "04", title: "Withdraw", desc: "Instant to wallet" },
+  { n: "04", title: "Withdraw", desc: "Back to your wallet" },
 ];
 
-export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
+function connectStepDesc(portalReady: boolean): string {
+  return portalReady ? "Phantom, Google, or Apple" : "Phantom wallet";
+}
+export function Landing({
+  socialLoginEnabled,
+  onChainEnabled,
+  cluster,
+  withdrawalsEnabled,
+}: LandingProps) {
   const taglineParts = BRAND.tagline.split(".");
   const mobile = isMobileBrowser();
   const portalReady = socialLoginEnabled ?? isPortalConfigured();
+  const clusterLabel = getClusterLabel(cluster);
+  const trustBadges = getTrustBadges({ cluster, withdrawalsEnabled, onChainEnabled });
+
+  const features = [
+    ...GAMES.map((g) => ({
+      icon: g.id as keyof typeof FEATURE_ICONS,
+      title: g.name,
+      desc: g.desc,
+      accent: ACCENT_CLASS[g.accent] ?? "feature-card--violet",
+      rtp: `${g.rtp} RTP`,
+    })),
+    {
+      icon: "shield" as const,
+      title: "Provably Fair",
+      desc: onChainEnabled
+        ? "Commit-reveal seeds with on-chain settlement. Verify every round."
+        : "Commit-reveal cryptographic seeds. Verify outcomes in the Fairness tab.",
+      accent: "feature-card--shield",
+      rtp: "Verifiable",
+    },
+  ];
 
   return (
     <div className="landing">
@@ -72,10 +87,10 @@ export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
           {onChainEnabled ? (
             <>
               <span className="on-chain-dot" />
-              Anchor on-chain · Devnet
+              Anchor on-chain · {clusterLabel}
             </>
           ) : (
-            <>⚡ Instant Solana gaming</>
+            <>⚡ {clusterLabel} · deposit-first gaming</>
           )}
         </div>
 
@@ -97,7 +112,7 @@ export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
                 <span className="auth-method-pill">Extension</span>
               </>
             ) : mobile ? (
-              <span className="auth-method-pill">Install Phantom app</span>
+              <span className="auth-method-pill">Phantom App</span>
             ) : (
               <span className="auth-method-pill">Phantom Extension</span>
             )}
@@ -106,11 +121,9 @@ export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
 
         {!portalReady && mobile && (
           <p className="landing-hint">
-            On mobile, install the{" "}
-            <a href="https://phantom.app/download" target="_blank" rel="noopener noreferrer">
-              Phantom app
-            </a>{" "}
-            and use Google sign-in once the site operator enables Phantom Portal.
+            On mobile, tap{" "}
+            <a href={getPhantomBrowseUrl()}>Open in Phantom App</a> to connect
+            your wallet.
           </p>
         )}
 
@@ -125,7 +138,7 @@ export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
         )}
 
         <div className="landing-trust-strip">
-          {TRUST_BADGES.map((b) => (
+          {trustBadges.map((b) => (
             <span key={b.label} className="trust-badge">
               <span className="trust-badge-dot" />
               {b.label}
@@ -177,7 +190,9 @@ export function Landing({ socialLoginEnabled, onChainEnabled }: LandingProps) {
           <div key={s.n} className="landing-step">
             <span className="landing-step-n">{s.n}</span>
             <span className="landing-step-title">{s.title}</span>
-            <span className="landing-step-desc">{s.desc}</span>
+            <span className="landing-step-desc">
+              {s.n === "01" ? connectStepDesc(portalReady) : s.desc}
+            </span>
           </div>
         ))}
       </motion.div>

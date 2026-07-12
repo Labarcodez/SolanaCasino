@@ -21,6 +21,7 @@
     "start:prod": "SERVE_FRONTEND=true npm run start -w backend",
     "test": "npm run test -w backend",
     "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test e2e/smoke-production.spec.ts",
     "test:e2e:install": "playwright install chromium",
     "test:all": "npm run test && npm run test:e2e",
     "test:integration": "npm run build -w backend && npm run test -w backend",
@@ -28,15 +29,22 @@
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "aws:deploy": "pwsh -ExecutionPolicy Bypass -File scripts/aws-deploy.ps1",
+    "orbit:launch-dry-run": "tsx scripts/launch-orbit-bags.ts",
+    "orbit:launch": "tsx scripts/launch-orbit-bags.ts --confirm",
+    "orbit:wire-live": "pwsh -ExecutionPolicy Bypass -File scripts/wire-orbit-token-live.ps1",
     "aws:build": "node scripts/aws-build.mjs",
     "screenshots": "node scripts/capture-screenshots.mjs",
-    "verify": "bash scripts/verify.sh"
+    "verify": "bash scripts/verify.sh",
+    "verify:prod": "node scripts/verify-production.mjs",
+    "load:test": "node scripts/load-test.mjs"
   },
   "devDependencies": {
+    "@bagsfm/bags-sdk": "^1.4.0",
     "@playwright/test": "^1.61.1",
     "@types/react": "^19.2.3",
     "@types/react-dom": "^19.2.3",
     "concurrently": "^9.1.2",
-    "playwright": "^1.61.1"
+    "playwright": "^1.61.1",
+    "tsx": "^4.19.4"
   }
 }

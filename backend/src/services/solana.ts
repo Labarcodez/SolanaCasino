@@ -5,6 +5,7 @@ import {
   PublicKey,
   SystemProgram,
   Transaction,
+  VersionedTransaction,
 } from "@solana/web3.js";
 import bs58 from "bs58";
 import { config } from "../config.js";
@@ -70,6 +71,32 @@ if (config.casinoWalletPrivateKey) {
     }
   } catch {
     console.warn("Invalid CASINO_WALLET_PRIVATE_KEY — withdrawals disabled");
+  }
+}
+
+/** Fail loud in production when address / keypair / optional Vite mirror disagree. */
+export function assertCasinoWalletConsistency(): void {
+  const address = config.casinoWalletAddress;
+  if (!address) {
+    throw new Error("CASINO_WALLET_ADDRESS is required");
+  }
+  try {
+    new PublicKey(address);
+  } catch {
+    throw new Error(`Invalid CASINO_WALLET_ADDRESS: ${address}`);
+  }
+
+  if (config.casinoWalletPrivateKey && !casinoKeypair) {
+    const msg =
+      "CASINO_WALLET_PRIVATE_KEY is set but does not match CASINO_WALLET_ADDRESS (or is invalid)";
+    if (config.nodeEnv === "production") {
+      throw new Error(msg);
+    }
+    console.warn(msg);
+  }
+
+  if (casinoKeypair) {
+    console.log(`Casino keypair OK: ${casinoKeypair.publicKey.toBase58()}`);
   }
 }
 
@@ -383,6 +410,49 @@ export async function getCasinoWalletBalance(): Promise<number> {
 
 export function isWithdrawalEnabled(): boolean {
   return casinoKeypair !== null;
+}
+
+/** Sign and send a versioned tx as the casino wallet (Pump fee claims, etc.). */
+export async function sendCasinoVersionedTransaction(
+  serializedBase64: string,
+): Promise<{ signature: string }> {
+  if (!casinoKeypair) {
+    throw new Error("Casino wallet private key not configured");
+  }
+
+  const rawBytes = Buffer.from(serializedBase64, "base64");
+  let lastError: Error | null = null;
+
+  for (const endpoint of rpcEndpoints) {
+    try {
+      const conn = new Connection(endpoint, "confirmed");
+      const tx = VersionedTransaction.deserialize(rawBytes);
+      tx.sign([casinoKeypair]);
+      const signature = await conn.sendRawTransaction(tx.serialize(), {
+        skipPreflight: false,
+        maxRetries: 2,
+        preflightCommitment: "confirmed",
+      });
+
+      const confirmResult = await waitForSignatureConfirmation(
+        conn,
+        signature,
+        WITHDRAW_CONFIRM_TIMEOUT_MS,
+      );
+      if (confirmResult === "confirmed") {
+        return { signature };
+      }
+      if (confirmResult === "failed") {
+        throw new Error("Casino transaction failed on-chain");
+      }
+      throw new Error("Casino transaction confirmation timed out");
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.warn(`Casino tx RPC ${endpoint} failed:`, lastError.message);
+    }
+  }
+
+  throw lastError ?? new Error("Casino transaction failed on all RPC endpoints");
 }
 
 export async function getLatestBlockhashForClient(): Promise<{

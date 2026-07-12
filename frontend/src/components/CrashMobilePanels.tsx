@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 
 interface CrashMobilePanelsProps {
   chatPanel: ReactNode;
@@ -12,6 +13,7 @@ export function CrashMobilePanels({
   betsPanel,
 }: CrashMobilePanelsProps) {
   const [sheet, setSheet] = useState<Sheet>(null);
+  const dialogRef = useFocusTrap(sheet !== null, () => setSheet(null));
 
   return (
     <>
@@ -43,10 +45,12 @@ export function CrashMobilePanels({
             data-testid="crash-sheet-overlay"
           />
           <div
+            ref={dialogRef}
             className="crash-bottom-sheet"
             role="dialog"
             aria-label={sheet === "chat" ? "Live chat" : "Live bets"}
             data-testid="crash-bottom-sheet"
+            tabIndex={-1}
           >
             <div className="crash-bottom-sheet-header">
               <h3>{sheet === "chat" ? "Live Chat" : "Live Bets"}</h3>

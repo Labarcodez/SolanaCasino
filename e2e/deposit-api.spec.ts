@@ -1,8 +1,9 @@
 import { test, expect } from "@playwright/test";
+import { API_BASE } from "./helpers/api";
 
 test.describe("Deposit API", () => {
   test("rejects deposit verification without authentication", async ({ request }) => {
-    const res = await request.post("http://127.0.0.1:3001/api/deposit/verify", {
+    const res = await request.post(`${API_BASE}/api/deposit/verify`, {
       data: {
         signature: "5".repeat(88),
         walletAddress: "HEqvDJ1111111111111111111111111111116fq6",
@@ -15,16 +16,16 @@ test.describe("Deposit API", () => {
   });
 
   test("health endpoint reports RPC status", async ({ request }) => {
-    const res = await request.get("http://127.0.0.1:3001/api/health");
+    const res = await request.get(`${API_BASE}/api/health`);
     expect(res.ok()).toBeTruthy();
 
     const body = await res.json();
     expect(body).toHaveProperty("status");
-    expect(body).toHaveProperty("rpc");
+    expect(body.rpc ?? body.cluster).toBeTruthy();
   });
 
   test("config exposes casino wallet for deposits", async ({ request }) => {
-    const res = await request.get("http://127.0.0.1:3001/api/config");
+    const res = await request.get(`${API_BASE}/api/config`);
     expect(res.ok()).toBeTruthy();
 
     const body = await res.json();

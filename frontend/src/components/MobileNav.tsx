@@ -11,18 +11,18 @@ interface MobileNavProps {
 
 const PRIMARY_TABS: { id: GameTab; label: string; icon: GameIconId }[] = [
   { id: "crash", label: "Crash", icon: "crash" },
-  { id: "tournament", label: "Tourney", icon: "tournament" },
-  { id: "leaderboard", label: "Ranks", icon: "leaderboard" },
+  { id: "limbo", label: "Limbo", icon: "limbo" },
+  { id: "coinflip", label: "Flip", icon: "coinflip" },
   { id: "wallet", label: "Wallet", icon: "wallet" },
   { id: "profile", label: "Profile", icon: "profile" },
 ];
 
 const MORE_TABS: { id: GameTab; label: string; icon: GameIconId; adminOnly?: boolean }[] = [
-  { id: "limbo", label: "Limbo", icon: "limbo" },
-  { id: "coinflip", label: "Coinflip", icon: "coinflip" },
+  { id: "tournament", label: "Tourney", icon: "tournament" },
+  { id: "leaderboard", label: "Ranks", icon: "leaderboard" },
   { id: "fairness", label: "Fairness", icon: "fairness" },
   { id: "token", label: "Token", icon: "wallet" },
-  { id: "launch", label: "Launch", icon: "wallet" },
+  { id: "launch", label: "Launch", icon: "wallet", adminOnly: true },
   { id: "admin", label: "Admin", icon: "admin", adminOnly: true },
 ];
 

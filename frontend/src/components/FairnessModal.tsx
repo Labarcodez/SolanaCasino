@@ -1,4 +1,5 @@
 import { FairnessPanel } from "./FairnessPanel";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 
 export type FairnessGame = "crash" | "limbo" | "coinflip";
 
@@ -13,6 +14,8 @@ export function FairnessModal({
   onClose,
   initialGame = "crash",
 }: FairnessModalProps) {
+  const dialogRef = useFocusTrap(open, onClose);
+
   if (!open) return null;
 
   return (
@@ -22,6 +25,7 @@ export function FairnessModal({
       role="presentation"
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Provably fair verification"

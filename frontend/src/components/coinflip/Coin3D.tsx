@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { prefersReducedMotion } from "../../lib/reducedMotion";
 
 interface Coin3DProps {
   flipping: boolean;
@@ -29,6 +30,7 @@ function OrbitIcon() {
 }
 
 export function Coin3D({ flipping, result, won }: Coin3DProps) {
+  const reducedMotion = prefersReducedMotion();
   const resultRotation =
     result === "tails" ? 1800 + 180 : result === "heads" ? 1800 : 0;
 
@@ -39,16 +41,20 @@ export function Coin3D({ flipping, result, won }: Coin3DProps) {
           result && won !== null ? (won ? "coin-win" : "coin-loss") : ""
         }`}
         animate={
-          flipping
-            ? { rotateY: [0, 720, 1440, 1800] }
-            : result
-              ? { rotateY: resultRotation }
-              : { rotateY: 0 }
+          reducedMotion
+            ? { rotateY: result ? resultRotation : 0 }
+            : flipping
+              ? { rotateY: [0, 720, 1440, 1800] }
+              : result
+                ? { rotateY: resultRotation }
+                : { rotateY: 0 }
         }
         transition={
-          flipping
-            ? { duration: 1.2, ease: [0.25, 0.1, 0.25, 1] }
-            : { duration: 0.4, ease: "easeOut" }
+          reducedMotion
+            ? { duration: 0 }
+            : flipping
+              ? { duration: 1.2, ease: [0.25, 0.1, 0.25, 1] }
+              : { duration: 0.4, ease: "easeOut" }
         }
       >
         <div className="coin-face coin-face-heads">
@@ -81,15 +87,17 @@ export function Coin3D({ flipping, result, won }: Coin3DProps) {
           </svg>
         </div>
       </motion.div>
-      <motion.div
-        className="coin-shadow"
-        aria-hidden="true"
-        animate={{
-          scale: flipping ? [1, 0.65, 1] : 1,
-          opacity: flipping ? [0.35, 0.12, 0.35] : 0.35,
-        }}
-        transition={{ duration: flipping ? 1.2 : 0.2 }}
-      />
+      {!reducedMotion && (
+        <motion.div
+          className="coin-shadow"
+          aria-hidden="true"
+          animate={{
+            scale: flipping ? [1, 0.65, 1] : 1,
+            opacity: flipping ? [0.35, 0.12, 0.35] : 0.35,
+          }}
+          transition={{ duration: flipping ? 1.2 : 0.2 }}
+        />
+      )}
     </div>
   );
 }

@@ -24,7 +24,8 @@ Parameters:
 
   CasinoWalletAddress:
     Type: String
-    Default: C9W7nGv2ZBJp4zcmtvBHkrtTPhB1FQ7JaNNPRNhiA4Ze
+    Default: 3BSEfRdZsZz87EDafo5rcY87uLt6RCbPqQZsmNMxYfcu
+    Description: Hot wallet public key (must match CASINO_WALLET_PRIVATE_KEY)
 
   AdminWallet:
     Type: String
@@ -68,10 +69,58 @@ Parameters:
     Default: ""
     Description: ACM certificate ARN in this region (required with DomainName for Phantom wallet).
 
+  BagsFmApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Bags.fm API key from dev.bags.fm (server-side only).
+
+  PhantomAppId:
+    Type: String
+    Default: ""
+    Description: Phantom Portal app ID for Google/Apple/deeplink login (optional).
+
+  SentryDsn:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Sentry DSN for backend error reporting (optional).
+
+  AlarmEmail:
+    Type: String
+    Default: ""
+    Description: Email for CloudWatch alarm notifications (SNS). Leave empty to skip.
+
+  OrbitTokenMint:
+    Type: String
+    Default: ""
+    Description: Active ORBIT mint (empty until live launch).
+
+  BagsFmTokenUrl:
+    Type: String
+    Default: ""
+    Description: Full Bags.fm URL for live token, e.g. https://bags.fm/MintAddress
+
+  OrbitTokenLaunchStatus:
+    Type: String
+    Default: coming_soon
+    AllowedValues: [coming_soon, live]
+
+  OrbitTokenLaunchPlatform:
+    Type: String
+    Default: pump
+    AllowedValues: [pump, bags]
+
+  OrbitTokenDeprecatedMints:
+    Type: String
+    Default: F2Kg2sH7q8CbH14ouZySE41vtwoJTbiuYCWeppR7BAGS,4T4seM2KAyQ23yF6aqnQHWiuGkuAp22FSs4fNbGPBAGS
+    Description: Comma-separated retired mints (sniped relaunch).
+
 Conditions:
   HasHttps: !And
     - !Not [!Equals [!Ref DomainName, ""]]
     - !Not [!Equals [!Ref AcmCertificateArn, ""]]
+  HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, ""]]
 
 Resources:
   VPC:
@@ -257,6 +306,36 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: !Sub "${ProjectName}-secrets-access"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref AppSecrets
+
+  AppSecrets:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${ProjectName}/app"
+      Description: Orbit Casino runtime secrets (injected into ECS; not visible in task env)
+      SecretString: !Join
+        - ""
+        - - '{"JWT_SECRET":"'
+          - !Ref JwtSecret
+          - '","ALCHEMY_API_KEY":"'
+          - !Ref AlchemyApiKey
+          - '","CASINO_WALLET_PRIVATE_KEY":"'
+          - !Ref CasinoWalletPrivateKey
+          - '","BAGS_FM_API_KEY":"'
+          - !Ref BagsFmApiKey
+          - '","PHANTOM_APP_ID":"'
+          - !Ref PhantomAppId
+          - '","SENTRY_DSN":"'
+          - !Ref SentryDsn
+          - '"}'
 
   TaskRole:
     Type: AWS::IAM::Role
@@ -395,12 +474,33 @@ Resources:
                 - HasHttps
                 - !Sub "https://${DomainName}"
                 - !Sub "http://${LoadBalancer.DNSName}"
+            - Name: ORBIT_TOKEN_LAUNCH_PLATFORM
+              Value: !Ref OrbitTokenLaunchPlatform
+            - Name: ORBIT_TOKEN_LAUNCH_STATUS
+              Value: !Ref OrbitTokenLaunchStatus
+            - Name: ORBIT_TOKEN_MINT
+              Value: !Ref OrbitTokenMint
+            - Name: BAGS_FM_TOKEN_URL
+              Value: !Ref BagsFmTokenUrl
+            - Name: ORBIT_TOKEN_DEPRECATED_MINTS
+              Value: !Ref OrbitTokenDeprecatedMints
+            - Name: BAGS_FM_PROFILE_URL
+              Value: https://bags.fm/@orbitsolanacasino
+            - Name: BLOCK_BETS_WHEN_INSOLVENT
+              Value: "true"
+          Secrets:
             - Name: JWT_SECRET
-              Value: !Ref JwtSecret
+              ValueFrom: !Sub "${AppSecrets}:JWT_SECRET::"
             - Name: ALCHEMY_API_KEY
-              Value: !Ref AlchemyApiKey
+              ValueFrom: !Sub "${AppSecrets}:ALCHEMY_API_KEY::"
             - Name: CASINO_WALLET_PRIVATE_KEY
-              Value: !Ref CasinoWalletPrivateKey
+              ValueFrom: !Sub "${AppSecrets}:CASINO_WALLET_PRIVATE_KEY::"
+            - Name: BAGS_FM_API_KEY
+              ValueFrom: !Sub "${AppSecrets}:BAGS_FM_API_KEY::"
+            - Name: PHANTOM_APP_ID
+              ValueFrom: !Sub "${AppSecrets}:PHANTOM_APP_ID::"
+            - Name: SENTRY_DSN
+              ValueFrom: !Sub "${AppSecrets}:SENTRY_DSN::"
 
   EcsService:
     Type: AWS::ECS::Service
@@ -424,6 +524,110 @@ Resources:
         - ContainerName: orbit-casino
           ContainerPort: 3001
           TargetGroupArn: !Ref TargetGroup
+
+  BackupVault:
+    Type: AWS::Backup::BackupVault
+    Properties:
+      BackupVaultName: !Sub "${ProjectName}-vault"
+
+  BackupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: backup.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores
+
+  BackupPlan:
+    Type: AWS::Backup::BackupPlan
+    Properties:
+      BackupPlan:
+        BackupPlanName: !Sub "${ProjectName}-efs-daily"
+        BackupPlanRule:
+          - RuleName: DailyEfs
+            TargetBackupVault: !Ref BackupVault
+            ScheduleExpression: cron(0 5 * * ? *)
+            StartWindowMinutes: 60
+            CompletionWindowMinutes: 180
+            Lifecycle:
+              DeleteAfterDays: 30
+
+  BackupSelection:
+    Type: AWS::Backup::BackupSelection
+    Properties:
+      BackupPlanId: !GetAtt BackupPlan.BackupPlanId
+      BackupSelection:
+        SelectionName: efs-data
+        IamRoleArn: !GetAtt BackupRole.Arn
+        Resources:
+          - !Sub arn:aws:elasticfilesystem:${AWS::Region}:${AWS::AccountId}:file-system/${FileSystem}
+
+  OpsAlarmTopic:
+    Type: AWS::SNS::Topic
+    Condition: HasAlarmEmail
+    Properties:
+      TopicName: !Sub "${ProjectName}-ops-alarms"
+      DisplayName: Orbit Casino ops alarms
+
+  OpsAlarmSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlarmEmail
+    Properties:
+      TopicArn: !Ref OpsAlarmTopic
+      Protocol: email
+      Endpoint: !Ref AlarmEmail
+
+  AlbUnhealthyHostAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-unhealthy-hosts"
+      AlarmDescription: Alert when ECS tasks are unhealthy behind the ALB
+      Namespace: AWS/ApplicationELB
+      MetricName: UnHealthyHostCount
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If
+        - HasAlarmEmail
+        - [!Ref OpsAlarmTopic]
+        - []
+      Dimensions:
+        - Name: TargetGroup
+          Value: !GetAtt TargetGroup.TargetGroupFullName
+        - Name: LoadBalancer
+          Value: !GetAtt LoadBalancer.LoadBalancerFullName
+
+  EcsCpuHighAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-ecs-cpu-high"
+      AlarmDescription: Alert when ECS service CPU stays high
+      Namespace: AWS/ECS
+      MetricName: CPUUtilization
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 85
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If
+        - HasAlarmEmail
+        - [!Ref OpsAlarmTopic]
+        - []
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref EcsCluster
+        - Name: ServiceName
+          Value: !GetAtt EcsService.Name
 
 Outputs:
   LoadBalancerUrl:
@@ -457,3 +661,7 @@ Outputs:
 
   EfsFileSystemId:
     Value: !Ref FileSystem
+
+  AppSecretsArn:
+    Description: Secrets Manager ARN for JWT / wallet key / API keys / Sentry
+    Value: !Ref AppSecrets

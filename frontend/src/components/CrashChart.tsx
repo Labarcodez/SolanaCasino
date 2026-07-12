@@ -3,6 +3,7 @@ import type { CrashPhase } from "../hooks/useSocket";
 import {
   createStarfield,
   drawComets,
+  drawCrashCrack,
   drawPulseRings,
   drawRocket,
   drawSpeedStreaks,
@@ -24,28 +25,38 @@ import {
   computeViewportMax,
   elapsedToX,
   getCrashPalette,
+  interpolateElapsedMs,
+  lerpAngle,
   multiplierAtElapsedMs,
   multiplierToY,
   spawnCrashParticles,
   stepParticles,
+  traceSmoothCurve,
   type TrailPoint,
 } from "../lib/crashCurve";
+import { prefersReducedMotion } from "../lib/reducedMotion";
 
 interface CrashChartProps {
   multiplier: number;
   phase: CrashPhase;
   crashPoint?: number;
   startedAt?: number;
+  runningStartedAt?: number;
+  elapsedMs?: number;
   autoCashoutTarget?: number;
 }
 
 interface ChartEngine {
   targetMult: number;
   displayMult: number;
+  serverElapsedMs: number;
+  lastTrailElapsedMs: number;
+  lastServerTickPerf: number;
   viewportMax: number;
   phase: CrashPhase;
   crashPoint: number;
   startedAt: number;
+  runningStartedAt: number;
   trail: TrailPoint[];
   particles: ReturnType<typeof spawnCrashParticles>;
   crashFlash: number;
@@ -59,6 +70,8 @@ interface ChartEngine {
   scrollTime: number;
   lastPulseAt: number;
   frame: number;
+  displayAngle: number;
+  crackLife: number;
   autoCashoutTarget?: number;
 }
 
@@ -69,6 +82,8 @@ export function CrashChart({
   phase,
   crashPoint,
   startedAt,
+  runningStartedAt,
+  elapsedMs,
   autoCashoutTarget,
 }: CrashChartProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -78,10 +93,14 @@ export function CrashChart({
   const engineRef = useRef<ChartEngine>({
     targetMult: 1,
     displayMult: 1,
+    serverElapsedMs: 0,
+    lastTrailElapsedMs: 0,
+    lastServerTickPerf: 0,
     viewportMax: 2.5,
     phase: "betting",
     crashPoint: 1,
     startedAt: 0,
+    runningStartedAt: 0,
     trail: [],
     particles: [],
     crashFlash: 0,
@@ -95,6 +114,8 @@ export function CrashChart({
     scrollTime: 0,
     lastPulseAt: 0,
     frame: 0,
+    displayAngle: -0.35,
+    crackLife: 0,
   });
 
   useEffect(() => {
@@ -104,15 +125,25 @@ export function CrashChart({
     engine.crashPoint = crashPoint ?? multiplier;
     engine.autoCashoutTarget = autoCashoutTarget;
     if (startedAt) engine.startedAt = startedAt;
+    if (runningStartedAt) engine.runningStartedAt = runningStartedAt;
+    if (elapsedMs !== undefined && phase === "running") {
+      engine.serverElapsedMs = elapsedMs;
+      engine.lastServerTickPerf = performance.now();
+    }
 
     if (phase === "running" && engine.lastPhase !== "running") {
       engine.trail = [{ mult: 1, elapsedMs: 0 }];
       engine.displayMult = 1;
+      engine.serverElapsedMs = 0;
+      engine.lastTrailElapsedMs = 0;
+      engine.lastServerTickPerf = performance.now();
       engine.viewportMax = 2.5;
-      engine.startedAt = startedAt ?? Date.now();
+      engine.runningStartedAt = runningStartedAt ?? Date.now();
       engine.comets = [];
       engine.pulseRings = [];
       engine.scrollTime = 0;
+      engine.displayAngle = -0.35;
+      engine.crackLife = 0;
     }
 
     if (phase === "betting" || phase === "cooldown") {
@@ -128,6 +159,7 @@ export function CrashChart({
 
     if (phase === "crashed" && engine.lastPhase !== "crashed") {
       engine.crashFlash = 1;
+      engine.crackLife = 1;
       engine.pendingBurst = true;
       engine.displayMult = engine.crashPoint;
       const last = engine.trail[engine.trail.length - 1];
@@ -137,7 +169,7 @@ export function CrashChart({
     }
 
     engine.lastPhase = phase;
-  }, [multiplier, phase, crashPoint, startedAt, autoCashoutTarget]);
+  }, [multiplier, phase, crashPoint, startedAt, runningStartedAt, elapsedMs, autoCashoutTarget]);
 
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -151,6 +183,12 @@ export function CrashChart({
     let height = 0;
     let dpr = 1;
     let rafId = 0;
+    let tabVisible = !document.hidden;
+
+    const onVisibility = () => {
+      tabVisible = !document.hidden;
+    };
+    document.addEventListener("visibilitychange", onVisibility);
 
     const resize = () => {
       const rect = wrap.getBoundingClientRect();
@@ -161,7 +199,7 @@ export function CrashChart({
       canvas.height = Math.floor(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const engine = engineRef.current;
-      engine.stars = createStarfield(90, width, height);
+      engine.stars = createStarfield(60, width, height);
       engine.streaks = spawnSpeedStreaks(width, height, 28);
     };
 
@@ -234,9 +272,9 @@ export function CrashChart({
       }
 
       if (engine.crashFlash > 0) {
-        ctx.fillStyle = `rgba(255, 59, 92, ${engine.crashFlash * 0.28})`;
+        ctx.fillStyle = `rgba(255, 59, 92, ${engine.crashFlash * 0.18})`;
         ctx.fillRect(0, 0, width, height);
-        engine.crashFlash = Math.max(0, engine.crashFlash - 0.04);
+        engine.crashFlash = Math.max(0, engine.crashFlash - 0.05);
       }
     };
 
@@ -261,20 +299,27 @@ export function CrashChart({
 
     const drawBettingIdle = () => {
       const y = multiplierToY(1, 2.5, height, PAD);
-      const pulse = 0.35 + Math.sin(performance.now() / 400) * 0.15;
+      const pulse = 0.28 + Math.sin(performance.now() / 500) * 0.1;
       ctx.strokeStyle = `rgba(59, 130, 246, ${pulse})`;
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 10]);
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 9]);
       ctx.beginPath();
       ctx.moveTo(PAD, y);
       ctx.lineTo(width - PAD, y);
       ctx.stroke();
       ctx.setLineDash([]);
 
-      const pad = 0.5 + Math.sin(performance.now() / 600) * 0.2;
-      ctx.font = "28px serif";
-      ctx.fillStyle = `rgba(148, 163, 184, ${pad})`;
-      ctx.fillText("🚀", width * 0.5 - 14, y - 18);
+      const bob = Math.sin(performance.now() / 700) * 4;
+      const idlePalette = getCrashPalette(1, false);
+      drawRocket(
+        ctx,
+        width * 0.5,
+        y - 22 + bob,
+        -0.25,
+        idlePalette,
+        0.15,
+        engineRef.current.frame,
+      );
     };
 
     const drawCurve = (timeWindow: number): { headX: number; headY: number; angle: number } | null => {
@@ -291,56 +336,50 @@ export function CrashChart({
       const toY = (mult: number) =>
         multiplierToY(mult, engine.viewportMax, height, PAD);
 
+      ctx.save();
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
       ctx.beginPath();
-      ctx.moveTo(toX(pts[0]), toY(pts[0].mult));
-      for (let i = 1; i < pts.length; i++) {
-        ctx.lineTo(toX(pts[i]), toY(pts[i].mult));
-      }
+      traceSmoothCurve(ctx, pts, toX, toY);
+      ctx.strokeStyle = palette.glow.replace(/[\d.]+\)$/, "0.18)");
+      ctx.lineWidth = 10;
+      ctx.stroke();
+
+      ctx.beginPath();
+      traceSmoothCurve(ctx, pts, toX, toY);
+      ctx.strokeStyle = palette.stroke;
+      ctx.lineWidth = 2.75;
+      ctx.stroke();
+
+      ctx.beginPath();
+      traceSmoothCurve(ctx, pts, toX, toY);
+      ctx.lineTo(toX(pts[pts.length - 1]), height - PAD);
+      ctx.lineTo(toX(pts[0]), height - PAD);
+      ctx.closePath();
+      const fill = ctx.createLinearGradient(0, PAD, 0, height);
+      fill.addColorStop(0, palette.fillTop);
+      fill.addColorStop(0.55, palette.fillTop.replace(/[\d.]+\)$/, "0.03)"));
+      fill.addColorStop(1, "rgba(0, 0, 0, 0)");
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.restore();
 
       const last = pts.length - 1;
       const headX = toX(pts[last]);
       const headY = toY(pts[last].mult);
 
-      const outerGlow = ctx.createLinearGradient(headX - 40, headY, headX, headY);
-      outerGlow.addColorStop(0, "rgba(0,0,0,0)");
-      outerGlow.addColorStop(1, palette.glow.replace(/[\d.]+\)$/, "0.25)"));
-      ctx.strokeStyle = outerGlow;
-      ctx.lineWidth = 8;
-      ctx.lineCap = "round";
-      ctx.stroke();
+      const prev = pts.length > 2 ? pts[pts.length - 2] : pts[pts.length - 1];
+      const targetAngle = Math.atan2(
+        headY - toY(prev.mult),
+        headX - toX(prev),
+      );
+      engine.displayAngle = lerpAngle(engine.displayAngle, targetAngle, 0.18);
 
-      ctx.beginPath();
-      ctx.moveTo(toX(pts[0]), toY(pts[0].mult));
-      for (let i = 1; i < pts.length; i++) {
-        ctx.lineTo(toX(pts[i]), toY(pts[i].mult));
+      if (!prefersReducedMotion()) {
+        drawComets(ctx, engine.comets, palette.glow);
+        drawPulseRings(ctx, engine.pulseRings, palette.glow);
       }
-      ctx.strokeStyle = palette.stroke;
-      ctx.lineWidth = 3.5;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.shadowColor = palette.glow;
-      ctx.shadowBlur = 20;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-
-      ctx.lineTo(headX, height - PAD);
-      ctx.lineTo(toX(pts[0]), height - PAD);
-      ctx.closePath();
-      const fill = ctx.createLinearGradient(0, PAD, 0, height);
-      fill.addColorStop(0, palette.fillTop);
-      fill.addColorStop(0.6, palette.fillTop.replace(/[\d.]+\)$/, "0.04)"));
-      fill.addColorStop(1, "rgba(0, 0, 0, 0)");
-      ctx.fillStyle = fill;
-      ctx.fill();
-
-      const prev =
-        pts.length > 2 ? pts[pts.length - 2] : pts[pts.length - 1];
-      const prevX = toX(prev);
-      const prevY = toY(prev.mult);
-      const angle = Math.atan2(headY - prevY, headX - prevX);
-
-      drawComets(ctx, engine.comets, palette.glow);
-      drawPulseRings(ctx, engine.pulseRings, palette.glow);
 
       const headGlow = ctx.createRadialGradient(
         headX,
@@ -348,29 +387,37 @@ export function CrashChart({
         0,
         headX,
         headY,
-        36,
+        28,
       );
-      headGlow.addColorStop(0, palette.glow);
+      headGlow.addColorStop(0, palette.glow.replace(/[\d.]+\)$/, "0.55)"));
       headGlow.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = headGlow;
       ctx.beginPath();
-      ctx.arc(headX, headY, 36, 0, Math.PI * 2);
+      ctx.arc(headX, headY, 28, 0, Math.PI * 2);
       ctx.fill();
 
       if (engine.phase === "running") {
         const thrust = speedIntensity(engine.displayMult);
-        drawRocket(ctx, headX, headY, angle, palette, thrust);
+        drawRocket(
+          ctx,
+          headX,
+          headY,
+          engine.displayAngle,
+          palette,
+          thrust,
+          engine.frame,
+        );
       } else {
         ctx.beginPath();
-        ctx.arc(headX, headY, 6, 0, Math.PI * 2);
+        ctx.arc(headX, headY, 5, 0, Math.PI * 2);
         ctx.fillStyle = palette.head;
-        ctx.shadowColor = palette.glow;
-        ctx.shadowBlur = 12;
         ctx.fill();
-        ctx.shadowBlur = 0;
+        if (engine.crackLife > 0) {
+          drawCrashCrack(ctx, headX, headY, engine.crackLife);
+        }
       }
 
-      return { headX, headY, angle };
+      return { headX, headY, angle: engine.displayAngle };
     };
 
     const drawParticles = () => {
@@ -409,10 +456,10 @@ export function CrashChart({
           engine.phase === "crashed",
         );
         label.style.color = palette.head;
-        label.style.textShadow = `0 0 28px ${palette.glow}, 0 0 64px ${palette.glow}`;
+        label.style.textShadow = `0 0 20px ${palette.glow}, 0 0 48px ${palette.glow}`;
         const pulse =
-          engine.phase === "running"
-            ? 1 + Math.sin(engine.frame * 0.12) * 0.025
+          engine.phase === "running" && !prefersReducedMotion()
+            ? 1 + Math.sin(engine.frame * 0.08) * 0.012
             : 1;
         label.style.transform = `scale(${pulse})`;
       }
@@ -428,23 +475,45 @@ export function CrashChart({
     };
 
     const tick = () => {
+      if (!tabVisible) {
+        rafId = requestAnimationFrame(tick);
+        return;
+      }
       const engine = engineRef.current;
+      const reducedMotion = prefersReducedMotion();
       let timeWindow = engine.frozenTimeWindow;
       engine.frame += 1;
-      engine.scrollTime += engine.phase === "running" ? 1.8 + speedIntensity(engine.displayMult) * 4 : 0.3;
+      engine.scrollTime +=
+        engine.phase === "running"
+          ? 0.6 + speedIntensity(engine.displayMult) * 1.2
+          : 0.15;
 
-      if (engine.phase === "running" && engine.startedAt > 0) {
-        const elapsed = Date.now() - engine.startedAt;
+      if (engine.phase === "running") {
+        const elapsed = interpolateElapsedMs(
+          engine.serverElapsedMs,
+          engine.lastServerTickPerf,
+        );
         engine.displayMult = multiplierAtElapsedMs(elapsed);
         engine.viewportMax = computeViewportMax(
-          Math.max(engine.targetMult, engine.displayMult),
+          engine.displayMult,
           engine.viewportMax,
         );
-        engine.trail.push({ mult: engine.displayMult, elapsedMs: elapsed });
+
+        const lastTrail = engine.trail[engine.trail.length - 1];
+        const trailGap = lastTrail
+          ? elapsed - lastTrail.elapsedMs
+          : Number.POSITIVE_INFINITY;
+        if (!lastTrail || trailGap >= 16) {
+          engine.trail.push({ mult: engine.displayMult, elapsedMs: elapsed });
+        } else if (lastTrail) {
+          lastTrail.mult = engine.displayMult;
+          lastTrail.elapsedMs = elapsed;
+        }
+
         timeWindow = computeTimeWindow(elapsed);
         engine.frozenTimeWindow = timeWindow;
 
-        const trimBefore = elapsed - timeWindow * 1.05;
+        const trimBefore = elapsed - timeWindow * 1.08;
         while (
           engine.trail.length > 2 &&
           engine.trail[0].elapsedMs < trimBefore
@@ -452,27 +521,32 @@ export function CrashChart({
           engine.trail.shift();
         }
 
-        engine.comets = stepComets(engine.comets);
-        engine.pulseRings = stepPulseRings(engine.pulseRings);
+        if (!reducedMotion) {
+          engine.comets = stepComets(engine.comets);
+          engine.pulseRings = stepPulseRings(engine.pulseRings);
 
-        if (engine.frame % 3 === 0 && engine.trail.length > 2) {
-          const last = engine.trail[engine.trail.length - 1];
-          const cx = elapsedToX(last.elapsedMs, timeWindow, width, PAD);
-          const cy = multiplierToY(last.mult, engine.viewportMax, height, PAD);
-          engine.comets.push(spawnComet(cx, cy));
-        }
+          if (engine.frame % 32 === 0 && engine.trail.length > 2) {
+            const last = engine.trail[engine.trail.length - 1];
+            const cx = elapsedToX(last.elapsedMs, timeWindow, width, PAD);
+            const cy = multiplierToY(last.mult, engine.viewportMax, height, PAD);
+            engine.comets.push(spawnComet(cx, cy));
+          }
 
-        if (elapsed - engine.lastPulseAt > 280) {
-          const last = engine.trail[engine.trail.length - 1];
-          const px = elapsedToX(last.elapsedMs, timeWindow, width, PAD);
-          const py = multiplierToY(last.mult, engine.viewportMax, height, PAD);
-          engine.pulseRings.push(spawnPulseRing(px, py));
-          engine.lastPulseAt = elapsed;
+          if (elapsed - engine.lastPulseAt > 1100) {
+            const last = engine.trail[engine.trail.length - 1];
+            const px = elapsedToX(last.elapsedMs, timeWindow, width, PAD);
+            const py = multiplierToY(last.mult, engine.viewportMax, height, PAD);
+            engine.pulseRings.push(spawnPulseRing(px, py));
+            engine.lastPulseAt = elapsed;
+          }
         }
       } else if (engine.phase === "crashed") {
         timeWindow = engine.frozenTimeWindow;
-        engine.comets = stepComets(engine.comets);
-        engine.pulseRings = stepPulseRings(engine.pulseRings);
+        engine.crackLife = Math.max(0, engine.crackLife - 0.03);
+        if (!reducedMotion) {
+          engine.comets = stepComets(engine.comets);
+          engine.pulseRings = stepPulseRings(engine.pulseRings);
+        }
       }
 
       const palette = getCrashPalette(
@@ -517,6 +591,7 @@ export function CrashChart({
 
     return () => {
       cancelAnimationFrame(rafId);
+      document.removeEventListener("visibilitychange", onVisibility);
       ro.disconnect();
     };
   }, []);

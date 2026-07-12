@@ -1,4 +1,4 @@
-/** Map slider position 0–100 to target multiplier on a log scale (1.01 – max). */
+/** Map slider position 0–100 to target multiplier on a log scale (min – max). */
 export function sliderToTarget(slider: number, min: number, max: number): number {
   const t = Math.min(100, Math.max(0, slider)) / 100;
   const logMin = Math.log(min);

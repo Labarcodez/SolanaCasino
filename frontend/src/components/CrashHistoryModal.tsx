@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 import { fetchCrashRound, verifyCrashFairness } from "../lib/api";
 
 interface HistoryRound {
@@ -14,6 +15,7 @@ interface CrashHistoryModalProps {
 export function CrashHistoryModal({ round, onClose }: CrashHistoryModalProps) {
   const [result, setResult] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const dialogRef = useFocusTrap(Boolean(round), onClose);
 
   if (!round) return null;
 
@@ -43,6 +45,7 @@ export function CrashHistoryModal({ round, onClose }: CrashHistoryModalProps) {
   return (
     <div className="modal-overlay" onClick={onClose} role="presentation">
       <div
+        ref={dialogRef}
         className="modal card"
         onClick={(e) => e.stopPropagation()}
         role="dialog"

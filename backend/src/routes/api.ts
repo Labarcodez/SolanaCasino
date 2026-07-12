@@ -1,9 +1,9 @@
 import { Router } from "express";
-import rateLimit from "express-rate-limit";
 import { PublicKey } from "@solana/web3.js";
 import { v4 as uuidv4 } from "uuid";
-import { db, getOrCreateUser, updateBalance, deductBalanceIfSufficient, recordBet } from "../db/index.js";
+import { db, getOrCreateUser, updateBalance, deductBalanceIfSufficient, recordBet, creditDepositOnce, runDbTask } from "../db/index.js";
 import { config, lamportsToSol, solToLamports, getPublicRpcSetup, maskRpcUrl } from "../config.js";
+import { getPersistenceInfo } from "../dataPaths.js";
 import {
   buildDepositTransactionForWallet,
   getCasinoWalletBalance,
@@ -41,9 +41,17 @@ import { getPublicProfile, updateDisplayName, upsertUserProfile, mapAuthProvider
 import { createGamePrepare, revealGamePrepare, purgeExpiredPrepares } from "../services/gamePrepare.js";
 import { applyReferralOnSignup, ensureReferralCode, getAffiliateStats, claimAffiliateCommission } from "../services/affiliate.js";
 import { isCasinoPaused } from "../services/pause.js";
+import {
+  getBettingBlock,
+  isTreasurySolventCached,
+} from "../services/bettingGate.js";
 import { claimRakeback, getPendingRakebackLamports, getVipTier } from "../services/vip.js";
 import { getTournamentLeaderboard } from "../services/tournament.js";
-import { placeLimboBet, LIMBO_MIN_TARGET, LIMBO_MAX_TARGET, recordBetWithRewards } from "../services/limbo.js";
+import { getTreasurySnapshot } from "../services/treasury.js";
+import { getJackpotState } from "../services/jackpot.js";
+import { isBagsApiConfigured, verifyBagsApiKey } from "../services/bagsApi.js";
+import { placeLimboBet, LIMBO_MIN_TARGET, LIMBO_MAX_TARGET, recordBetWithRewards, validateLimboTarget } from "../services/limbo.js";
+import { broadcastPlayerWin } from "../services/gameBroadcast.js";
 import { registerOnChainCrashBet } from "../services/crashKeeper.js";
 import {
   verifyCrashPoint,
@@ -61,38 +69,66 @@ import {
   requireMatchingWallet,
   type AuthenticatedRequest,
 } from "../middleware/auth.js";
+import { jsonRateLimit } from "../middleware/rateLimitJson.js";
 
 export const apiRouter = Router();
 
-const globalLimiter = rateLimit({
+const globalLimiter = jsonRateLimit({
   windowMs: 60 * 1000,
-  max: 300,
-  standardHeaders: true,
-  legacyHeaders: false,
+  max: 400,
+  skip: (req) =>
+    req.path === "/health" || req.path.startsWith("/auth/"),
 });
 
 apiRouter.use(globalLimiter);
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
+const authLimiter = jsonRateLimit({
+  windowMs: 60 * 1000,
+  max: 40,
 });
 
-const betLimiter = rateLimit({
+const betLimiter = jsonRateLimit({
   windowMs: 60 * 1000,
   max: 60,
-  standardHeaders: true,
-  legacyHeaders: false,
+});
+
+const rpcLimiter = jsonRateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
 });
 
 apiRouter.get("/health", async (_req, res) => {
   const rpc = await checkRpcHealth();
+  const isProd = config.nodeEnv === "production";
+  const treasurySolvent = await isTreasurySolventCached();
+  if (isProd) {
+    res.json({
+      status: rpc.healthy ? "ok" : "degraded",
+      timestamp: new Date().toISOString(),
+      cluster: config.solanaCluster,
+      withdrawalsEnabled: isWithdrawalEnabled(),
+      limboMinTarget: LIMBO_MIN_TARGET,
+      socialLoginConfigured: Boolean(process.env.PHANTOM_APP_ID),
+      sqliteStorage: process.env.SQLITE_PATH ? "efs" : "local",
+      treasurySolvent,
+      blockBetsWhenInsolvent: config.blockBetsWhenInsolvent,
+      sentryEnabled: Boolean(config.sentryDsn),
+    });
+    return;
+  }
   const rpcSetup = getPublicRpcSetup();
+  const persistence = getPersistenceInfo();
+  const bagsConfigured = isBagsApiConfigured();
+  const bagsAuthenticated = bagsConfigured ? await verifyBagsApiKey() : false;
   res.json({
     status: rpc.healthy ? "ok" : "degraded",
     timestamp: new Date().toISOString(),
+    persistence: {
+      dataDir: persistence.dataDir,
+      dbPath: persistence.dbPath,
+      dbExists: persistence.dbExists,
+      storage: process.env.SQLITE_PATH ? "efs" : "local",
+    },
     rpc: {
       ...rpc,
       endpoint: maskRpcUrl(rpc.endpoint),
@@ -100,7 +136,15 @@ apiRouter.get("/health", async (_req, res) => {
       alchemyConfigured: rpcSetup.alchemyConfigured,
       cluster: rpcSetup.cluster,
     },
+    bagsApi: {
+      configured: bagsConfigured,
+      authenticated: bagsAuthenticated,
+    },
+    e2eHelpers: process.env.ENABLE_E2E_HELPERS === "true",
     withdrawalsEnabled: isWithdrawalEnabled(),
+    treasurySolvent,
+    blockBetsWhenInsolvent: config.blockBetsWhenInsolvent,
+    sentryEnabled: Boolean(config.sentryDsn),
   });
 });
 
@@ -109,6 +153,7 @@ apiRouter.get("/config", async (_req, res) => {
   const onChain = isAnchorEnabled();
   const casino = onChain ? await fetchCasinoAccount() : null;
   const paused = await isCasinoPaused();
+  const treasurySolvent = await isTreasurySolventCached();
 
   const rpcSetup = getPublicRpcSetup();
 
@@ -124,6 +169,9 @@ apiRouter.get("/config", async (_req, res) => {
     onChainEnabled: onChain,
     casinoInitialized: Boolean(casino),
     casinoPaused: paused,
+    bettingBlocked:
+      paused || (config.blockBetsWhenInsolvent && !treasurySolvent),
+    treasurySolvent,
     casinoPda: pdas.casinoPda,
     vaultPda: pdas.vaultPda,
     minBetSol: casino
@@ -139,44 +187,57 @@ apiRouter.get("/config", async (_req, res) => {
     limboMaxTarget: LIMBO_MAX_TARGET,
     withdrawalsEnabled: onChain || isWithdrawalEnabled(),
     socialLoginEnabled: Boolean(process.env.PHANTOM_APP_ID),
-    adminWallet: config.adminWallet || undefined,
     rpcEndpoints: getRpcEndpoints().map((url) => maskRpcUrl(url)),
   });
 });
 
-apiRouter.get("/rpc/latest-blockhash", async (_req, res) => {
+apiRouter.get(
+  "/rpc/latest-blockhash",
+  requireAuth,
+  rpcLimiter,
+  async (_req, res) => {
+    try {
+      const blockhash = await getLatestBlockhashForClient();
+      res.json(blockhash);
+    } catch (err) {
+      res.status(503).json({
+        error: err instanceof Error ? err.message : "Failed to fetch blockhash",
+      });
+    }
+  },
+);
+
+apiRouter.post("/auth/nonce", authLimiter, (req, res) => {
   try {
-    const blockhash = await getLatestBlockhashForClient();
-    res.json(blockhash);
+    const { walletAddress } = req.body as { walletAddress?: string };
+    if (!walletAddress) {
+      res.status(400).json({ error: "walletAddress required" });
+      return;
+    }
+
+    try {
+      new PublicKey(walletAddress);
+    } catch {
+      res.status(400).json({ error: "Invalid wallet address" });
+      return;
+    }
+
+    const nonce = runDbTask(() => createAuthNonce(walletAddress));
+    res.json({
+      nonce,
+      message: buildAuthMessage(walletAddress, nonce),
+    });
   } catch (err) {
+    console.error("auth/nonce failed:", err);
     res.status(503).json({
-      error: err instanceof Error ? err.message : "Failed to fetch blockhash",
+      error: "Database temporarily unavailable. Please try again in a few seconds.",
+      code: "DB_UNAVAILABLE",
     });
   }
 });
 
-apiRouter.post("/auth/nonce", authLimiter, (req, res) => {
-  const { walletAddress } = req.body as { walletAddress?: string };
-  if (!walletAddress) {
-    res.status(400).json({ error: "walletAddress required" });
-    return;
-  }
-
-  try {
-    new PublicKey(walletAddress);
-  } catch {
-    res.status(400).json({ error: "Invalid wallet address" });
-    return;
-  }
-
-  const nonce = createAuthNonce(walletAddress);
-  res.json({
-    nonce,
-    message: buildAuthMessage(walletAddress, nonce),
-  });
-});
-
 apiRouter.post("/auth/verify", authLimiter, (req, res) => {
+  try {
   const { walletAddress, signature, message, authProvider, email, displayName, referralCode } =
     req.body as {
       walletAddress?: string;
@@ -194,7 +255,10 @@ apiRouter.post("/auth/verify", authLimiter, (req, res) => {
   }
 
   const nonce = extractNonceFromMessage(message);
-  if (!nonce || !consumeAuthNonce(walletAddress, nonce)) {
+  const nonceValid = runDbTask(() =>
+    Boolean(nonce && consumeAuthNonce(walletAddress, nonce)),
+  );
+  if (!nonceValid) {
     res.status(401).json({ error: "Invalid or expired nonce" });
     return;
   }
@@ -204,14 +268,19 @@ apiRouter.post("/auth/verify", authLimiter, (req, res) => {
     return;
   }
 
-  const profile = upsertUserProfile(walletAddress, {
-    authProvider: mapAuthProvider(authProvider),
-    email: email?.trim() || undefined,
-    displayName: displayName?.trim() || undefined,
+  const { profile, token } = runDbTask(() => {
+    const upserted = upsertUserProfile(walletAddress, {
+      authProvider: mapAuthProvider(authProvider),
+      email: email?.trim() || undefined,
+      displayName: displayName?.trim() || undefined,
+    });
+    applyReferralOnSignup(walletAddress, referralCode?.trim());
+    ensureReferralCode(walletAddress);
+    return {
+      profile: upserted,
+      token: createSessionToken(walletAddress),
+    };
   });
-  applyReferralOnSignup(walletAddress, referralCode?.trim());
-  ensureReferralCode(walletAddress);
-  const token = createSessionToken(walletAddress);
 
   res.json({
     token,
@@ -223,6 +292,13 @@ apiRouter.post("/auth/verify", authLimiter, (req, res) => {
       authProvider: profile.auth_provider,
     },
   });
+  } catch (err) {
+    console.error("auth/verify failed:", err);
+    res.status(503).json({
+      error: "Database temporarily unavailable. Please try again in a few seconds.",
+      code: "DB_UNAVAILABLE",
+    });
+  }
 });
 
 apiRouter.get(
@@ -281,6 +357,9 @@ apiRouter.get(
         referralLink: affiliate.referralLink,
         referredCount: affiliate.referredCount,
         pendingCommissionSol: affiliate.pendingCommissionSol,
+        isAdmin:
+          Boolean(config.adminWallet) &&
+          walletAddress === config.adminWallet,
         playerInitialized: Boolean(player),
         onChainEnabled: isAnchorEnabled(),
         memberSince: user.created_at,
@@ -420,18 +499,21 @@ apiRouter.post(
         return;
       }
 
-      getOrCreateUser(walletAddress);
-      const newBalance = updateBalance(walletAddress, verification.amount);
-
-      const depositId = uuidv4();
-      db.prepare(
-        "INSERT INTO deposits (id, wallet_address, signature, amount_lamports) VALUES (?, ?, ?, ?)",
-      ).run(depositId, walletAddress, signature, verification.amount);
+      const credited = creditDepositOnce(
+        walletAddress,
+        signature,
+        verification.amount,
+      );
+      if (!credited) {
+        res.status(500).json({ error: "Failed to record deposit" });
+        return;
+      }
 
       res.json({
         success: true,
+        alreadyProcessed: credited.alreadyProcessed,
         amountSol: lamportsToSol(verification.amount),
-        balanceSol: lamportsToSol(newBalance),
+        balanceSol: lamportsToSol(credited.balance),
         signature,
       });
     } catch (err) {
@@ -487,6 +569,16 @@ apiRouter.post(
       const newBalance = deductBalanceIfSufficient(walletAddress, lamports);
       if (newBalance === null) {
         res.status(400).json({ error: "Insufficient casino balance" });
+        return;
+      }
+
+      const treasuryLamports = await getCasinoWalletBalance();
+      if (treasuryLamports < lamports) {
+        updateBalance(walletAddress, lamports);
+        res.status(503).json({
+          error:
+            "Treasury wallet has insufficient on-chain SOL for this withdrawal. Your balance was restored.",
+        });
         return;
       }
 
@@ -702,17 +794,63 @@ apiRouter.get("/coinflip/recent", (_req, res) => {
   );
 });
 
+apiRouter.get("/limbo/recent", (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT id, multiplier, result, metadata
+       FROM bets
+       WHERE game = 'limbo'
+       ORDER BY created_at DESC
+       LIMIT 10`,
+    )
+    .all() as Array<{
+      id: string;
+      multiplier: number | null;
+      result: string;
+      metadata: string | null;
+    }>;
+
+  res.json(
+    rows.map((r) => {
+      let resultMultiplier = r.multiplier ?? 1;
+      try {
+        const meta = r.metadata
+          ? (JSON.parse(r.metadata) as { resultMultiplier?: number })
+          : null;
+        if (typeof meta?.resultMultiplier === "number") {
+          resultMultiplier = meta.resultMultiplier;
+        }
+      } catch {
+        /* ignore malformed metadata */
+      }
+      return {
+        id: r.id,
+        multiplier: resultMultiplier,
+        won: r.result === "win",
+      };
+    }),
+  );
+});
+
 apiRouter.post(
   "/coinflip",
   requireAuth,
   betLimiter,
-  (req: AuthenticatedRequest, res) => {
+  async (req: AuthenticatedRequest, res) => {
     try {
-      const { walletAddress, amountSol, choice, clientSeed } = req.body as {
+      const betBlock = await getBettingBlock();
+      if (betBlock.blocked) {
+        res.status(503).json({
+          error: betBlock.reason ?? "Casino is paused",
+          code: betBlock.code,
+        });
+        return;
+      }
+
+      const { walletAddress, amountSol, choice } = req.body as {
         walletAddress?: string;
         amountSol?: number;
         choice?: "heads" | "tails";
-        clientSeed?: string;
       };
 
       if (!walletAddress || walletAddress !== req.walletAddress) {
@@ -738,8 +876,16 @@ apiRouter.post(
         walletAddress,
         amountLamports: solToLamports(amountSol),
         choice,
-        clientSeed,
       });
+
+      if (result.won) {
+        broadcastPlayerWin({
+          walletAddress,
+          game: "coinflip",
+          multiplier: amountSol > 0 ? result.payoutLamports / solToLamports(amountSol) : 1.95,
+          payoutSol: lamportsToSol(result.payoutLamports),
+        });
+      }
 
       const updatedUser = db
         .prepare("SELECT balance_lamports FROM users WHERE wallet_address = ?")
@@ -762,14 +908,22 @@ apiRouter.post(
   "/limbo",
   requireAuth,
   betLimiter,
-  (req: AuthenticatedRequest, res) => {
+  async (req: AuthenticatedRequest, res) => {
     try {
-      const { walletAddress, amountSol, targetMultiplier, clientSeed } =
+      const betBlock = await getBettingBlock();
+      if (betBlock.blocked) {
+        res.status(503).json({
+          error: betBlock.reason ?? "Casino is paused",
+          code: betBlock.code,
+        });
+        return;
+      }
+
+      const { walletAddress, amountSol, targetMultiplier } =
         req.body as {
           walletAddress?: string;
           amountSol?: number;
           targetMultiplier?: number;
-          clientSeed?: string;
         };
 
       if (!walletAddress || walletAddress !== req.walletAddress) {
@@ -793,8 +947,16 @@ apiRouter.post(
         walletAddress,
         amountLamports: solToLamports(amountSol),
         targetMultiplier,
-        clientSeed,
       });
+
+      if (result.won) {
+        broadcastPlayerWin({
+          walletAddress,
+          game: "limbo",
+          multiplier: result.resultMultiplier,
+          payoutSol: lamportsToSol(result.payoutLamports),
+        });
+      }
 
       const updatedUser = db
         .prepare("SELECT balance_lamports FROM users WHERE wallet_address = ?")
@@ -829,6 +991,14 @@ apiRouter.post(
     }
     if (!targetMultiplier) {
       res.status(400).json({ error: "targetMultiplier required" });
+      return;
+    }
+    try {
+      validateLimboTarget(targetMultiplier);
+    } catch (err) {
+      res.status(400).json({
+        error: err instanceof Error ? err.message : "Invalid target multiplier",
+      });
       return;
     }
 
@@ -906,6 +1076,15 @@ apiRouter.post(
       !signature
     ) {
       res.status(400).json({ error: "Missing limbo confirmation fields" });
+      return;
+    }
+
+    try {
+      validateLimboTarget(targetMultiplier);
+    } catch (err) {
+      res.status(400).json({
+        error: err instanceof Error ? err.message : "Invalid target multiplier",
+      });
       return;
     }
 
@@ -1095,6 +1274,24 @@ apiRouter.get("/tournament", (_req, res) => {
   res.json(getTournamentLeaderboard());
 });
 
+apiRouter.get("/jackpot", (_req, res) => {
+  res.json(getJackpotState());
+});
+
+apiRouter.get("/crash/stats", (_req, res) => {
+  const row = db
+    .prepare(
+      `SELECT MAX(crash_point) AS max_point
+       FROM crash_rounds
+       WHERE status = 'complete'
+         AND ended_at >= datetime('now', '-1 hour')`,
+    )
+    .get() as { max_point: number | null } | undefined;
+
+  const hourlyHigh = Math.max(1, row?.max_point ?? 1);
+  res.json({ hourlyHigh });
+});
+
 apiRouter.get(
   "/transactions/:walletAddress",
   requireAuth,
@@ -1102,28 +1299,43 @@ apiRouter.get(
   (req, res) => {
     const walletAddress = req.params.walletAddress;
     const typeFilter = req.query.type as string | undefined;
+    const limit = Math.min(
+      100,
+      Math.max(1, Number.parseInt(String(req.query.limit ?? "25"), 10) || 25),
+    );
+    const offset = Math.max(
+      0,
+      Number.parseInt(String(req.query.offset ?? "0"), 10) || 0,
+    );
+    const overFetch = Math.min(offset + limit, 500);
+
+    const countRow = (sql: string) =>
+      (
+        db.prepare(sql).get(walletAddress) as { c: number } | undefined
+      )?.c ?? 0;
 
     const bets = db
       .prepare(
-        `SELECT id, game, amount_lamports, payout_lamports, multiplier, result, created_at
-         FROM bets WHERE wallet_address = ? ORDER BY created_at DESC LIMIT 50`,
+        `SELECT id, game, amount_lamports, payout_lamports, multiplier, result, metadata, created_at
+         FROM bets WHERE wallet_address = ? ORDER BY created_at DESC LIMIT ?`,
       )
-      .all(walletAddress) as Array<{
+      .all(walletAddress, overFetch) as Array<{
         id: string;
         game: string;
         amount_lamports: number;
         payout_lamports: number;
         multiplier: number | null;
         result: string | null;
+        metadata: string | null;
         created_at: string;
       }>;
 
     const deposits = db
       .prepare(
         `SELECT id, amount_lamports, signature, status, created_at
-         FROM deposits WHERE wallet_address = ? ORDER BY created_at DESC LIMIT 50`,
+         FROM deposits WHERE wallet_address = ? ORDER BY created_at DESC LIMIT ?`,
       )
-      .all(walletAddress) as Array<{
+      .all(walletAddress, overFetch) as Array<{
         id: string;
         amount_lamports: number;
         signature: string;
@@ -1134,15 +1346,30 @@ apiRouter.get(
     const withdrawals = db
       .prepare(
         `SELECT id, amount_lamports, signature, status, created_at
-         FROM withdrawals WHERE wallet_address = ? ORDER BY created_at DESC LIMIT 50`,
+         FROM withdrawals WHERE wallet_address = ? ORDER BY created_at DESC LIMIT ?`,
       )
-      .all(walletAddress) as Array<{
+      .all(walletAddress, overFetch) as Array<{
         id: string;
         amount_lamports: number;
         signature: string | null;
         status: string;
         created_at: string;
       }>;
+
+    const total =
+      (!typeFilter || typeFilter === "bet" ? countRow(
+        "SELECT COUNT(*) AS c FROM bets WHERE wallet_address = ?",
+      ) : 0) +
+      (!typeFilter || typeFilter === "deposit"
+        ? countRow(
+            "SELECT COUNT(*) AS c FROM deposits WHERE wallet_address = ?",
+          )
+        : 0) +
+      (!typeFilter || typeFilter === "withdrawal"
+        ? countRow(
+            "SELECT COUNT(*) AS c FROM withdrawals WHERE wallet_address = ?",
+          )
+        : 0);
 
     const records: Array<{
       id: string;
@@ -1155,7 +1382,63 @@ apiRouter.get(
       signature?: string | null;
       status?: string;
       createdAt: string;
+      verify?: {
+        game: "crash" | "limbo" | "coinflip";
+        roundId?: string;
+        serverSeed?: string;
+        clientSeed?: string;
+        serverSeedHash?: string;
+        targetMultiplier?: number;
+        crashPoint?: number;
+      };
     }> = [];
+
+    const parseBetVerify = (
+      game: string,
+      betId: string,
+      metadataRaw: string | null,
+    ):
+      | {
+          game: "crash" | "limbo" | "coinflip";
+          roundId?: string;
+          serverSeed?: string;
+          clientSeed?: string;
+          serverSeedHash?: string;
+          targetMultiplier?: number;
+          crashPoint?: number;
+        }
+      | undefined => {
+      if (game !== "crash" && game !== "limbo" && game !== "coinflip") {
+        return undefined;
+      }
+      let meta: Record<string, unknown> = {};
+      if (metadataRaw) {
+        try {
+          meta = JSON.parse(metadataRaw) as Record<string, unknown>;
+        } catch {
+          meta = {};
+        }
+      }
+      return {
+        game,
+        roundId:
+          typeof meta.roundId === "string" ? meta.roundId : undefined,
+        serverSeed:
+          typeof meta.serverSeed === "string" ? meta.serverSeed : undefined,
+        clientSeed:
+          typeof meta.clientSeed === "string" ? meta.clientSeed : undefined,
+        serverSeedHash:
+          typeof meta.serverSeedHash === "string"
+            ? meta.serverSeedHash
+            : undefined,
+        targetMultiplier:
+          typeof meta.targetMultiplier === "number"
+            ? meta.targetMultiplier
+            : undefined,
+        crashPoint:
+          typeof meta.crashPoint === "number" ? meta.crashPoint : undefined,
+      };
+    };
 
     if (!typeFilter || typeFilter === "bet") {
       for (const b of bets) {
@@ -1168,6 +1451,7 @@ apiRouter.get(
           multiplier: b.multiplier,
           result: b.result,
           createdAt: b.created_at,
+          verify: parseBetVerify(b.game, b.id, b.metadata),
         });
       }
     }
@@ -1203,7 +1487,14 @@ apiRouter.get(
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
 
-    res.json(records.slice(0, 50));
+    const items = records.slice(offset, offset + limit);
+    res.json({
+      items,
+      total,
+      limit,
+      offset,
+      hasMore: offset + items.length < total,
+    });
   },
 );
 
@@ -1298,7 +1589,7 @@ apiRouter.get("/recent-wins", (_req, res) => {
 });
 
 apiRouter.get("/casino/stats", async (_req, res) => {
-  const casinoBalance = await getCasinoWalletBalance();
+  const treasury = await getTreasurySnapshot();
   const totalUsers = db
     .prepare("SELECT COUNT(*) as count FROM users")
     .get() as { count: number };
@@ -1327,8 +1618,13 @@ apiRouter.get("/casino/stats", async (_req, res) => {
   const tournament = getTournamentLeaderboard();
 
   res.json({
-    casinoWallet: config.casinoWalletAddress,
-    casinoBalanceSol: lamportsToSol(casinoBalance),
+    casinoWallet: treasury.casinoWallet,
+    casinoBalanceSol: treasury.treasuryBalanceSol,
+    totalUserBalancesSol: treasury.totalUserBalancesSol,
+    pendingWithdrawalsSol: treasury.pendingWithdrawalsSol,
+    totalLiabilitiesSol: treasury.totalLiabilitiesSol,
+    treasurySurplusSol: treasury.treasurySurplusSol,
+    treasurySolvent: treasury.solvent,
     totalUsers: totalUsers.count,
     totalBets: totalBets.count,
     pendingWithdrawals: pendingWithdrawals.count,
@@ -1361,10 +1657,12 @@ apiRouter.get("/crash/round/:roundId", (req, res) => {
     return;
   }
 
+  const roundComplete = row.status === "complete";
+
   res.json({
     roundId: row.id,
-    crashPoint: row.crash_point,
-    serverSeed: row.server_seed,
+    crashPoint: roundComplete ? row.crash_point : undefined,
+    serverSeed: roundComplete ? row.server_seed : undefined,
     serverSeedHash: row.server_seed_hash,
     status: row.status,
   });
@@ -1458,7 +1756,7 @@ apiRouter.post("/fairness/verify-limbo", (req, res) => {
   });
 });
 
-if (config.nodeEnv !== "production" && process.env.ENABLE_E2E_HELPERS === "true") {
+if (process.env.ENABLE_E2E_HELPERS === "true") {
   apiRouter.post("/test/mint-session", (req, res) => {
     const walletAddress = (req.body as { walletAddress?: string }).walletAddress;
     if (!walletAddress || typeof walletAddress !== "string") {
@@ -1481,11 +1779,15 @@ if (config.nodeEnv !== "production" && process.env.ENABLE_E2E_HELPERS === "true"
     }
 
     const walletAddress = req.walletAddress!;
-    getOrCreateUser(walletAddress);
-    const balanceLamports = updateBalance(
-      walletAddress,
-      solToLamports(amountSol),
-    );
-    res.json({ balanceSol: lamportsToSol(balanceLamports) });
+    const amountLamports = solToLamports(amountSol);
+    const signature = `test-seed-${uuidv4()}`;
+
+    const credited = creditDepositOnce(walletAddress, signature, amountLamports);
+    if (!credited) {
+      res.status(500).json({ error: "Failed to seed balance" });
+      return;
+    }
+
+    res.json({ balanceSol: lamportsToSol(credited.balance) });
   });
 }

@@ -1,21 +1,13 @@
 import Database from "better-sqlite3";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { v4 as uuidv4 } from "uuid";
 import type { UserRow } from "./types.js";
 import { runMigrations } from "./migrations.js";
+import { ensureDataDir, getDbPath } from "../dataPaths.js";
+import { archiveCorruptDatabase } from "./backup.js";
+import { isSqliteCorruptionError, usesEfsPersistence } from "./sqliteErrors.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dataDir = process.env.SQLITE_PATH
-  ? path.dirname(path.resolve(process.env.SQLITE_PATH))
-  : path.join(__dirname, "..", "..", "data");
-const dbPath = process.env.SQLITE_PATH
-  ? path.resolve(process.env.SQLITE_PATH)
-  : path.join(dataDir, "casino.db");
-
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
+ensureDataDir();
+const dbPath = getDbPath();
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS users (
@@ -99,19 +91,31 @@ const SCHEMA = `
   );
 `;
 
-function backupCorruptDbFiles(targetPath: string): void {
-  const stamp = Date.now();
-  for (const suffix of ["", "-wal", "-shm"]) {
-    const file = `${targetPath}${suffix}`;
-    if (fs.existsSync(file)) {
-      fs.renameSync(file, `${file}.corrupt-${stamp}`);
-    }
+function backupCorruptDbFiles(targetPath: string, reason: string): void {
+  archiveCorruptDatabase(targetPath, reason);
+}
+
+function configureDatabase(database: Database.Database): void {
+  database.pragma("foreign_keys = ON");
+  database.pragma("busy_timeout = 5000");
+  // WAL on EFS/NFS corrupts SQLite — use DELETE journal on persistent ECS volume.
+  if (usesEfsPersistence()) {
+    database.pragma("journal_mode = DELETE");
+    database.pragma("synchronous = FULL");
+  } else {
+    database.pragma("journal_mode = WAL");
   }
+}
+
+function initializeSchema(database: Database.Database): void {
+  database.exec(SCHEMA);
+  runMigrations(database);
 }
 
 function openDatabase(): Database.Database {
   const tryOpen = (): Database.Database => {
     const database = new Database(dbPath);
+    configureDatabase(database);
     const integrity = database.pragma("integrity_check", {
       simple: true,
     }) as string;
@@ -129,18 +133,65 @@ function openDatabase(): Database.Database {
       `SQLite at ${dbPath} is corrupt or unreadable — backing up and reinitializing:`,
       err instanceof Error ? err.message : err,
     );
-    backupCorruptDbFiles(dbPath);
-    return new Database(dbPath);
+    backupCorruptDbFiles(
+      dbPath,
+      err instanceof Error ? err.message : "open failed",
+    );
+    const database = new Database(dbPath);
+    configureDatabase(database);
+    return database;
   }
 }
 
-export const db = openDatabase();
+export let db = openDatabase();
+initializeSchema(db);
 
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
+let recovering = false;
 
-db.exec(SCHEMA);
-runMigrations();
+export function recoverDatabaseFromCorruption(reason: unknown): boolean {
+  if (recovering) return false;
+  if (!isSqliteCorruptionError(reason)) return false;
+
+  recovering = true;
+  try {
+    console.error(
+      "Recovering SQLite after corruption:",
+      reason instanceof Error ? reason.message : reason,
+    );
+    try {
+      db.close();
+    } catch {
+      // ignore close errors on corrupt handle
+    }
+    backupCorruptDbFiles(
+      dbPath,
+      reason instanceof Error ? reason.message : "runtime corruption",
+    );
+    db = openDatabase();
+    initializeSchema(db);
+    console.log("SQLite recovery complete — fresh database initialized");
+    return true;
+  } catch (err) {
+    console.error(
+      "SQLite recovery failed:",
+      err instanceof Error ? err.message : err,
+    );
+    return false;
+  } finally {
+    recovering = false;
+  }
+}
+
+export function runDbTask<T>(task: () => T): T {
+  try {
+    return task();
+  } catch (err) {
+    if (recoverDatabaseFromCorruption(err)) {
+      return task();
+    }
+    throw err;
+  }
+}
 
 export function getOrCreateUser(walletAddress: string): UserRow {
   const existing = db
@@ -200,6 +251,57 @@ export function deductBalanceIfSufficient(
     .get(walletAddress) as { balance_lamports: number };
 
   return row.balance_lamports;
+}
+
+/**
+ * Credit a verified deposit exactly once (signature is UNIQUE).
+ * Returns null if this signature was already processed.
+ */
+export function creditDepositOnce(
+  walletAddress: string,
+  signature: string,
+  amountLamports: number,
+): { balance: number; alreadyProcessed: boolean } | null {
+  getOrCreateUser(walletAddress);
+  const depositId = uuidv4();
+
+  const tx = db.transaction(() => {
+    const insert = db
+      .prepare(
+        "INSERT OR IGNORE INTO deposits (id, wallet_address, signature, amount_lamports) VALUES (?, ?, ?, ?)",
+      )
+      .run(depositId, walletAddress, signature, amountLamports);
+
+    if (insert.changes === 0) {
+      const existing = db
+        .prepare("SELECT amount_lamports FROM deposits WHERE signature = ?")
+        .get(signature) as { amount_lamports: number } | undefined;
+      const user = db
+        .prepare("SELECT balance_lamports FROM users WHERE wallet_address = ?")
+        .get(walletAddress) as { balance_lamports: number };
+      return {
+        balance: user.balance_lamports,
+        alreadyProcessed: true,
+        amountLamports: existing?.amount_lamports ?? 0,
+      };
+    }
+
+    db.prepare(
+      "UPDATE users SET balance_lamports = balance_lamports + ?, updated_at = datetime('now') WHERE wallet_address = ?",
+    ).run(amountLamports, walletAddress);
+
+    const row = db
+      .prepare("SELECT balance_lamports FROM users WHERE wallet_address = ?")
+      .get(walletAddress) as { balance_lamports: number };
+
+    return {
+      balance: row.balance_lamports,
+      alreadyProcessed: false,
+      amountLamports,
+    };
+  });
+
+  return tx();
 }
 
 export function recordBet(params: {

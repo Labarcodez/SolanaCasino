@@ -52,7 +52,7 @@ When `PROGRAM_AUTHORITY_PRIVATE_KEY` is set, the backend enables **on-chain mode
 ## Casino Wallet (legacy custodial mode)
 
 ```
-FMmho438Vv1Y9nov4mtfHZ4pYSZV8NfubiCeCB3bbGCb
+3BSEfRdZsZz87EDafo5rcY87uLt6RCbPqQZsmNMxYfcu
 ```
 
 ## Quick Start
@@ -72,7 +72,10 @@ Leave `PROGRAM_AUTHORITY_PRIVATE_KEY` **unset** in `backend/.env` for custodial 
 
 ```bash
 # Verify backend is healthy (with server running)
-npm run verify
+npm run verify          # local API smoke (server must be running)
+npm run verify:prod     # production URL checks (default: orbit-casino.com)
+npm run test:e2e:smoke  # Playwright smoke against PLAYWRIGHT_BASE_URL
+npm run load:test       # lightweight concurrent load test
 ```
 
 ### Production (single server)
@@ -129,6 +132,8 @@ Open http://localhost:3001
    - `http://localhost:5173` (dev)
    - `http://localhost:5173/auth/callback` (dev)
    - Your production domain + `/auth/callback`
+
+See **[docs/PHANTOM-PROD.md](docs/PHANTOM-PROD.md)** for the full HTTPS + deploy checklist.
 
 **Phantom browser extension works without an app ID.**
 

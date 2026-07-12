@@ -41,7 +41,7 @@ export async function connectInjectedPhantom(timeoutMs = 120_000): Promise<void>
   const provider = getInjectedPhantomProvider();
   if (!provider) {
     throw new Error(
-      "Phantom extension not detected. Install it for Chrome, Brave, or Edge, then refresh this page.",
+      "Phantom wallet not detected. On mobile, tap Open in Phantom App. On desktop, install the Phantom extension.",
     );
   }
 

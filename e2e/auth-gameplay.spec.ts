@@ -35,14 +35,24 @@ test.describe("Authenticated gameplay", () => {
     await seedTestBalance(request, token, 0.05);
     await primeAuthenticatedSession(page, wallet, token);
 
+    // Let Phantom + JWT settle on a game route before opening wallet (avoids guest landing flash).
     await page.goto("/crash");
     await expect(page.getByTitle("Open wallet")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("crash-place-bet-0")).toBeEnabled({
+      timeout: 20_000,
+    });
     await page.getByRole("button", { name: "Wallet" }).click();
     await expect(page).toHaveURL(/\/wallet$/);
 
-    await expect(page.getByTestId("transaction-history-panel")).toBeVisible();
-    await expect(page.getByText("Transaction history")).toBeVisible();
-    await expect(page.getByRole("tab", { name: "All" })).toBeVisible();
-    await expect(page.getByRole("tab", { name: "Deposits" })).toBeVisible();
+    const walletPage = page.getByTestId("wallet-page");
+    await expect(walletPage).toBeVisible({ timeout: 20_000 });
+
+    const history = walletPage.getByTestId("transaction-history-panel");
+    await expect(history).toBeVisible({ timeout: 20_000 });
+    await expect(history.getByRole("heading", { name: "Transaction history" })).toBeVisible();
+    await expect(history.getByRole("tab", { name: "All" })).toBeVisible();
+    await expect(history.getByRole("tab", { name: "Deposits" })).toBeVisible({
+      timeout: 10_000,
+    });
   });
 });

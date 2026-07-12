@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   formatSol,
+  fetchLimboRecent,
   playLimbo,
 } from "../lib/api";
 import { useToast } from "./ui/Toast";
@@ -13,11 +14,13 @@ import { SoundToggle } from "./SoundToggle";
 import { WinCelebration } from "./WinCelebration";
 import { FairnessModal } from "./FairnessModal";
 import { GameActionSpinner } from "./GameActionSpinner";
+import { ConnectTrigger } from "./ConnectTrigger";
 import { fairnessUrl } from "../lib/fairnessLink";
+import { hapticPulse } from "../lib/haptics";
 import { sliderToTarget, targetToSlider } from "../lib/limboSlider";
 
 interface LimboGameProps {
-  walletAddress: string;
+  walletAddress?: string;
   balanceSol: number;
   minBetSol: number;
   maxBetSol: number;
@@ -26,9 +29,10 @@ interface LimboGameProps {
   limboHouseEdge?: number;
   onChainEnabled?: boolean;
   onBalanceUpdate: (balance: number) => void;
+  spectator?: boolean;
 }
 
-const PRESET_TARGETS = [1.5, 2, 3, 5, 10, 50, 100, 1000];
+const PRESET_TARGETS = [1.25, 1.5, 2, 3, 5, 10, 50, 100, 1000];
 
 interface RollRecord {
   id: string;
@@ -41,13 +45,14 @@ export function LimboGame({
   balanceSol,
   minBetSol,
   maxBetSol,
-  limboMinTarget = 1.01,
+  limboMinTarget = 1.25,
   limboMaxTarget = 1000,
   limboHouseEdge = 0.02,
   onBalanceUpdate,
+  spectator = false,
 }: LimboGameProps) {
   const { toast } = useToast();
-  const { muted, toggleMute, play } = useSound();
+  const { muted, volume, toggleMute, setVolume, play } = useSound();
   const [betAmount, setBetAmount] = useState("0.01");
   const [target, setTarget] = useState("2.00");
   const [rolling, setRolling] = useState(false);
@@ -110,7 +115,25 @@ export function LimboGame({
     };
   }, []);
 
-  const handlePlay = async () => {
+  useEffect(() => {
+    fetchLimboRecent()
+      .then((rows) => {
+        if (rows.length === 0) return;
+        setRecentRolls(
+          rows.map((r) => ({
+            id: r.id,
+            multiplier: r.multiplier,
+            won: r.won,
+          })),
+        );
+      })
+      .catch(() => {
+        /* optional strip */
+      });
+  }, []);
+
+  const handlePlay = useCallback(async () => {
+    if (spectator || !walletAddress) return;
     const amount = parseFloat(betAmount);
     if (isNaN(amount) || amount < minBetSol || amount > maxBetSol) {
       toast(`Bet must be between ${minBetSol} and ${maxBetSol} SOL`, "error");
@@ -157,7 +180,12 @@ export function LimboGame({
         ].slice(0, 10),
       );
       play(result.won ? "limboWin" : "limboBust");
-      if (result.won) setCelebrateWin(true);
+      if (result.won) {
+        setCelebrateWin(true);
+        hapticPulse(16);
+      } else {
+        hapticPulse(28);
+      }
       onBalanceUpdate(result.balanceSol);
       toast(
         result.won
@@ -172,7 +200,34 @@ export function LimboGame({
       setDisplayRoll(null);
       setRollTone("neutral");
     }
-  };
+  }, [
+    spectator,
+    walletAddress,
+    betAmount,
+    minBetSol,
+    maxBetSol,
+    targetNum,
+    limboMinTarget,
+    limboMaxTarget,
+    toast,
+    play,
+    muted,
+    onBalanceUpdate,
+  ]);
+
+  useEffect(() => {
+    if (spectator) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.code === "Enter" && !rolling) {
+        e.preventDefault();
+        void handlePlay();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [spectator, rolling, handlePlay]);
 
   const gaugePercent = Math.min(
     100,
@@ -186,7 +241,7 @@ export function LimboGame({
       <div className="game-header-row">
         <PageHeader
           title="Limbo"
-          subtitle={`Pick your target · ${((1 - limboHouseEdge) * 100).toFixed(0)}% RTP · 2% house edge`}
+          subtitle={`${limboMinTarget.toFixed(2)}× min target · ${((1 - limboHouseEdge) * 100).toFixed(0)}% RTP · 2% house edge`}
         />
         <button
           type="button"
@@ -196,7 +251,12 @@ export function LimboGame({
         >
           Fairness
         </button>
-        <SoundToggle muted={muted} onToggle={toggleMute} />
+        <SoundToggle
+          muted={muted}
+          volume={volume}
+          onToggle={toggleMute}
+          onVolumeChange={setVolume}
+        />
       </div>
 
       <RecentResultsStrip
@@ -211,17 +271,18 @@ export function LimboGame({
       <div className="limbo-arena">
         <div className="limbo-display game-action-stage">
           <WinCelebration active={celebrateWin} onDone={() => setCelebrateWin(false)} />
-          <div className="limbo-gauge">
+          <div className="limbo-gauge limbo-gauge--horizontal">
             <div
               className="limbo-gauge-target"
-              style={{ bottom: `${Math.min(95, (targetNum / limboMaxTarget) * 90 + 5)}%` }}
+              style={{ left: `${Math.min(95, (targetNum / limboMaxTarget) * 90 + 5)}%` }}
             />
             <div
               className="limbo-gauge-fill"
-              style={{ height: `${gaugePercent}%` }}
+              style={{ width: `${gaugePercent}%` }}
             />
           </div>
-          <AnimatePresence mode="wait">
+          <div className="limbo-multiplier-live" aria-live="polite" aria-atomic="true">
+            <AnimatePresence mode="wait">
             {rolling || displayRoll !== null ? (
               <motion.div
                 key="rolling"
@@ -253,7 +314,8 @@ export function LimboGame({
                 {targetNum.toFixed(2)}x
               </motion.div>
             )}
-          </AnimatePresence>
+            </AnimatePresence>
+          </div>
           <p className="limbo-target-line">
             Target: <strong>{targetNum.toFixed(2)}x</strong>
           </p>
@@ -276,7 +338,7 @@ export function LimboGame({
               max={limboMaxTarget}
               value={target}
               onChange={(e) => setTarget(e.target.value)}
-              disabled={rolling}
+              disabled={rolling || spectator}
             />
             <input
               className="limbo-slider"
@@ -293,7 +355,7 @@ export function LimboGame({
                 );
                 setTarget(next.toFixed(2));
               }}
-              disabled={rolling}
+              disabled={rolling || spectator}
             />
           </div>
 
@@ -304,7 +366,7 @@ export function LimboGame({
                 type="button"
                 className={`preset-btn ${targetNum === p ? "selected" : ""}`}
                 onClick={() => setTarget(p.toFixed(2))}
-                disabled={rolling}
+                disabled={rolling || spectator}
               >
                 {p}x
               </button>
@@ -317,9 +379,12 @@ export function LimboGame({
             maxBetSol={maxBetSol}
             amount={betAmount}
             onAmountChange={setBetAmount}
-            disabled={rolling}
+            disabled={rolling || spectator}
           />
 
+          {spectator ? (
+            <ConnectTrigger intent="play" label="Connect to play" fullWidth testId="limbo-spectator-connect" />
+          ) : (
           <button
             type="button"
             className="btn btn-primary"
@@ -333,6 +398,12 @@ export function LimboGame({
               `Play Limbo @ ${targetNum.toFixed(2)}x`
             )}
           </button>
+          )}
+          {!spectator && (
+            <p className="game-shortcut-hint text-muted">
+              Enter = roll · adjust target with slider or presets
+            </p>
+          )}
 
           {lastResult && (
             <p className="limbo-fairness-note">

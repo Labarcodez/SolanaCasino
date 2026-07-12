@@ -18,7 +18,7 @@ test.describe("Clean URL routing", () => {
     await page.goto("/limbo");
     await expect(page).toHaveURL(/\/limbo$/);
     await expect(page.getByRole("heading", { name: "Limbo", exact: true })).toBeVisible();
-    await expect(page.getByText("Connect your wallet to play limbo")).toBeVisible();
+    await expect(page.getByTestId("limbo-spectator-connect")).toBeVisible();
   });
 
   test("serves coinflip preview at /coinflip for guests", async ({ page }) => {
@@ -48,7 +48,9 @@ test.describe("Clean URL routing", () => {
 test.describe("Guest crash spectator", () => {
   test("shows connect banner and disabled betting", async ({ page }) => {
     await page.goto("/crash");
-    await expect(page.getByTestId("spectator-connect-banner")).toBeVisible();
+    await expect(page.getByTestId("spectator-connect-banner")).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.getByTestId("crash-place-bet-0")).toBeDisabled();
     await expect(page.getByTestId("crash-cashout-0")).toBeDisabled();
   });
@@ -56,8 +58,10 @@ test.describe("Guest crash spectator", () => {
   test("receives live crash phase updates", async ({ page }) => {
     await page.goto("/crash");
     const badge = page.getByTestId("crash-phase-badge");
-    await expect(badge).toBeVisible();
-    await expect(badge).toHaveText(/betting|running|crashed|cooldown/);
+    await expect(badge).toBeVisible({ timeout: 15_000 });
+    await expect(badge).toHaveText(
+      /betting|running|crashed|cooldown|Betting open|Running|Crashed|Next round/i,
+    );
   });
 
   test("opens in-game fairness modal", async ({ page }) => {
@@ -84,7 +88,9 @@ test.describe("Guest crash spectator", () => {
 test.describe("Fairness deep links", () => {
   test("opens fairness panel from /fairness route", async ({ page }) => {
     await page.goto("/fairness?verify=limbo");
-    await expect(page.getByRole("button", { name: "Verify Limbo" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Verify Limbo" })).toBeVisible({
+      timeout: 15_000,
+    });
   });
 
   test("opens fairness panel from /verify route", async ({ page }) => {

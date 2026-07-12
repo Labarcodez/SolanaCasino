@@ -7,7 +7,11 @@ import {
 import { PageHeader } from "./PageHeader";
 import { FetchError } from "./FetchError";
 
-export function Leaderboard() {
+interface LeaderboardProps {
+  walletAddress?: string | null;
+}
+
+export function Leaderboard({ walletAddress }: LeaderboardProps) {
   const [leaders, setLeaders] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,8 +70,15 @@ export function Leaderboard() {
               </tr>
             </thead>
             <tbody>
-              {leaders.map((l) => (
-                <tr key={l.rank}>
+              {leaders.map((l) => {
+                const isSelf =
+                  !!walletAddress && l.walletAddress === walletAddress;
+                return (
+                <tr
+                  key={l.rank}
+                  className={isSelf ? "leaderboard-row-self" : undefined}
+                  aria-current={isSelf ? "true" : undefined}
+                >
                   <td>
                     {l.rank <= 3 ? (
                       <span className={`rank-badge ${getRankClass(l.rank)}`}>
@@ -77,13 +88,19 @@ export function Leaderboard() {
                       l.rank
                     )}
                   </td>
-                  <td className="mono-cell">{l.displayName}</td>
+                  <td className="mono-cell">
+                    {l.displayName}
+                    {isSelf && (
+                      <span className="leaderboard-you-badge">You</span>
+                    )}
+                  </td>
                   <td>{formatSol(l.totalWageredSol)} SOL</td>
                   <td className="text-success">
                     {formatSol(l.totalWonSol)} SOL
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

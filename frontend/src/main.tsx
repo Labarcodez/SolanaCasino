@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
+import * as Sentry from "@sentry/react";
 import { PhantomProvider, darkTheme } from "@phantom/react-sdk";
 import { AddressType } from "@phantom/browser-sdk";
 import App from "./App";
@@ -13,6 +14,15 @@ import { captureReferralFromUrl, fetchConfig } from "./lib/api";
 import { setSolanaCluster, setSolanaRpc } from "./lib/cluster";
 import { ToastProvider } from "./components/ui/Toast";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+
+const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: import.meta.env.MODE,
+    tracesSampleRate: import.meta.env.PROD ? 0.15 : 1.0,
+  });
+}
 
 const redirectUrl = `${window.location.origin}/auth/callback`;
 

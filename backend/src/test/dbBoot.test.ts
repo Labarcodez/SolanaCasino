@@ -15,7 +15,7 @@ function testDbBoot(): void {
     }
   }
 
-  runMigrations();
+  runMigrations(db);
   console.log("✅ Database boot test passed");
   console.log(`   Tables: ${names.length}`);
 }

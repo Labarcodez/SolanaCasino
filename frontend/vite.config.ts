@@ -12,7 +12,6 @@ export default defineConfig({
           phantom: ["@phantom/react-sdk", "@phantom/browser-sdk"],
           anchor: ["@coral-xyz/anchor"],
           motion: ["framer-motion"],
-          pump: ["@pump-fun/pump-sdk"],
         },
       },
     },

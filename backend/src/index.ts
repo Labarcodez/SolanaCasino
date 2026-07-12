@@ -1,4 +1,5 @@
 import "dotenv/config";
+import "./instrument.js";
 import cors from "cors";
 import compression from "compression";
 import helmet from "helmet";
@@ -8,6 +9,8 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
+import { Sentry } from "./instrument.js";
+import { getPersistenceInfo } from "./dataPaths.js";
 import { config, solToLamports, lamportsToSol, getPublicRpcSetup, isAlchemyRpcConfigured } from "./config.js";
 import { apiRouter } from "./routes/api.js";
 import { adminRouter } from "./routes/admin.js";
@@ -15,12 +18,22 @@ import { tokenRouter } from "./routes/token.js";
 import { crashEngine } from "./services/crash.js";
 import { startCrashKeeper } from "./services/crashKeeper.js";
 import { startBetIndexer } from "./services/indexer.js";
-import { getOrCreateUser } from "./db/index.js";
+import { getOrCreateUser, recoverDatabaseFromCorruption } from "./db/index.js";
+import { isSqliteCorruptionError } from "./db/sqliteErrors.js";
 import { attachSocketAuth } from "./middleware/auth.js";
-import { checkRpcHealth } from "./services/solana.js";
+import { checkRpcHealth, assertCasinoWalletConsistency } from "./services/solana.js";
 import { getRecentChatMessages, sendChatMessage } from "./services/chat.js";
-import { isCasinoPaused } from "./services/pause.js";
+import { getBettingBlock } from "./services/bettingGate.js";
 import { initializeCasinoIfNeeded, isAnchorEnabled, fetchCasinoAccount } from "./services/anchor.js";
+import { getJackpotState } from "./services/jackpot.js";
+import { getDisplayName } from "./services/profile.js";
+import { backupDatabaseOnStartup, appendOpsLog } from "./db/backup.js";
+import { setGameBroadcastIo } from "./services/gameBroadcast.js";
+import {
+  startPumpCreatorRewardLottery,
+  stopPumpCreatorRewardLottery,
+} from "./services/pumpCreatorRewards.js";
+import { startWithdrawalFinalizer } from "./services/balanceSync.js";
 
 const socketRateLimits = new Map<string, number>();
 const SOCKET_COOLDOWN_MS = 500;
@@ -52,11 +65,17 @@ const io = new Server(httpServer, {
     methods: ["GET", "POST"],
   },
 });
+setGameBroadcastIo(io);
 
 app.use(
   helmet({
+    // Phantom / wallet SDKs may use eval-like constructs; do not ship a blocking CSP.
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
+    // Allow OAuth / wallet popups to retain window.opener (Google, Apple, Phantom).
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+    // Permit cross-origin embeds Phantom Connect may load (scripts, iframes assets).
+    crossOriginResourcePolicy: { policy: "cross-origin" },
   }),
 );
 app.use(compression());
@@ -69,6 +88,26 @@ app.use(express.json({ limit: "2mb" }));
 app.use("/api", apiRouter);
 app.use("/api/token", tokenRouter);
 app.use("/api/admin", adminRouter);
+
+if (config.sentryDsn) {
+  Sentry.setupExpressErrorHandler(app);
+}
+
+app.use(
+  (
+    err: unknown,
+    _req: express.Request,
+    res: express.Response,
+    _next: express.NextFunction,
+  ) => {
+    console.error("Unhandled API error:", err);
+    if (res.headersSent) return;
+    res.status(500).json({
+      error: "Internal server error",
+      code: "INTERNAL_ERROR",
+    });
+  },
+);
 
 function broadcastOnlineCount(): void {
   io.emit("site:online", { count: io.engine.clientsCount });
@@ -87,6 +126,7 @@ io.on("connection", (socket) => {
       : crashEngine.getFullStateForWallet(walletAddress),
   );
   socket.emit("chat:history", getRecentChatMessages());
+  socket.emit("jackpot:state", getJackpotState());
   broadcastOnlineCount();
 
   socket.on("disconnect", () => {
@@ -112,8 +152,9 @@ io.on("connection", (socket) => {
         if (isSpectator || !walletAddress) {
           throw new Error("Connect wallet to place bets");
         }
-        if (await isCasinoPaused()) {
-          throw new Error("Casino is paused");
+        const betBlock = await getBettingBlock();
+        if (betBlock.blocked) {
+          throw new Error(betBlock.reason ?? "Casino is paused");
         }
 
         if (!checkSocketRateLimit(walletAddress)) {
@@ -178,8 +219,9 @@ io.on("connection", (socket) => {
       if (isSpectator || !walletAddress) {
         throw new Error("Connect wallet to cash out");
       }
-      if (await isCasinoPaused()) {
-        throw new Error("Casino is paused");
+      const cashoutBlock = await getBettingBlock();
+      if (cashoutBlock.blocked && cashoutBlock.code === "CASINO_PAUSED") {
+        throw new Error(cashoutBlock.reason ?? "Casino is paused");
       }
       if (!checkSocketRateLimit(walletAddress)) {
         throw new Error("Too many requests — slow down");
@@ -196,6 +238,7 @@ io.on("connection", (socket) => {
       io.emit("crash:player_cashout", {
         walletAddress:
           walletAddress.slice(0, 4) + "..." + walletAddress.slice(-4),
+        displayName: getDisplayName(walletAddress),
         multiplier: bet.cashoutMultiplier,
         payoutSol: lamportsToSol(bet.payoutLamports),
       });
@@ -252,9 +295,18 @@ crashEngine.on("cashout", ({ bet, multiplier }) => {
   io.emit("crash:player_cashout", {
     walletAddress:
       bet.walletAddress.slice(0, 4) + "..." + bet.walletAddress.slice(-4),
+    displayName: getDisplayName(bet.walletAddress),
     multiplier,
     payoutSol: lamportsToSol(bet.payoutLamports),
   });
+});
+
+crashEngine.on("jackpot_update", (state) => {
+  io.emit("jackpot:state", state);
+});
+
+crashEngine.on("jackpot_won", (award) => {
+  io.emit("jackpot:won", award);
 });
 
 const LEGACY_TAB_REDIRECTS: Record<string, string> = {
@@ -317,6 +369,7 @@ if (config.serveFrontend && fs.existsSync(frontendDist)) {
 function shutdown(signal: string): void {
   console.log(`${signal} received — shutting down`);
   crashEngine.destroy();
+  stopPumpCreatorRewardLottery();
   httpServer.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 10_000).unref();
 }
@@ -324,7 +377,24 @@ function shutdown(signal: string): void {
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 
+process.on("uncaughtException", (err) => {
+  console.error("uncaughtException:", err);
+  if (isSqliteCorruptionError(err)) {
+    recoverDatabaseFromCorruption(err);
+    return;
+  }
+  shutdown("uncaughtException");
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("unhandledRejection:", reason);
+});
+
 async function start(): Promise<void> {
+  backupDatabaseOnStartup();
+  appendOpsLog(`container start (NODE_ENV=${config.nodeEnv})`);
+  assertCasinoWalletConsistency();
+
   const rpc = await checkRpcHealth();
   if (!rpc.healthy) {
     console.warn("Warning: RPC health check failed — deposits may be slow");
@@ -343,6 +413,14 @@ async function start(): Promise<void> {
       console.error(
         "CRITICAL: ALCHEMY_API_KEY is not set — using public mainnet RPC. Deposits will be unreliable. Set ALCHEMY_API_KEY in production env and redeploy.",
       );
+    }
+    if (config.nodeEnv === "production" && !process.env.PHANTOM_APP_ID) {
+      console.warn(
+        "Warning: PHANTOM_APP_ID is not set — Google/Apple social login disabled. See docs/PHANTOM-PROD.md",
+      );
+    }
+    if (config.sentryDsn) {
+      console.log("Sentry error reporting enabled");
     }
   }
 
@@ -368,14 +446,20 @@ async function start(): Promise<void> {
   }
 
   httpServer.listen(config.port, () => {
+    const persistence = getPersistenceInfo();
     console.log(`OrbitCasino backend running on port ${config.port}`);
     console.log(`Casino wallet: ${config.casinoWalletAddress}`);
     console.log(`Environment: ${config.nodeEnv}`);
+    console.log(
+      `SQLite: ${persistence.dbPath} (exists: ${persistence.dbExists})`,
+    );
     console.log(
       `Withdrawals: ${process.env.CASINO_WALLET_PRIVATE_KEY ? "enabled" : "queued mode"}`,
     );
     startCrashKeeper();
     startBetIndexer();
+    startPumpCreatorRewardLottery();
+    startWithdrawalFinalizer();
   });
 }
 

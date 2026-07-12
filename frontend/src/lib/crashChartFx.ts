@@ -112,8 +112,9 @@ export function spawnComet(x: number, y: number): Comet {
 }
 
 export function stepComets(comets: Comet[]): Comet[] {
-  return comets
-    .map((c) => ({ ...c, life: c.life - 0.04 }))
+  const capped = comets.length > 10 ? comets.slice(-10) : comets;
+  return capped
+    .map((c) => ({ ...c, life: c.life - 0.055 }))
     .filter((c) => c.life > 0);
 }
 
@@ -131,8 +132,9 @@ export function spawnPulseRing(x: number, y: number): PulseRing {
 }
 
 export function stepPulseRings(rings: PulseRing[]): PulseRing[] {
-  return rings
-    .map((r) => ({ ...r, radius: r.radius + 2.2, life: r.life - 0.035 }))
+  const capped = rings.length > 4 ? rings.slice(-4) : rings;
+  return capped
+    .map((r) => ({ ...r, radius: r.radius + 1.6, life: r.life - 0.045 }))
     .filter((r) => r.life > 0);
 }
 
@@ -150,7 +152,7 @@ export function drawPulseRings(
   }
 }
 
-/** SolPump-style rocket drawn on canvas. */
+/** SolPump-style rocket — clean silhouette with subtle flame flicker. */
 export function drawRocket(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -158,53 +160,78 @@ export function drawRocket(
   angle: number,
   palette: CrashPalette,
   thrust: number,
+  frame = 0,
 ): void {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(angle);
 
-  const flameLen = 14 + thrust * 18;
-  const flameGrad = ctx.createLinearGradient(-flameLen, 0, 4, 0);
-  flameGrad.addColorStop(0, "rgba(255, 120, 40, 0)");
-  flameGrad.addColorStop(0.35, `rgba(255, 160, 60, ${0.5 + thrust * 0.4})`);
-  flameGrad.addColorStop(0.7, `rgba(0, 255, 163, ${0.7 + thrust * 0.3})`);
+  const flicker = 0.85 + Math.sin(frame * 0.35) * 0.15;
+  const flameLen = (12 + thrust * 14) * flicker;
+  const flameGrad = ctx.createLinearGradient(-flameLen, 0, 6, 0);
+  flameGrad.addColorStop(0, "rgba(255, 90, 40, 0)");
+  flameGrad.addColorStop(0.4, `rgba(255, 140, 50, ${0.35 + thrust * 0.25})`);
+  flameGrad.addColorStop(0.75, `rgba(0, 255, 163, ${0.55 + thrust * 0.25})`);
   flameGrad.addColorStop(1, palette.head);
   ctx.fillStyle = flameGrad;
   ctx.beginPath();
-  ctx.moveTo(-4, 0);
-  ctx.lineTo(-4 - flameLen, -5 - thrust * 4);
-  ctx.lineTo(-4 - flameLen * 0.7, 0);
-  ctx.lineTo(-4 - flameLen, 5 + thrust * 4);
+  ctx.moveTo(-2, 0);
+  ctx.lineTo(-2 - flameLen, -3.5 - thrust * 2.5);
+  ctx.lineTo(-2 - flameLen * 0.65, 0);
+  ctx.lineTo(-2 - flameLen, 3.5 + thrust * 2.5);
   ctx.closePath();
   ctx.fill();
 
-  ctx.shadowColor = palette.glow;
-  ctx.shadowBlur = 16;
-  ctx.fillStyle = "#e8edf7";
+  ctx.fillStyle = "#f1f5f9";
   ctx.beginPath();
-  ctx.moveTo(14, 0);
-  ctx.lineTo(-8, -7);
-  ctx.lineTo(-4, 0);
-  ctx.lineTo(-8, 7);
+  ctx.moveTo(12, 0);
+  ctx.lineTo(-6, -5.5);
+  ctx.lineTo(-3, 0);
+  ctx.lineTo(-6, 5.5);
   ctx.closePath();
   ctx.fill();
 
   ctx.fillStyle = palette.head;
   ctx.beginPath();
-  ctx.moveTo(6, 0);
-  ctx.lineTo(-2, -4);
-  ctx.lineTo(0, 0);
-  ctx.lineTo(-2, 4);
+  ctx.moveTo(5, 0);
+  ctx.lineTo(-1, -3);
+  ctx.lineTo(1, 0);
+  ctx.lineTo(-1, 3);
   ctx.closePath();
   ctx.fill();
-  ctx.shadowBlur = 0;
 
-  ctx.strokeStyle = "rgba(255,255,255,0.5)";
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.lineWidth = 0.8;
   ctx.beginPath();
-  ctx.arc(2, 0, 3, 0, Math.PI * 2);
+  ctx.arc(1, 0, 2.2, 0, Math.PI * 2);
   ctx.stroke();
 
+  ctx.restore();
+}
+
+/** Stake-style crack burst at crash point. */
+export function drawCrashCrack(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  life: number,
+): void {
+  if (life <= 0) return;
+  const alpha = life * 0.9;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.strokeStyle = `rgba(255, 80, 100, ${alpha})`;
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+  const rays = 6;
+  for (let i = 0; i < rays; i++) {
+    const a = (i / rays) * Math.PI * 2 + 0.2;
+    const len = 18 + (1 - life) * 28;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 

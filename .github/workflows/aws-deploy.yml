@@ -37,14 +37,17 @@ jobs:
           ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
           ECR_REPOSITORY: ${{ secrets.AWS_ECR_REPOSITORY }}
           VITE_PHANTOM_APP_ID: ${{ secrets.VITE_PHANTOM_APP_ID }}
+          VITE_CASINO_WALLET: ${{ secrets.VITE_CASINO_WALLET }}
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
         run: |
           IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${{ env.IMAGE_TAG }}"
           docker build \
             --build-arg VITE_PHANTOM_APP_ID="${VITE_PHANTOM_APP_ID}" \
             --build-arg VITE_PROGRAM_ID=Be5brMe2AvA68zEdiFKxa6KfYJdeQAeY12eWtZiC41vU \
-            --build-arg VITE_CASINO_WALLET=C9W7nGv2ZBJp4zcmtvBHkrtTPhB1FQ7JaNNPRNhiA4Ze \
+            --build-arg VITE_CASINO_WALLET="${VITE_CASINO_WALLET:-3BSEfRdZsZz87EDafo5rcY87uLt6RCbPqQZsmNMxYfcu}" \
             --build-arg VITE_SOLANA_RPC=https://solana.drpc.org \
             --build-arg VITE_API_URL="" \
+            --build-arg VITE_SENTRY_DSN="${VITE_SENTRY_DSN}" \
             -t "$IMAGE" .
           docker push "$IMAGE"
 
@@ -69,3 +72,11 @@ jobs:
           done
           echo "Health check did not pass yet — check CloudWatch logs and ECS service events"
           exit 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run production verify
+        run: node scripts/verify-production.mjs "${{ secrets.AWS_LOAD_BALANCER_URL }}"

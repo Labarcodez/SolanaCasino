@@ -1,0 +1,11 @@
+{
+  "name": "Orbit Solana Casino",
+  "symbol": "ORBIT",
+  "website": "https://orbit-casino.com",
+  "twitter": "https://x.com/OrbitSolCasino",
+  "discord": "https://discord.gg/tXHWmuQkS",
+  "imageUrl": "https://ipfs.io/ipfs/QmNPY6MruFAPQZNbnVDsJbjApun5Vd8xjCUVKedAoSb7oN",
+  "initialBuyUsd": 140,
+  "launchPlatform": "pump",
+  "description": "ORBIT is the official community token of Orbit Solana Casino — a deposit-first, provably fair Solana casino with crash, limbo, and coinflip.\n\n🌐 Play: https://orbit-casino.com\n𝕏 Updates: https://x.com/OrbitSolCasino\n\nLaunching on Pump.fun from treasury wallet 3BSEfRdZsZz87EDafo5rcY87uLt6RCbPqQZsmNMxYfcu with a $140 initial buy. Trading volume and creator rewards grow the casino treasury as the bonding curve fills.\n\nRoadmap: treasury growth, withdrawal liquidity, VIP rewards, tournaments, and holder perks. Play responsibly — not financial advice."
+}

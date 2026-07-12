@@ -96,28 +96,43 @@ export function claimRakeback(walletAddress: string): {
   claimedSol: number;
   balanceSol: number;
 } {
-  const pending = getPendingRakebackLamports(walletAddress);
-  if (pending < solToLamports(0.001)) {
-    throw new Error("Minimum rakeback claim is 0.001 SOL");
-  }
+  return db.transaction(() => {
+    const row = db
+      .prepare(
+        "SELECT rakeback_pending_lamports FROM users WHERE wallet_address = ?",
+      )
+      .get(walletAddress) as { rakeback_pending_lamports: number } | undefined;
 
-  const vip = getVipTier(walletAddress);
+    const pending = row?.rakeback_pending_lamports ?? 0;
+    if (pending < solToLamports(0.001)) {
+      throw new Error("Minimum rakeback claim is 0.001 SOL");
+    }
 
-  db.prepare(
-    "UPDATE users SET rakeback_pending_lamports = 0 WHERE wallet_address = ?",
-  ).run(walletAddress);
+    const cleared = db
+      .prepare(
+        `UPDATE users
+         SET rakeback_pending_lamports = 0, updated_at = datetime('now')
+         WHERE wallet_address = ? AND rakeback_pending_lamports = ?`,
+      )
+      .run(walletAddress, pending);
 
-  const newBalance = updateBalance(walletAddress, pending);
+    if (cleared.changes === 0) {
+      throw new Error("Rakeback already claimed or changed — retry");
+    }
 
-  db.prepare(
-    `INSERT INTO rakeback_claims (id, wallet_address, amount_lamports, vip_tier)
-     VALUES (?, ?, ?, ?)`,
-  ).run(uuidv4(), walletAddress, pending, vip.tier);
+    const vip = getVipTier(walletAddress);
+    const newBalance = updateBalance(walletAddress, pending);
 
-  return {
-    claimedSol: lamportsToSol(pending),
-    balanceSol: lamportsToSol(newBalance),
-  };
+    db.prepare(
+      `INSERT INTO rakeback_claims (id, wallet_address, amount_lamports, vip_tier)
+       VALUES (?, ?, ?, ?)`,
+    ).run(uuidv4(), walletAddress, pending, vip.tier);
+
+    return {
+      claimedSol: lamportsToSol(pending),
+      balanceSol: lamportsToSol(newBalance),
+    };
+  })();
 }
 
 export { VIP_TIERS };

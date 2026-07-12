@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useSearchParams } from "react-router-dom";
 import { Header } from "./components/Header";
 import { Landing } from "./components/Landing";
 import { TransactionHistoryPanel } from "./components/TransactionHistoryPanel";
+import { GameMobileHistorySheet } from "./components/GameMobileHistorySheet";
 import { AnimatedBackground } from "./components/AnimatedBackground";
 import { MobileNav } from "./components/MobileNav";
 import { useCasino, CasinoUserProvider } from "./hooks/CasinoUserProvider";
@@ -20,11 +21,14 @@ import { ConfigErrorScreen } from "./components/ConfigErrorScreen";
 import { GameErrorBoundary } from "./components/GameErrorBoundary";
 import type { UserProfile } from "./lib/api";
 import { shortenAddress } from "./lib/api";
-import { useGameTab, parseGameTab, tabToPath } from "./hooks/useGameTab";
+import { useGameTab, parseGameTab, tabToPath, type GameTab } from "./hooks/useGameTab";
+import { useDocumentTitle } from "./hooks/useDocumentTitle";
+import { useFocusTrap } from "./hooks/useFocusTrap";
 import { GuestGameShell, isGuestAccessibleTab } from "./components/GuestGameShell";
 import { SocketStatusBanner } from "./components/SocketStatusBanner";
 import { ZeroBalanceBanner } from "./components/ZeroBalanceBanner";
 import { ConnectTrigger } from "./components/ConnectTrigger";
+import { AuthSignInOverlay } from "./components/AuthSignInOverlay";
 
 const CrashArena = lazy(() =>
   import("./components/CrashArena").then((m) => ({ default: m.CrashArena })),
@@ -155,9 +159,20 @@ function CasinoContent() {
   const { connected: wsConnected } = useSocket();
   const { activeTab, setActiveTab } = useGameTab();
   const [profileOpen, setProfileOpen] = useState(false);
+  const profileDialogRef = useFocusTrap(profileOpen && !!profile, () =>
+    setProfileOpen(false),
+  );
+
+  useDocumentTitle(activeTab);
 
   const balanceSol = profile?.balanceSol ?? 0;
   const onChainEnabled = config?.onChainEnabled ?? false;
+  const isAdmin = profile?.isAdmin ?? false;
+  const pendingProfileSignIn =
+    Boolean(isConnected && walletAddress && !isAuthenticated);
+  const gameTabsWhileSigningIn = new Set<GameTab>(["crash", "limbo", "coinflip"]);
+  const showGameWhileSigningIn =
+    pendingProfileSignIn && gameTabsWhileSigningIn.has(activeTab);
 
   if (!configLoading && configError && !config) {
     return (
@@ -179,9 +194,6 @@ function CasinoContent() {
                 Your session for{" "}
                 <strong>{shortenAddress(sessionWalletAddress)}</strong> is saved.
                 Reconnect the same Phantom wallet to continue playing.
-              </p>
-              <p className="wallet-hint">
-                Reconnect with the same wallet to continue playing.
               </p>
               <ConnectTrigger
                 intent="play"
@@ -221,6 +233,8 @@ function CasinoContent() {
         <Landing
           socialLoginEnabled={config?.socialLoginEnabled}
           onChainEnabled={onChainEnabled}
+          cluster={config?.cluster}
+          withdrawalsEnabled={config?.withdrawalsEnabled}
         />
         <SiteFooter />
       </div>
@@ -237,7 +251,7 @@ function CasinoContent() {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated && !showGameWhileSigningIn) {
     return (
       <div className="app">
         <AnimatedBackground />
@@ -262,6 +276,7 @@ function CasinoContent() {
               onClick={() => authenticate().catch(console.error)}
               disabled={authLoading}
               style={{ width: "100%" }}
+              data-testid="connect-sign-in"
             >
               {authLoading ? "Signing..." : "Create profile & play"}
             </button>
@@ -279,7 +294,7 @@ function CasinoContent() {
   };
 
   return (
-    <div className="app">
+    <div className={`app${pendingProfileSignIn ? " app--pending-signin" : ""}`}>
       <AnimatedBackground />
       <Header
         balanceSol={balanceSol}
@@ -299,6 +314,7 @@ function CasinoContent() {
           role="presentation"
         >
           <div
+            ref={profileDialogRef}
             role="dialog"
             aria-modal="true"
             aria-label="Profile"
@@ -320,6 +336,7 @@ function CasinoContent() {
       <TreasuryBar />
 
       {config &&
+        !pendingProfileSignIn &&
         (activeTab === "crash" ||
           activeTab === "coinflip" ||
           activeTab === "limbo") && (
@@ -394,7 +411,7 @@ function CasinoContent() {
             <GameIcon id="profile" size={16} className="nav-tab-icon" />
             Profile
           </button>
-          {config?.adminWallet && walletAddress === config.adminWallet && (
+          {isAdmin && (
             <button
               className={`nav-tab ${activeTab === "admin" ? "active" : ""}`}
               onClick={() => setActiveTab("admin")}
@@ -413,32 +430,45 @@ function CasinoContent() {
         </nav>
       </div>
 
-      <main className="main-content">
+      <a href="#main-content" className="skip-to-main">
+        Skip to main content
+      </a>
+
+      <main id="main-content" className="main-content">
         {activeTab === "crash" && config ? (
           <div className="container crash-page">
             <GameErrorBoundary label="Crash">
               <Suspense fallback={<TabLoader />}>
                 <CrashArena
-                  balanceSol={balanceSol}
+                  balanceSol={pendingProfileSignIn ? 0 : balanceSol}
                   minBetSol={config.minBetSol}
                   maxBetSol={config.maxBetSol}
                   onBalanceUpdate={handleBalanceUpdate}
+                  onRefreshBalance={() => void refresh()}
+                  spectator={pendingProfileSignIn}
                 />
               </Suspense>
             </GameErrorBoundary>
-            <TransactionHistoryPanel walletAddress={walletAddress} />
+            <div className="crash-history-desktop game-sidebar-desktop">
+              <TransactionHistoryPanel walletAddress={walletAddress} />
+            </div>
+            <GameMobileHistorySheet
+              historyPanel={
+                <TransactionHistoryPanel walletAddress={walletAddress} />
+              }
+            />
           </div>
-        ) : activeTab === "wallet" && config && profile ? (
+        ) : activeTab === "wallet" && config ? (
           <Suspense fallback={<TabLoader />}>
             <WalletPage
               walletAddress={walletAddress}
               balanceSol={balanceSol}
-              onChainBalanceSol={profile.onChainBalanceSol}
+              onChainBalanceSol={profile?.onChainBalanceSol ?? 0}
               minBetSol={config.minBetSol}
               minWithdrawSol={config.minWithdrawSol}
               withdrawalsEnabled={config.withdrawalsEnabled}
               onChainEnabled={onChainEnabled}
-              loading={loading}
+              loading={loading || !profile}
               walletActionPhase={walletActionPhase}
               pendingWalletTx={pendingWalletTx}
               error={error}
@@ -460,10 +490,11 @@ function CasinoContent() {
                   <Suspense fallback={<TabLoader />}>
                     <CoinflipGame
                       walletAddress={walletAddress}
-                      balanceSol={balanceSol}
+                      balanceSol={pendingProfileSignIn ? 0 : balanceSol}
                       minBetSol={config.minBetSol}
                       maxBetSol={config.maxBetSol}
                       onBalanceUpdate={handleBalanceUpdate}
+                      spectator={pendingProfileSignIn}
                     />
                   </Suspense>
                 </GameErrorBoundary>
@@ -473,7 +504,7 @@ function CasinoContent() {
                   <Suspense fallback={<TabLoader />}>
                     <LimboGame
                       walletAddress={walletAddress}
-                      balanceSol={balanceSol}
+                      balanceSol={pendingProfileSignIn ? 0 : balanceSol}
                       minBetSol={config.minBetSol}
                       maxBetSol={config.maxBetSol}
                       limboMinTarget={config.limboMinTarget}
@@ -481,25 +512,31 @@ function CasinoContent() {
                       limboHouseEdge={config.limboHouseEdge}
                       onChainEnabled={onChainEnabled}
                       onBalanceUpdate={handleBalanceUpdate}
+                      spectator={pendingProfileSignIn}
                     />
                   </Suspense>
                 </GameErrorBoundary>
               )}
             </div>
-            <aside className="sidebar-panels">
+            <aside className="sidebar-panels game-sidebar-desktop">
               <TransactionHistoryPanel walletAddress={walletAddress} />
             </aside>
+            <GameMobileHistorySheet
+              historyPanel={
+                <TransactionHistoryPanel walletAddress={walletAddress} />
+              }
+            />
           </div>
         ) : (
           <div className="container">
             {activeTab === "leaderboard" && (
               <Suspense fallback={<TabLoader />}>
-                <Leaderboard />
+                <Leaderboard walletAddress={walletAddress} />
               </Suspense>
             )}
             {activeTab === "tournament" && (
               <Suspense fallback={<TabLoader />}>
-                <TournamentPanel />
+                <TournamentPanel walletAddress={walletAddress} />
               </Suspense>
             )}
             {activeTab === "fairness" && (
@@ -511,16 +548,18 @@ function CasinoContent() {
               <ProfilePanel profile={profile} onUpdated={handleProfileUpdated} />
             )}
             {activeTab === "token" && (
-              <Suspense fallback={<TabLoader />}>
-                <SiteTokenPage onLaunchClick={() => setActiveTab("launch")} />
-              </Suspense>
+              <GameErrorBoundary label="Token">
+                <Suspense fallback={<TabLoader />}>
+                  <SiteTokenPage />
+                </Suspense>
+              </GameErrorBoundary>
             )}
-            {activeTab === "launch" && (
+            {activeTab === "launch" && isAdmin && (
               <Suspense fallback={<TabLoader />}>
                 <LaunchTokenPage />
               </Suspense>
             )}
-            {activeTab === "admin" && (
+            {activeTab === "admin" && isAdmin && (
               <GameErrorBoundary label="Admin">
                 <Suspense fallback={<TabLoader />}>
                   <AdminDashboard />
@@ -534,8 +573,17 @@ function CasinoContent() {
       <MobileNav
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        showAdmin={Boolean(config?.adminWallet && walletAddress === config.adminWallet)}
+        showAdmin={isAdmin}
       />
+      {pendingProfileSignIn && (
+        <AuthSignInOverlay
+          authProvider={authProvider}
+          authLoading={authLoading}
+          authError={authError}
+          onSignIn={() => authenticate().catch(console.error)}
+          onSignOut={() => void signOut()}
+        />
+      )}
       <SiteFooter />
     </div>
   );

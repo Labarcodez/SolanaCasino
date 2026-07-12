@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   fetchTransactions,
   formatSol,
   type TransactionRecord,
   type TransactionType,
 } from "../lib/api";
+import { fairnessUrlFromBet } from "../lib/fairnessLink";
 import { solscanTxUrl } from "../lib/utils";
 import { FetchError } from "./FetchError";
 
@@ -13,6 +15,8 @@ type FilterType = "all" | TransactionType;
 interface TransactionHistoryPanelProps {
   walletAddress: string;
 }
+
+const PAGE_SIZE = 25;
 
 const FILTERS: { id: FilterType; label: string }[] = [
   { id: "all", label: "All" },
@@ -32,23 +36,50 @@ export function TransactionHistoryPanel({
 }: TransactionHistoryPanelProps) {
   const [filter, setFilter] = useState<FilterType>("all");
   const [items, setItems] = useState<TransactionRecord[]>([]);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(() => {
-    setError(null);
-    setLoading(true);
-    fetchTransactions(walletAddress, filter === "all" ? undefined : filter)
-      .then(setItems)
-      .catch((err) =>
-        setError(err instanceof Error ? err.message : "Failed to load"),
-      )
-      .finally(() => setLoading(false));
-  }, [walletAddress, filter]);
+  const load = useCallback(
+    async (options?: { offset?: number; append?: boolean }) => {
+      const offset = options?.offset ?? 0;
+      const append = options?.append ?? false;
+      setError(null);
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
+
+      try {
+        const page = await fetchTransactions(
+          walletAddress,
+          filter === "all" ? undefined : filter,
+          offset,
+          PAGE_SIZE,
+        );
+        setItems((prev) =>
+          append ? [...prev, ...page.items] : page.items,
+        );
+        setHasMore(page.hasMore);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load");
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [walletAddress, filter],
+  );
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
+
+  const handleLoadMore = () => {
+    void load({ offset: items.length, append: true });
+  };
 
   return (
     <div className="card transaction-history-panel" data-testid="transaction-history-panel">
@@ -70,89 +101,119 @@ export function TransactionHistoryPanel({
         </div>
       </div>
 
-      {loading ? (
+      {loading && items.length === 0 ? (
         <div aria-busy="true" aria-label="Loading transactions">
           {[1, 2, 3].map((i) => (
             <div key={i} className="skeleton skeleton-row" />
           ))}
         </div>
       ) : error ? (
-        <FetchError message={error} onRetry={load} />
+        <FetchError message={error} onRetry={() => void load()} />
       ) : items.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">📋</div>
           <p>No transactions yet.</p>
         </div>
       ) : (
-        <div className="table-wrap">
-          <table className="leaderboard-table">
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Amount</th>
-                <th>Detail</th>
-                <th>When</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((tx) => (
-                <tr key={`${tx.type}-${tx.id}`}>
-                  <td>{typeLabel(tx.type)}</td>
-                  <td>
-                    {tx.type === "bet" ? (
-                      <>
-                        {formatSol(tx.amountSol)} →{" "}
-                        <span
-                          className={
-                            (tx.payoutSol ?? 0) > tx.amountSol
-                              ? "text-success"
-                              : "text-muted"
-                          }
-                        >
-                          {formatSol(tx.payoutSol ?? 0)}
-                        </span>
-                      </>
-                    ) : (
-                      <span
-                        className={
-                          tx.type === "deposit" ? "text-success" : ""
-                        }
-                      >
-                        {tx.type === "deposit" ? "+" : "−"}
-                        {formatSol(tx.amountSol)} SOL
-                      </span>
-                    )}
-                  </td>
-                  <td>
-                    {tx.type === "bet" && (
-                      <span style={{ textTransform: "capitalize" }}>
-                        {tx.game}
-                        {tx.multiplier
-                          ? ` · ${tx.multiplier.toFixed(2)}x`
-                          : ""}
-                      </span>
-                    )}
-                    {tx.type !== "bet" && tx.signature && (
-                      <a
-                        href={solscanTxUrl(tx.signature)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        Solscan
-                      </a>
-                    )}
-                    {tx.type !== "bet" && tx.status && tx.status !== "complete" && (
-                      <span className="text-muted"> · {tx.status}</span>
-                    )}
-                  </td>
-                  <td className="text-muted">
-                    {new Date(tx.createdAt).toLocaleString()}
-                  </td>
+        <>
+          <div
+            className={`table-wrap ${loading ? "table-wrap--refreshing" : ""}`}
+          >
+            <table className="leaderboard-table">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Amount</th>
+                  <th>Detail</th>
+                  <th>When</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {items.map((tx) => {
+                  const verifyHref = fairnessUrlFromBet(tx.id, tx.verify);
+                  return (
+                    <tr key={`${tx.type}-${tx.id}`}>
+                      <td>{typeLabel(tx.type)}</td>
+                      <td>
+                        {tx.type === "bet" ? (
+                          <>
+                            {formatSol(tx.amountSol)} →{" "}
+                            <span
+                              className={
+                                (tx.payoutSol ?? 0) > tx.amountSol
+                                  ? "text-success"
+                                  : "text-muted"
+                              }
+                            >
+                              {formatSol(tx.payoutSol ?? 0)}
+                            </span>
+                          </>
+                        ) : (
+                          <span
+                            className={
+                              tx.type === "deposit" ? "text-success" : ""
+                            }
+                          >
+                            {tx.type === "deposit" ? "+" : "−"}
+                            {formatSol(tx.amountSol)} SOL
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        {tx.type === "bet" && (
+                          <span style={{ textTransform: "capitalize" }}>
+                            {tx.game}
+                            {tx.multiplier
+                              ? ` · ${tx.multiplier.toFixed(2)}x`
+                              : ""}
+                            {verifyHref && (
+                              <>
+                                {" · "}
+                                <Link className="fairness-link" to={verifyHref}>
+                                  Verify
+                                </Link>
+                              </>
+                            )}
+                          </span>
+                        )}
+                        {tx.type !== "bet" && tx.signature && (
+                          <a
+                            href={solscanTxUrl(tx.signature)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            Solscan
+                          </a>
+                        )}
+                        {tx.type !== "bet" &&
+                          tx.status &&
+                          tx.status !== "complete" && (
+                            <span className="text-muted"> · {tx.status}</span>
+                          )}
+                      </td>
+                      <td className="text-muted">
+                        {new Date(tx.createdAt).toLocaleString()}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {hasMore && (
+            <div className="transaction-history-more">
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                data-testid="transaction-history-load-more"
+              >
+                {loadingMore ? "Loading…" : "Load more"}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

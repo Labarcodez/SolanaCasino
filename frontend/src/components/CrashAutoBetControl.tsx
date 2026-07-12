@@ -1,10 +1,12 @@
 interface CrashAutoBetControlProps {
+  slotLabel: "A" | "B";
   enabled: boolean;
   rounds: string;
   stopProfitSol: string;
   stopLossSol: string;
-  sessionPnlSol: number;
+  sessionPnlSol?: number;
   roundsRemaining: number | null;
+  showSessionPnl?: boolean;
   disabled?: boolean;
   onEnabledChange: (enabled: boolean) => void;
   onRoundsChange: (value: string) => void;
@@ -13,12 +15,14 @@ interface CrashAutoBetControlProps {
 }
 
 export function CrashAutoBetControl({
+  slotLabel,
   enabled,
   rounds,
   stopProfitSol,
   stopLossSol,
-  sessionPnlSol,
+  sessionPnlSol = 0,
   roundsRemaining,
+  showSessionPnl = false,
   disabled,
   onEnabledChange,
   onRoundsChange,
@@ -26,7 +30,10 @@ export function CrashAutoBetControl({
   onStopLossChange,
 }: CrashAutoBetControlProps) {
   return (
-    <div className="crash-auto-bet" data-testid="crash-auto-bet">
+    <div
+      className="crash-auto-bet"
+      data-testid={`crash-auto-bet-${slotLabel.toLowerCase()}`}
+    >
       <div className="crash-auto-bet-header">
         <label className="auto-cashout-toggle">
           <input
@@ -35,7 +42,7 @@ export function CrashAutoBetControl({
             onChange={(e) => onEnabledChange(e.target.checked)}
             disabled={disabled}
           />
-          <span>Auto-bet (Bet A)</span>
+          <span>Auto-bet (Bet {slotLabel})</span>
         </label>
         {enabled && (
           <span className="crash-auto-bet-remaining">
@@ -90,17 +97,19 @@ export function CrashAutoBetControl({
               />
             </label>
           </div>
-          <p className="crash-auto-bet-pnl">
-            Session PnL:{" "}
-            <span
-              className={
-                sessionPnlSol >= 0 ? "text-success" : "text-danger"
-              }
-            >
-              {sessionPnlSol >= 0 ? "+" : ""}
-              {sessionPnlSol.toFixed(4)} SOL
-            </span>
-          </p>
+          {showSessionPnl && (
+            <p className="crash-auto-bet-pnl">
+              Session PnL:{" "}
+              <span
+                className={
+                  sessionPnlSol >= 0 ? "text-success" : "text-danger"
+                }
+              >
+                {sessionPnlSol >= 0 ? "+" : ""}
+                {sessionPnlSol.toFixed(4)} SOL
+              </span>
+            </p>
+          )}
         </div>
       )}
     </div>

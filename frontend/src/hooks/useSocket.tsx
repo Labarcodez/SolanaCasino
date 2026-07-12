@@ -32,11 +32,35 @@ export interface CrashRoundState {
   multiplier: number;
   bets: CrashBetView[];
   startedAt: number;
+  runningStartedAt?: number;
   elapsedMs: number;
   bettingEndsAt?: number;
   history: { roundId: string; crashPoint: number }[];
   myBets?: CrashBetView[];
   onChainEnabled?: boolean;
+}
+
+export interface JackpotState {
+  poolSol: number;
+  poolLamports: number;
+  contributionBps: number;
+  minCrashMultiplier: number;
+  lastPayout: {
+    roundId: string;
+    walletAddress: string;
+    amountSol: number;
+    cashoutMultiplier: number;
+    crashPoint: number;
+    createdAt: string;
+  } | null;
+}
+
+export interface JackpotWonEvent {
+  roundId: string;
+  walletAddress: string;
+  amountSol: number;
+  cashoutMultiplier: number;
+  crashPoint: number;
 }
 
 export interface ChatMessage {
@@ -49,13 +73,16 @@ export interface ChatMessage {
 
 export interface CashoutEvent {
   walletAddress: string;
+  displayName?: string;
   multiplier: number;
   payoutSol: number;
+  game?: "crash" | "limbo" | "coinflip";
 }
 
 interface SocketContextValue {
   socket: Socket | null;
   crashState: CrashRoundState | null;
+  jackpotState: JackpotState | null;
   connected: boolean;
   onlineCount: number;
   chatMessages: ChatMessage[];
@@ -66,6 +93,7 @@ interface SocketContextValue {
 const SocketContext = createContext<SocketContextValue>({
   socket: null,
   crashState: null,
+  jackpotState: null,
   connected: false,
   onlineCount: 0,
   chatMessages: [],
@@ -84,6 +112,7 @@ export function SocketProvider({
 }) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [crashState, setCrashState] = useState<CrashRoundState | null>(null);
+  const [jackpotState, setJackpotState] = useState<JackpotState | null>(null);
   const [connected, setConnected] = useState(false);
   const [onlineCount, setOnlineCount] = useState(0);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -178,6 +207,13 @@ export function SocketProvider({
     s.on("crash:player_cashout", (event: CashoutEvent) => {
       setRecentCashouts((prev) => [event, ...prev].slice(0, 8));
     });
+    s.on("jackpot:state", (state: JackpotState) => setJackpotState(state));
+    s.on("jackpot:won", (event: JackpotWonEvent) => {
+      toast(
+        `Jackpot! ${event.walletAddress} won ${event.amountSol.toFixed(3)} SOL @ ${event.cashoutMultiplier.toFixed(2)}x`,
+        "success",
+      );
+    });
 
     setSocket(s);
     return () => {
@@ -209,6 +245,7 @@ export function SocketProvider({
       value={{
         socket,
         crashState,
+        jackpotState,
         connected,
         onlineCount,
         chatMessages,

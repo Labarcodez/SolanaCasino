@@ -3,22 +3,29 @@ import { fetchTournament, type TournamentData } from "../lib/api";
 import { PageHeader } from "./PageHeader";
 import { FetchError } from "./FetchError";
 
-export function TournamentPanel() {
+interface TournamentPanelProps {
+  walletAddress?: string | null;
+}
+
+export function TournamentPanel({ walletAddress }: TournamentPanelProps) {
   const [data, setData] = useState<TournamentData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setError(null);
-    fetchTournament()
+    setLoading(true);
+    return fetchTournament()
       .then(setData)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"));
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : "Failed to load"),
+      )
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
-    load();
-    setLoading(false);
-    const interval = setInterval(load, 60000);
+    void load();
+    const interval = setInterval(() => void load(), 60000);
     return () => clearInterval(interval);
   }, [load]);
 
@@ -36,7 +43,11 @@ export function TournamentPanel() {
       />
 
       {loading && !data && !error ? (
-        <div className="skeleton skeleton-row" />
+        <div aria-busy="true" aria-label="Loading tournament">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="skeleton skeleton-row" />
+          ))}
+        </div>
       ) : error ? (
         <FetchError message={error} onRetry={load} />
       ) : data ? (
@@ -72,16 +83,29 @@ export function TournamentPanel() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.entries.map((e) => (
-                    <tr key={e.rank}>
+                  {data.entries.map((e) => {
+                    const isSelf =
+                      !!walletAddress && e.walletAddress === walletAddress;
+                    return (
+                    <tr
+                      key={e.rank}
+                      className={isSelf ? "leaderboard-row-self" : undefined}
+                      aria-current={isSelf ? "true" : undefined}
+                    >
                       <td>{e.rank}</td>
-                      <td>{e.displayName}</td>
+                      <td>
+                        {e.displayName}
+                        {isSelf && (
+                          <span className="leaderboard-you-badge">You</span>
+                        )}
+                      </td>
                       <td>{e.wageredSol.toFixed(4)} SOL</td>
                       <td className="text-success">
                         {e.estimatedPrizeSol.toFixed(4)} SOL
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

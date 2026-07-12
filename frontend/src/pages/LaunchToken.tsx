@@ -3,7 +3,7 @@ import { useCasino } from "../hooks/CasinoUserProvider";
 import { useToast } from "../components/ui/Toast";
 import { PageHeader } from "../components/PageHeader";
 import { uploadTokenMetadata, registerLaunchedToken } from "../lib/api";
-import { buildPumpCreateTransaction, getPumpFunUrl } from "../lib/pump";
+import { getPumpFunUrl } from "../lib/pumpUrl";
 
 export function LaunchTokenPage() {
   const { walletAddress, signAndSendTx, isAuthenticated } = useCasino();
@@ -53,7 +53,9 @@ export function LaunchTokenPage() {
         website: website || undefined,
       });
 
-      const { transaction, mint } = await buildPumpCreateTransaction({
+      const { transaction, mint } = await (
+        await import("../lib/pump")
+      ).buildPumpCreateTransaction({
         name,
         symbol,
         uri,

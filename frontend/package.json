@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build:favicon": "node scripts/build-favicon.mjs",
-    "build": "npm run build:favicon && tsc -b && vite build",
+    "build:og-image": "node scripts/build-og-image.mjs",
+    "build": "npm run build:favicon && npm run build:og-image && tsc -b && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -14,6 +15,7 @@
     "@phantom/browser-sdk": "^1.0.0",
     "@phantom/react-sdk": "^1.0.0",
     "@pump-fun/pump-sdk": "^1.36.0",
+    "@sentry/react": "^10.65.0",
     "@solana/client": "^1.7.0",
     "@solana/kit": "^5.5.1",
     "@solana/web3-compat": "^0.0.21",
@@ -27,6 +29,7 @@
     "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.7.0",

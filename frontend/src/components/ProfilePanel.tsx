@@ -167,10 +167,39 @@ export function ProfilePanel({ profile, onUpdated, onClose }: ProfilePanelProps)
       )}
 
       {profile.nextVipTier && profile.nextVipWagerSol && (
-        <p className="panel-hint">
-          {(profile.wagered30dSol ?? 0).toFixed(2)} / {profile.nextVipWagerSol} SOL to{" "}
-          {profile.nextVipTier} VIP
-        </p>
+        <div className="vip-progress">
+          <div className="vip-progress-header">
+            <span>{profile.vipLabel ?? "Member"}</span>
+            <span>{profile.nextVipTier} VIP</span>
+          </div>
+          <div
+            className="vip-progress-track"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={profile.nextVipWagerSol}
+            aria-valuenow={Math.min(
+              profile.wagered30dSol ?? 0,
+              profile.nextVipWagerSol,
+            )}
+            aria-label={`Progress to ${profile.nextVipTier} VIP`}
+          >
+            <div
+              className="vip-progress-fill"
+              style={{
+                width: `${Math.min(
+                  100,
+                  ((profile.wagered30dSol ?? 0) / profile.nextVipWagerSol) *
+                    100,
+                ).toFixed(1)}%`,
+              }}
+            />
+          </div>
+          <p className="panel-hint vip-progress-hint">
+            {(profile.wagered30dSol ?? 0).toFixed(2)} /{" "}
+            {profile.nextVipWagerSol} SOL wagered (30d) to reach{" "}
+            {profile.nextVipTier}
+          </p>
+        </div>
       )}
 
       {profile.referralCode && (

@@ -171,15 +171,36 @@ export async function claimAffiliateCommission(walletAddress: string): Promise<{
     };
   }
 
-  db.prepare(
-    `INSERT INTO affiliate_claims (id, wallet_address, amount_lamports)
-     VALUES (?, ?, ?)`,
-  ).run(uuidv4(), walletAddress, pendingLamports);
+  return db.transaction(() => {
+    const earnings = db
+      .prepare(
+        `SELECT COALESCE(SUM(commission_lamports), 0) as total
+         FROM affiliate_earnings WHERE referrer_wallet = ?`,
+      )
+      .get(walletAddress) as { total: number };
 
-  const newBalance = updateBalance(walletAddress, pendingLamports);
+    const claimed = db
+      .prepare(
+        `SELECT COALESCE(SUM(amount_lamports), 0) as total
+         FROM affiliate_claims WHERE wallet_address = ?`,
+      )
+      .get(walletAddress) as { total: number };
 
-  return {
-    claimedSol: lamportsToSol(pendingLamports),
-    balanceSol: lamportsToSol(newBalance),
-  };
+    const pendingLamportsTx = Math.max(0, earnings.total - claimed.total);
+    if (pendingLamportsTx < solToLamports(0.001)) {
+      throw new Error("Minimum affiliate claim is 0.001 SOL");
+    }
+
+    db.prepare(
+      `INSERT INTO affiliate_claims (id, wallet_address, amount_lamports)
+       VALUES (?, ?, ?)`,
+    ).run(uuidv4(), walletAddress, pendingLamportsTx);
+
+    const newBalance = updateBalance(walletAddress, pendingLamportsTx);
+
+    return {
+      claimedSol: lamportsToSol(pendingLamportsTx),
+      balanceSol: lamportsToSol(newBalance),
+    };
+  })();
 }

@@ -1,11 +1,12 @@
 /** Shared crash curve math — log Y scale; growth matches backend `crash.ts`. */
 
-export const GROWTH_RATE_MILLI = 60;
+/** Bustabit-style exponential rate (1/ms). Keep in sync with backend crash.ts / crashKeeper.ts. */
+export const CRASH_GROWTH_RATE = 0.00008;
 
 /** Same formula as backend `multiplierAtElapsedMs`. */
 export function multiplierAtElapsedMs(elapsedMs: number): number {
-  const growth = 1000 + (GROWTH_RATE_MILLI * elapsedMs) / 1000;
-  return Math.min(growth / 1000, 1000);
+  const t = Math.max(0, elapsedMs);
+  return Math.min(Math.exp(CRASH_GROWTH_RATE * t), 1000);
 }
 
 export interface CrashPalette {
@@ -63,6 +64,28 @@ const CRASH_PALETTE: CrashPalette = {
 
 export function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
+}
+
+/** Shortest-path angle interpolation for smooth rocket rotation. */
+export function lerpAngle(a: number, b: number, t: number): number {
+  let diff = b - a;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  return a + diff * t;
+}
+
+/** Interpolate elapsed ms between server ticks for 60fps-smooth curve motion. */
+export function interpolateElapsedMs(
+  serverElapsedMs: number,
+  lastServerTickPerf: number,
+  maxDriftMs = 120,
+): number {
+  const extrapolated =
+    serverElapsedMs + Math.max(0, performance.now() - lastServerTickPerf);
+  return Math.min(
+    extrapolated,
+    serverElapsedMs + maxDriftMs,
+  );
 }
 
 function parseRgba(color: string): [number, number, number, number] {
@@ -123,13 +146,47 @@ export function computeViewportMax(
   previous: number,
   floor = 2.5,
 ): number {
-  const target = Math.max(floor, current * 1.22, 2);
-  return lerp(previous, target, 0.06);
+  const minViewport = Math.max(floor, 2);
+  const safePrevious = Math.max(previous, minViewport);
+  // Expand only when the rocket nears the top — avoids per-frame Y rescaling that warps the trail.
+  if (current < safePrevious * 0.78) return safePrevious;
+  const headroom = Math.max(minViewport, current * 1.28);
+  return Math.max(safePrevious, headroom);
 }
 
 /** Horizontal time window — curve grows right without compressing older points. */
-export function computeTimeWindow(elapsedMs: number, minMs = 4500): number {
-  return Math.max(minMs, elapsedMs * 1.12);
+export function computeTimeWindow(elapsedMs: number, minMs = 5000): number {
+  return Math.max(minMs, elapsedMs * 1.08);
+}
+
+/** Build a smooth quadratic-bezier path through trail samples. */
+export function traceSmoothCurve(
+  ctx: CanvasRenderingContext2D,
+  points: TrailPoint[],
+  toX: (p: TrailPoint) => number,
+  toY: (mult: number) => number,
+): void {
+  if (points.length < 2) return;
+
+  const first = points[0];
+  ctx.moveTo(toX(first), toY(first.mult));
+
+  if (points.length === 2) {
+    const second = points[1];
+    ctx.lineTo(toX(second), toY(second.mult));
+    return;
+  }
+
+  for (let i = 1; i < points.length - 1; i++) {
+    const curr = points[i];
+    const next = points[i + 1];
+    const midX = (toX(curr) + toX(next)) / 2;
+    const midY = (toY(curr.mult) + toY(next.mult)) / 2;
+    ctx.quadraticCurveTo(toX(curr), toY(curr.mult), midX, midY);
+  }
+
+  const last = points[points.length - 1];
+  ctx.lineTo(toX(last), toY(last.mult));
 }
 
 export function elapsedToX(

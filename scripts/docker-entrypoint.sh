@@ -12,4 +12,7 @@ if [ "${NODE_ENV:-production}" = "production" ]; then
   fi
 fi
 
+# EFS data dir — backups and ops.log live under /app/backend/data/backups
+mkdir -p /app/backend/data/backups
+
 exec node backend/dist/index.js

@@ -62,7 +62,11 @@ export function Header({
             </button>
           )}
           {connected && onSignOut && (
-            <button className="btn-ghost" onClick={onSignOut} type="button">
+            <button
+              className="btn-ghost header-sign-out"
+              onClick={onSignOut}
+              type="button"
+            >
               Sign out
             </button>
           )}

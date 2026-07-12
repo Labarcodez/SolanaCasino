@@ -16,12 +16,23 @@ import { CrashBetStatusCard } from "./CrashBetStatusCard";
 import { CrashBetSlot, type CrashBetSlotIndex } from "./CrashBetSlot";
 import { ConnectTrigger } from "./ConnectTrigger";
 import { CrashAutoBetControl } from "./CrashAutoBetControl";
+import { CrashJackpotBanner } from "./CrashJackpotBanner";
+import { CrashRoundStats } from "./CrashRoundStats";
+import { hapticPulse } from "../lib/haptics";
+
+const PHASE_LABELS: Record<string, string> = {
+  betting: "Betting open",
+  running: "Running",
+  crashed: "Crashed!",
+  cooldown: "Next round…",
+};
 
 interface CrashGameProps {
   balanceSol: number;
   minBetSol: number;
   maxBetSol: number;
   onBalanceUpdate: (balance: number) => void;
+  onRefreshBalance?: () => void;
   spectator?: boolean;
   focusMode?: boolean;
   onFocusModeChange?: (focused: boolean) => void;
@@ -47,19 +58,36 @@ function betSlot(bet: { slot?: 0 | 1 } | undefined): CrashBetSlotIndex {
   return bet?.slot === 1 ? 1 : 0;
 }
 
+interface AutoBetSlotState {
+  enabled: boolean;
+  rounds: string;
+  stopProfitSol: string;
+  stopLossSol: string;
+  roundsLeft: number | null;
+}
+
+const createDefaultAutoBet = (): AutoBetSlotState => ({
+  enabled: false,
+  rounds: "10",
+  stopProfitSol: "",
+  stopLossSol: "",
+  roundsLeft: null,
+});
+
 export function CrashGame({
   balanceSol,
   minBetSol,
   maxBetSol,
   onBalanceUpdate,
+  onRefreshBalance,
   spectator = false,
   focusMode = false,
   onFocusModeChange,
 }: CrashGameProps) {
   const { crashState, placeBet, cashout } = useCrashSubscription(!spectator);
-  const { recentCashouts } = useSocket();
+  const { recentCashouts, jackpotState } = useSocket();
   const { toast } = useToast();
-  const { muted, toggleMute, play } = useSound();
+  const { muted, volume, toggleMute, setVolume, play } = useSound();
 
   const [slots, setSlots] = useState<[SlotUiState, SlotUiState]>([
     { ...DEFAULT_SLOT, autoCashoutValue: "1.5" },
@@ -74,40 +102,60 @@ export function CrashGame({
   } | null>(null);
   const [celebrateWin, setCelebrateWin] = useState(false);
   const [fairnessOpen, setFairnessOpen] = useState(false);
-  const [autoBetEnabled, setAutoBetEnabled] = useState(false);
-  const [autoBetRounds, setAutoBetRounds] = useState("10");
-  const [autoBetStopProfit, setAutoBetStopProfit] = useState("");
-  const [autoBetStopLoss, setAutoBetStopLoss] = useState("");
-  const [autoBetRoundsLeft, setAutoBetRoundsLeft] = useState<number | null>(null);
-  const autoBetStartBalance = useRef(balanceSol);
+  const [autoBets, setAutoBets] = useState<[AutoBetSlotState, AutoBetSlotState]>([
+    createDefaultAutoBet(),
+    createDefaultAutoBet(),
+  ]);
+  const autoBetStartBalances = useRef<[number, number]>([balanceSol, balanceSol]);
   const lastPhaseRef = useRef<string>("betting");
-  const lastAutoBetRoundRef = useRef<string | null>(null);
+  const lastAutoBetRoundRef = useRef<Record<CrashBetSlotIndex, string | null>>({
+    0: null,
+    1: null,
+  });
   const lastTickRef = useRef(0);
+  const prevCashedOutRef = useRef<Record<0 | 1, boolean>>({ 0: false, 1: false });
 
   const phase = crashState?.phase ?? "betting";
   const multiplier = crashState?.multiplier ?? 1.0;
-  const sessionPnlSol = balanceSol - autoBetStartBalance.current;
+  const sessionPnlForSlot = (slot: CrashBetSlotIndex) =>
+    balanceSol - autoBetStartBalances.current[slot];
 
-  const shouldStopAutoBet = () => {
-    const stopProfit = parseFloat(autoBetStopProfit);
-    const stopLoss = parseFloat(autoBetStopLoss);
+  const shouldStopAutoBet = (slot: CrashBetSlotIndex) => {
+    const ab = autoBets[slot];
+    const sessionPnlSol = sessionPnlForSlot(slot);
+    const stopProfit = parseFloat(ab.stopProfitSol);
+    const stopLoss = parseFloat(ab.stopLossSol);
     if (!Number.isNaN(stopProfit) && stopProfit > 0 && sessionPnlSol >= stopProfit) {
       return "profit target";
     }
     if (!Number.isNaN(stopLoss) && stopLoss > 0 && sessionPnlSol <= -stopLoss) {
       return "loss limit";
     }
-    if (autoBetRoundsLeft !== null && autoBetRoundsLeft <= 0) {
+    if (ab.roundsLeft !== null && ab.roundsLeft <= 0) {
       return "round limit";
     }
     return null;
   };
 
-  const disableAutoBet = (reason: string) => {
-    setAutoBetEnabled(false);
-    setAutoBetRoundsLeft(null);
-    lastAutoBetRoundRef.current = null;
-    toast(`Auto-bet stopped (${reason})`, "info");
+  const disableAutoBet = (slot: CrashBetSlotIndex, reason: string) => {
+    setAutoBets((prev) => {
+      const next = [...prev] as [AutoBetSlotState, AutoBetSlotState];
+      next[slot] = { ...next[slot], enabled: false, roundsLeft: null };
+      return next;
+    });
+    lastAutoBetRoundRef.current[slot] = null;
+    toast(`Auto-bet Bet ${slot === 0 ? "A" : "B"} stopped (${reason})`, "info");
+  };
+
+  const updateAutoBet = (
+    slot: CrashBetSlotIndex,
+    patch: Partial<AutoBetSlotState>,
+  ) => {
+    setAutoBets((prev) => {
+      const next = [...prev] as [AutoBetSlotState, AutoBetSlotState];
+      next[slot] = { ...next[slot], ...patch };
+      return next;
+    });
   };
 
   const myBetForSlot = useCallback(
@@ -115,6 +163,13 @@ export function CrashGame({
       crashState?.myBets?.find(
         (b) => !b.cashedOut && betSlot(b) === slot,
       ),
+    [crashState?.myBets],
+  );
+
+  /** Any bet for this slot this round (active or already cashed). */
+  const myRoundBetForSlot = useCallback(
+    (slot: CrashBetSlotIndex) =>
+      crashState?.myBets?.find((b) => betSlot(b) === slot),
     [crashState?.myBets],
   );
 
@@ -157,15 +212,62 @@ export function CrashGame({
           SlotUiState,
         ],
       );
+      prevCashedOutRef.current = { 0: false, 1: false };
     }
     if (phase === "crashed" && lastPhaseRef.current !== "crashed") {
       play("crash");
+      hapticPulse(20);
+      if (!spectator) {
+        for (const slot of [0, 1] as const) {
+          const bet = myBetForSlot(slot);
+          if (bet && !bet.cashedOut) {
+            const cp = crashState?.crashPoint ?? multiplier;
+            toast(
+              `Bet ${slot === 0 ? "A" : "B"} lost — crashed at ${cp.toFixed(2)}×`,
+              "info",
+            );
+          }
+        }
+      }
     }
     if (phase === "running" && lastPhaseRef.current === "betting") {
       play("bet");
     }
     lastPhaseRef.current = phase;
-  }, [phase, play]);
+  }, [phase, play, spectator, crashState?.crashPoint, multiplier, toast, myBetForSlot]);
+
+  useEffect(() => {
+    if (spectator || !crashState?.myBets) return;
+
+    for (const slot of [0, 1] as const) {
+      const bet = crashState.myBets.find((b) => betSlot(b) === slot);
+      const wasCashed = prevCashedOutRef.current[slot];
+      const isCashed = Boolean(bet?.cashedOut);
+
+      if (isCashed && !wasCashed && !slots[slot].cashingOut) {
+        const mult = bet?.cashoutMultiplier ?? multiplier;
+        play("cashout");
+        play("win");
+        hapticPulse(16);
+        setCelebrateWin(true);
+        toast(
+          `Bet ${slot === 0 ? "A" : "B"} auto-cashed at ${mult.toFixed(2)}×!`,
+          "success",
+        );
+        onRefreshBalance?.();
+      }
+
+      prevCashedOutRef.current[slot] = isCashed;
+    }
+  }, [
+    crashState?.myBets,
+    multiplier,
+    onRefreshBalance,
+    play,
+    slots,
+    spectator,
+    toast,
+  ]);
 
   useEffect(() => {
     if (phase === "running") {
@@ -190,29 +292,39 @@ export function CrashGame({
   }, [phase, slots[0].pendingBet, slots[1].pendingBet]);
 
   useEffect(() => {
-    if (spectator || !autoBetEnabled) return;
-    const stopReason = shouldStopAutoBet();
-    if (stopReason) {
-      disableAutoBet(stopReason);
-      return;
-    }
-    if (phase !== "betting") return;
+    if (spectator) return;
 
-    const roundId = crashState?.id;
-    if (!roundId || lastAutoBetRoundRef.current === roundId) return;
-    if (hasActiveBetForSlot(0) || loadingSlot === 0) return;
-    if (slots[0].pendingBet !== null) return;
+    for (const slot of [0, 1] as const) {
+      const ab = autoBets[slot];
+      if (!ab.enabled) continue;
 
-    const amount = parseFloat(slots[0].betAmount);
-    if (Number.isNaN(amount) || amount < minBetSol || amount > maxBetSol) return;
+      const stopReason = shouldStopAutoBet(slot);
+      if (stopReason) {
+        disableAutoBet(slot, stopReason);
+        continue;
+      }
+      if (phase !== "betting") continue;
 
-    lastAutoBetRoundRef.current = roundId;
-    void placeBetInternal(amount, 0);
-    if (autoBetRoundsLeft !== null) {
-      setAutoBetRoundsLeft((n) => (n === null ? n : Math.max(0, n - 1)));
+      const roundId = crashState?.id;
+      if (!roundId || lastAutoBetRoundRef.current[slot] === roundId) continue;
+      if (hasActiveBetForSlot(slot) || loadingSlot === slot) continue;
+      if (slots[slot].pendingBet !== null) continue;
+
+      const amount = parseFloat(slots[slot].betAmount);
+      if (Number.isNaN(amount) || amount < minBetSol || amount > maxBetSol) {
+        continue;
+      }
+
+      lastAutoBetRoundRef.current[slot] = roundId;
+      void placeBetInternal(amount, slot);
+      if (ab.roundsLeft !== null) {
+        updateAutoBet(slot, {
+          roundsLeft: Math.max(0, ab.roundsLeft - 1),
+        });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, autoBetEnabled, spectator, crashState?.id]);
+  }, [phase, autoBets, spectator, crashState?.id]);
 
   const placeBetInternal = async (
     amount: number,
@@ -276,6 +388,7 @@ export function CrashGame({
         play("cashout");
         play("win");
         setCelebrateWin(true);
+        hapticPulse(16);
         toast(
           `Bet ${slot === 0 ? "A" : "B"} cashed out at ${multiplier.toFixed(2)}x!`,
           "success",
@@ -350,9 +463,14 @@ export function CrashGame({
           >
             Fairness
           </button>
-          <SoundToggle muted={muted} onToggle={toggleMute} />
+          <SoundToggle
+            muted={muted}
+            volume={volume}
+            onToggle={toggleMute}
+            onVolumeChange={setVolume}
+          />
           <span className={`phase-badge ${phase}`} data-testid="crash-phase-badge">
-            {phase}
+            {PHASE_LABELS[phase] ?? phase}
           </span>
         </div>
       </div>
@@ -374,34 +492,41 @@ export function CrashGame({
         </div>
       )}
 
+      <CrashJackpotBanner jackpot={jackpotState} />
+
+      <CrashRoundStats
+        phase={phase}
+        multiplier={multiplier}
+        crashPoint={crashState?.crashPoint}
+        elapsedMs={crashState?.elapsedMs}
+      />
+
       <BettingCountdown
         phase={phase}
         bettingEndsAt={crashState?.bettingEndsAt}
         startedAt={crashState?.startedAt}
       />
 
-      <div className={phase === "crashed" ? "crash-shake" : ""}>
-        <div className="crash-chart-stage">
+      <div className="crash-chart-stage">
           <WinCelebration active={celebrateWin} onDone={() => setCelebrateWin(false)} />
           <CrashChart
             multiplier={multiplier}
             phase={phase}
             crashPoint={crashState?.crashPoint}
             startedAt={crashState?.startedAt}
+            runningStartedAt={crashState?.runningStartedAt}
+            elapsedMs={crashState?.elapsedMs}
             autoCashoutTarget={chartAutoTarget}
           />
         </div>
-      </div>
 
       {!spectator && (
         <div className="crash-bet-status-grid">
           {([0, 1] as const).map((slot) => {
-            const bet = myBetForSlot(slot);
-            const active = hasActiveBetForSlot(slot);
-            if (!active && phase !== "crashed") return null;
-            const amountSol = bet
-              ? bet.amountLamports / LAMPORTS_PER_SOL
-              : parseFloat(slots[slot].betAmount) || 0;
+            const roundBet = myRoundBetForSlot(slot);
+            // Only show result cards for real server bets — never the input placeholder.
+            if (!roundBet) return null;
+            const amountSol = roundBet.amountLamports / LAMPORTS_PER_SOL;
             return (
               <CrashBetStatusCard
                 key={slot}
@@ -410,6 +535,13 @@ export function CrashGame({
                 phase={phase}
                 visible
                 cashingOut={slots[slot].cashingOut}
+                cashedOut={roundBet.cashedOut}
+                cashoutMultiplier={roundBet.cashoutMultiplier}
+                payoutSol={
+                  roundBet.cashedOut
+                    ? roundBet.payoutLamports / LAMPORTS_PER_SOL
+                    : undefined
+                }
               />
             );
           })}
@@ -480,31 +612,44 @@ export function CrashGame({
 
         {!spectator && (
           <>
-            <CrashAutoBetControl
-              enabled={autoBetEnabled}
-              rounds={autoBetRounds}
-              stopProfitSol={autoBetStopProfit}
-              stopLossSol={autoBetStopLoss}
-              sessionPnlSol={sessionPnlSol}
-              roundsRemaining={autoBetRoundsLeft}
-              disabled={loadingSlot !== null}
-              onEnabledChange={(enabled) => {
-                if (enabled) {
-                  autoBetStartBalance.current = balanceSol;
-                  lastAutoBetRoundRef.current = null;
-                  const total = parseInt(autoBetRounds, 10);
-                  setAutoBetRoundsLeft(
-                    Number.isNaN(total) || total <= 0 ? null : total,
-                  );
-                } else {
-                  setAutoBetRoundsLeft(null);
-                }
-                setAutoBetEnabled(enabled);
-              }}
-              onRoundsChange={setAutoBetRounds}
-              onStopProfitChange={setAutoBetStopProfit}
-              onStopLossChange={setAutoBetStopLoss}
-            />
+            <div className="crash-auto-bet-grid" data-testid="crash-auto-bet">
+              {([0, 1] as const).map((slot) => (
+                <CrashAutoBetControl
+                  key={slot}
+                  slotLabel={slot === 0 ? "A" : "B"}
+                  enabled={autoBets[slot].enabled}
+                  rounds={autoBets[slot].rounds}
+                  stopProfitSol={autoBets[slot].stopProfitSol}
+                  stopLossSol={autoBets[slot].stopLossSol}
+                  sessionPnlSol={sessionPnlForSlot(slot)}
+                  roundsRemaining={autoBets[slot].roundsLeft}
+                  showSessionPnl={autoBets[slot].enabled}
+                  disabled={loadingSlot !== null}
+                  onEnabledChange={(enabled) => {
+                    if (enabled) {
+                      autoBetStartBalances.current[slot] = balanceSol;
+                      lastAutoBetRoundRef.current[slot] = null;
+                      const total = parseInt(autoBets[slot].rounds, 10);
+                      updateAutoBet(slot, {
+                        enabled: true,
+                        roundsLeft:
+                          Number.isNaN(total) || total <= 0 ? null : total,
+                      });
+                    } else {
+                      updateAutoBet(slot, { enabled: false, roundsLeft: null });
+                      lastAutoBetRoundRef.current[slot] = null;
+                    }
+                  }}
+                  onRoundsChange={(value) => updateAutoBet(slot, { rounds: value })}
+                  onStopProfitChange={(value) =>
+                    updateAutoBet(slot, { stopProfitSol: value })
+                  }
+                  onStopLossChange={(value) =>
+                    updateAutoBet(slot, { stopLossSol: value })
+                  }
+                />
+              ))}
+            </div>
             <p className="crash-shortcuts-hint" aria-hidden="true">
               Space = cash out Bet A (or B) · Enter = place Bet A
             </p>

@@ -14,7 +14,7 @@ export interface AuthTokenPayload {
 }
 
 export function buildAuthMessage(walletAddress: string, nonce: string): string {
-  const brandName = process.env.BRAND_NAME ?? "OrbitCasino";
+  const brandName = process.env.BRAND_NAME ?? "Orbit Solana Casino";
   return `${brandName} wants you to sign in with your Solana account:
 ${walletAddress}
 

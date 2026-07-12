@@ -71,6 +71,8 @@ http://YOUR-ALB-DNS/api/config
 
 Expect: `"status":"ok"`, `"alchemyConfigured":true`, `"withdrawalsEnabled":true`
 
+**Data persistence:** `/api/health` includes `persistence.dbPath` (typically `/app/backend/data/casino.db` on EFS). Player balances, bets, jackpots, and tournaments live in that SQLite file. Token metadata is stored under the same EFS mount at `token-metadata/`. Redeploys replace the container only — EFS data is retained.
+
 **Alchemy** is server-side only — set `ALCHEMY_API_KEY` in `backend/.env` before deploy. The browser does not need an Alchemy key; it uses the RPC URL from `/api/config`.
 
 ---
@@ -136,6 +138,8 @@ Repo → **Settings** → **Secrets and variables** → **Actions**:
 | `AWS_ECS_SERVICE` | CloudFormation output `EcsServiceName` |
 | `AWS_LOAD_BALANCER_URL` | CloudFormation output `LoadBalancerUrl` (no trailing slash) |
 | `VITE_PHANTOM_APP_ID` | Optional — Phantom Portal app ID |
+| `VITE_CASINO_WALLET` | `3BSEfRdZsZz87EDafo5rcY87uLt6RCbPqQZsmNMxYfcu` |
+| `VITE_SENTRY_DSN` | Optional — frontend Sentry DSN |
 
 ### Step 4 — Push to deploy
 
@@ -147,13 +151,15 @@ Or: GitHub → **Actions** → **Deploy to AWS ECS** → **Run workflow**.
 
 ## Update secrets / env vars
 
-Environment variables are set in the CloudFormation **TaskDefinition**. To change them:
+Hot secrets (`JWT_SECRET`, `CASINO_WALLET_PRIVATE_KEY`, Alchemy/Bags keys, `PHANTOM_APP_ID`, `SENTRY_DSN`) are stored in **Secrets Manager** (`orbit-casino/app`) and injected into the ECS task. Non-secret config stays as task environment.
 
-1. AWS Console → **CloudFormation** → stack `orbit-casino` → **Update**
-2. Edit parameters (JWT, Alchemy key, wallet keys, etc.)
-3. Or update the task definition in **ECS** → **Task definitions** → create new revision → update service
+To change them:
 
-After changing `FRONTEND_URL` (custom domain), update the stack parameter or task env and redeploy.
+1. Update `backend/.env` locally
+2. Run `npm run aws:deploy` (updates stack parameters → Secrets Manager SecretString + force new ECS deployment)
+3. Or: AWS Console → Secrets Manager → `orbit-casino/app` → edit JSON keys, then force new ECS deployment
+
+After changing `FRONTEND_URL` (custom domain), update the stack parameter and redeploy.
 
 ---
 

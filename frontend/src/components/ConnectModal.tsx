@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { useConnect, useDisconnect, useIsExtensionInstalled, usePhantom } from "@phantom/react-sdk";
+import { useConnect, useDisconnect, usePhantom } from "@phantom/react-sdk";
 import type { AuthProviderType } from "@phantom/browser-sdk";
 import { useCasino } from "../hooks/CasinoUserProvider";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 import { BRAND } from "../lib/brand";
 import { Logo } from "./Logo";
 import {
@@ -9,6 +10,11 @@ import {
   isInjectedPhantomInstalled,
 } from "../lib/injectedPhantom";
 import { isMobileBrowser, isPortalConfigured } from "../lib/phantomProviders";
+import {
+  getPhantomBrowseUrl,
+  isPhantomInAppBrowser,
+  phantomBrowseHint,
+} from "../lib/phantomMobile";
 import {
   isSecurePhantomContext,
   phantomSecureContextHint,
@@ -55,7 +61,6 @@ export function ConnectModal({ open, intent, onClose }: ConnectModalProps) {
   } = useCasino();
   const { connect, isConnecting, error: connectError } = useConnect();
   const { disconnect } = useDisconnect();
-  const { isInstalled: extensionInstalled } = useIsExtensionInstalled();
   const { isConnected: sdkConnected } = usePhantom();
 
   const [localError, setLocalError] = useState<string | null>(null);
@@ -65,6 +70,8 @@ export function ConnectModal({ open, intent, onClose }: ConnectModalProps) {
     (config?.socialLoginEnabled ?? false) || isPortalConfigured();
   const secureContext = isSecurePhantomContext();
   const mobile = isMobileBrowser();
+  const inPhantomBrowser = isPhantomInAppBrowser();
+  const injectedReady = isInjectedPhantomInstalled();
   const copy = INTENT_COPY[intent];
 
   useEffect(() => {
@@ -125,10 +132,14 @@ export function ConnectModal({ open, intent, onClose }: ConnectModalProps) {
     }
   }, [authenticate, onClose]);
 
+  const dialogRef = useFocusTrap(open, onClose);
+
   if (!open) return null;
 
   const showExtension =
-    extensionInstalled || isInjectedPhantomInstalled() || !mobile;
+    injectedReady || inPhantomBrowser || !mobile;
+  const showPhantomAppDeeplink = mobile && portalReady && !injectedReady;
+  const showBrowseFallback = mobile && !portalReady && !injectedReady;
   const errorMessage = localError ?? connectError?.message ?? authError;
 
   return (
@@ -139,6 +150,7 @@ export function ConnectModal({ open, intent, onClose }: ConnectModalProps) {
       data-testid="connect-modal-overlay"
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="connect-modal-title"
@@ -175,13 +187,21 @@ export function ConnectModal({ open, intent, onClose }: ConnectModalProps) {
               >
                 <span className="connect-provider-icon">◎</span>
                 <span>
-                  <strong>Phantom Extension</strong>
-                  <small>Browser wallet · recommended on desktop</small>
+                  <strong>
+                    {mobile || inPhantomBrowser
+                      ? "Phantom Wallet"
+                      : "Phantom Extension"}
+                  </strong>
+                  <small>
+                    {mobile || inPhantomBrowser
+                      ? "Connect inside Phantom's browser"
+                      : "Browser wallet · recommended on desktop"}
+                  </small>
                 </span>
               </button>
             )}
 
-            {mobile && portalReady && (
+            {showPhantomAppDeeplink && (
               <button
                 type="button"
                 className="connect-provider-btn"
@@ -227,6 +247,7 @@ export function ConnectModal({ open, intent, onClose }: ConnectModalProps) {
                 </button>
               </>
             ) : (
+              !showBrowseFallback && (
               <p className="connect-modal-hint">
                 Google and Apple sign-in activate when the operator configures{" "}
                 <a
@@ -238,19 +259,30 @@ export function ConnectModal({ open, intent, onClose }: ConnectModalProps) {
                 </a>
                 .
               </p>
+              )
             )}
 
-            {!showExtension && !portalReady && mobile && (
-              <p className="connect-modal-hint">
-                Install the{" "}
-                <a
-                  href="https://phantom.app/download"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Phantom app
-                </a>{" "}
-                to connect on mobile.
+            {showBrowseFallback && (
+              <a
+                href={getPhantomBrowseUrl()}
+                className="connect-provider-btn connect-provider-btn--phantom"
+                data-testid="connect-phantom-browse"
+              >
+                <span className="connect-provider-icon">📱</span>
+                <span>
+                  <strong>Open in Phantom App</strong>
+                  <small>Best way to connect on mobile Safari / Chrome</small>
+                </span>
+              </a>
+            )}
+
+            {showBrowseFallback && (
+              <p className="connect-modal-hint">{phantomBrowseHint()}</p>
+            )}
+
+            {mobile && step === "providers" && portalReady && (
+              <p className="connect-modal-hint connect-modal-hint--mobile">
+                After Phantom opens, return here and tap <strong>Create profile &amp; play</strong> to finish sign-in.
               </p>
             )}
 
@@ -271,6 +303,11 @@ export function ConnectModal({ open, intent, onClose }: ConnectModalProps) {
                 : " via Phantom"}
               . Sign a free message to create your profile — no SOL required.
             </p>
+            {mobile && (
+              <p className="connect-modal-hint connect-modal-hint--mobile">
+                Tap below to approve the sign-in message in Phantom.
+              </p>
+            )}
             <button
               type="button"
               className="btn btn-primary"

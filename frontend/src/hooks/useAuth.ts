@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
-import bs58 from "bs58";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AddressType } from "@phantom/browser-sdk";
 import { usePhantom, useSolana, useDisconnect } from "@phantom/react-sdk";
 import {
@@ -11,8 +10,9 @@ import {
   hasStoredSession,
   getSessionWalletAddress,
 } from "../lib/api";
-import { signInjectedMessage, disconnectInjectedPhantom } from "../lib/injectedPhantom";
+import { disconnectInjectedPhantom } from "../lib/injectedPhantom";
 import { isMobileBrowser } from "../lib/phantomProviders";
+import { isEmbeddedAuthProvider, signAuthMessage } from "../lib/walletSigning";
 import { useInjectedPhantom } from "./useInjectedPhantom";
 
 type PhantomUserExtended = {
@@ -39,25 +39,40 @@ export function useAuth() {
   const phantomEmail = (phantomUser as PhantomUserExtended | null)?.email;
   const sessionWalletAddress = getSessionWalletAddress();
   const hasRestorableSession = Boolean(sessionWalletAddress && hasStoredSession());
+  const authInFlightRef = useRef(false);
+  const autoAuthAttemptedRef = useRef<string | null>(null);
+  const solanaRef = useRef(solana);
+  const isAvailableRef = useRef(isAvailable);
+
+  useEffect(() => {
+    solanaRef.current = solana;
+    isAvailableRef.current = isAvailable;
+  }, [solana, isAvailable]);
 
   const authenticate = useCallback(async () => {
     if (!walletAddress) {
       throw new Error("Wallet not connected");
     }
+    if (authInFlightRef.current) {
+      throw new Error(
+        "Sign-in already in progress. Approve the message in Phantom or wait a moment.",
+      );
+    }
 
+    authInFlightRef.current = true;
     setAuthLoading(true);
     setAuthError(null);
 
     try {
       const { message } = await requestAuthNonce(walletAddress);
-      let signatureBytes: Uint8Array;
-      if (solana && isAvailable) {
-        const signResult = await solana.signMessage(message);
-        signatureBytes = signResult.signature;
-      } else {
-        signatureBytes = await signInjectedMessage(message);
-      }
-      const signature = bs58.encode(signatureBytes);
+      const signature = await signAuthMessage({
+        message,
+        sdkConnected,
+        getSolana: () => solanaRef.current ?? undefined,
+        getAvailable: () => isAvailableRef.current,
+        useInjected: injected.connected && !sdkConnected,
+        authProvider,
+      });
 
       const result = await verifyAuth(walletAddress, signature, message, {
         authProvider,
@@ -66,6 +81,7 @@ export function useAuth() {
       });
       setAuthToken(result.token);
       setIsAuthenticated(true);
+      autoAuthAttemptedRef.current = walletAddress;
       return result.token;
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Authentication failed";
@@ -74,9 +90,18 @@ export function useAuth() {
       setIsAuthenticated(false);
       throw err;
     } finally {
+      authInFlightRef.current = false;
       setAuthLoading(false);
     }
-  }, [walletAddress, solana, isAvailable, authProvider, phantomEmail]);
+  }, [
+    walletAddress,
+    solana,
+    isAvailable,
+    sdkConnected,
+    injected.connected,
+    authProvider,
+    phantomEmail,
+  ]);
 
   useEffect(() => {
     if (!isConnected || !walletAddress) {
@@ -101,11 +126,16 @@ export function useAuth() {
       return;
     }
 
-    // Mobile / deeplink: connect and sign must be separate user actions (iOS deep-link limit).
-    if (isMobileBrowser() || authProvider === "deeplink") {
+    // Embedded OAuth / deeplink: connect and sign must be separate user actions.
+    if (isMobileBrowser() || isEmbeddedAuthProvider(authProvider)) {
       return;
     }
 
+    if (autoAuthAttemptedRef.current === walletAddress) {
+      return;
+    }
+
+    autoAuthAttemptedRef.current = walletAddress;
     authenticate().catch(() => {
       // User may reject sign prompt on first connect
     });
@@ -115,6 +145,7 @@ export function useAuth() {
     setAuthToken(null);
     setIsAuthenticated(false);
     setAuthError(null);
+    autoAuthAttemptedRef.current = null;
     try {
       await disconnectInjectedPhantom();
       await disconnect();

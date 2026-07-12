@@ -20,3 +20,30 @@ export function fairnessUrl(params: {
   }
   return `/fairness?${q.toString()}`;
 }
+
+export interface BetVerifyParams {
+  game: "crash" | "limbo" | "coinflip";
+  roundId?: string;
+  serverSeed?: string;
+  clientSeed?: string;
+  serverSeedHash?: string;
+  targetMultiplier?: number;
+  crashPoint?: number;
+}
+
+export function fairnessUrlFromBet(
+  betId: string,
+  verify?: BetVerifyParams,
+): string | null {
+  if (!verify) return null;
+  return fairnessUrl({
+    game: verify.game,
+    betId,
+    roundId: verify.roundId,
+    serverSeed: verify.serverSeed,
+    clientSeed: verify.clientSeed,
+    serverSeedHash: verify.serverSeedHash,
+    targetMultiplier: verify.targetMultiplier,
+    crashPoint: verify.crashPoint,
+  });
+}

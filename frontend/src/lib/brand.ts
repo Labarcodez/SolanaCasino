@@ -30,7 +30,7 @@ export const GAMES = [
     shortLabel: "Limbo",
     rtp: "98%",
     accent: "violet",
-    desc: "Set your target multiplier and roll for instant results.",
+    desc: "Set your target (1.25× min) and roll for instant results.",
   },
   {
     id: "coinflip",
@@ -46,7 +46,32 @@ export const TRUST_BADGES = [
   { label: "Provably fair", icon: "shield" },
   { label: "Deposit-first", icon: "wallet" },
   { label: "Mainnet SOL", icon: "chain" },
-  { label: "Instant payouts", icon: "bolt" },
+  { label: "Fast withdrawals", icon: "bolt" },
 ] as const;
+
+export function getTrustBadges(options: {
+  cluster?: string;
+  withdrawalsEnabled?: boolean;
+  onChainEnabled?: boolean;
+}): { label: string; icon: string }[] {
+  const isMainnet = options.cluster === "mainnet-beta";
+  const solLabel = isMainnet ? "Mainnet SOL" : "Devnet SOL";
+  const payoutLabel = options.withdrawalsEnabled
+    ? "Fast withdrawals"
+    : "Queued withdrawals";
+
+  return [
+    { label: "Provably fair", icon: "shield" },
+    { label: "Deposit-first", icon: "wallet" },
+    { label: solLabel, icon: "chain" },
+    { label: payoutLabel, icon: "bolt" },
+  ];
+}
+
+export function getClusterLabel(cluster?: string): string {
+  if (cluster === "mainnet-beta") return "Mainnet";
+  if (cluster === "devnet") return "Devnet";
+  return cluster ?? "Solana";
+}
 
 export const AUTH_MESSAGE_PREFIX = `${BRAND.name} wants you to sign in with your Solana account:`;

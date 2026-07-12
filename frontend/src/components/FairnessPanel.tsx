@@ -206,12 +206,24 @@ export function FairnessPanel({
             <input className="input" value={serverSeed} onChange={(e) => setServerSeed(e.target.value)} />
           </div>
           <div className="input-group">
-            <label>Client Seed</label>
-            <input className="input" value={clientSeed} onChange={(e) => setClientSeed(e.target.value)} />
+            <label>Client seed (from bet record)</label>
+            <input
+              className="input"
+              value={clientSeed}
+              onChange={(e) => setClientSeed(e.target.value)}
+              placeholder="Server-generated — copy from bet history"
+            />
           </div>
           <div className="input-group">
             <label>Target Multiplier</label>
-            <input className="input" type="number" step="0.01" value={targetMultiplier} onChange={(e) => setTargetMultiplier(e.target.value)} />
+            <input
+              className="input"
+              type="number"
+              step="0.01"
+              min="1.25"
+              value={targetMultiplier}
+              onChange={(e) => setTargetMultiplier(e.target.value)}
+            />
           </div>
           <div className="input-group">
             <label>Expected outcome</label>
@@ -241,8 +253,13 @@ export function FairnessPanel({
             <input className="input" value={serverSeed} onChange={(e) => setServerSeed(e.target.value)} />
           </div>
           <div className="input-group">
-            <label>Client Seed</label>
-            <input className="input" value={clientSeed} onChange={(e) => setClientSeed(e.target.value)} />
+            <label>Client seed (from bet record)</label>
+            <input
+              className="input"
+              value={clientSeed}
+              onChange={(e) => setClientSeed(e.target.value)}
+              placeholder="Server-generated — copy from bet history"
+            />
           </div>
           <div className="input-group">
             <label>Expected result</label>

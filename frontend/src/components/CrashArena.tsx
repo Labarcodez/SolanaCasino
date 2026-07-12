@@ -10,6 +10,7 @@ interface CrashArenaProps {
   minBetSol: number;
   maxBetSol: number;
   onBalanceUpdate: (balance: number) => void;
+  onRefreshBalance?: () => void;
   spectator?: boolean;
 }
 
@@ -18,6 +19,7 @@ export function CrashArena({
   minBetSol,
   maxBetSol,
   onBalanceUpdate,
+  onRefreshBalance,
   spectator = false,
 }: CrashArenaProps) {
   const { crashState } = useSocket();
@@ -45,6 +47,7 @@ export function CrashArena({
           minBetSol={minBetSol}
           maxBetSol={maxBetSol}
           onBalanceUpdate={onBalanceUpdate}
+          onRefreshBalance={onRefreshBalance}
           spectator={spectator}
           focusMode={focusMode}
           onFocusModeChange={setFocusMode}
@@ -55,7 +58,9 @@ export function CrashArena({
         {betsPanel}
       </div>
 
-      <CrashMobilePanels chatPanel={chatPanel} betsPanel={betsPanel} />
+      <div className="crash-arena-mobile">
+        <CrashMobilePanels chatPanel={chatPanel} betsPanel={betsPanel} />
+      </div>
     </div>
   );
 }

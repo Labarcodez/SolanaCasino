@@ -21,7 +21,7 @@ export function WinFeed({ cashouts }: WinFeedProps) {
             exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.25 }}
           >
-            <span className="win-feed-player">{c.walletAddress}</span>
+            <span className="win-feed-player">{c.displayName ?? c.walletAddress}</span>
             <span className="win-feed-mult">{c.multiplier.toFixed(2)}x</span>
             <span className="win-feed-payout">+{formatSol(c.payoutSol)} SOL</span>
           </motion.div>

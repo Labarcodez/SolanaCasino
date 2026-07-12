@@ -62,7 +62,7 @@ export function WalletPanel({
   const handleAction = async () => {
     if (mode === "deposit" && rpcMisconfigured) {
       toast(
-        "Deposits are unavailable — the server is not connected to Alchemy. Set ALCHEMY_API_KEY in production env and redeploy.",
+        "Deposits are temporarily unavailable. Please try again in a few minutes.",
         "error",
       );
       return;
@@ -70,7 +70,7 @@ export function WalletPanel({
 
     if (mode === "withdraw" && !withdrawalsEnabled) {
       toast(
-        "Withdrawals are unavailable — the server payout wallet is not configured. Set CASINO_WALLET_PRIVATE_KEY in production env and redeploy.",
+        "Withdrawals are temporarily paused. Your balance is safe — try again later.",
         "error",
       );
       return;
@@ -225,16 +225,15 @@ export function WalletPanel({
 
         {!withdrawalsEnabled && mode === "withdraw" && (
           <p className="wallet-hint warning">
-            Withdrawals are disabled until <code>CASINO_WALLET_PRIVATE_KEY</code> is set on the
-            server. Your casino balance is safe — SOL is not sent until payouts are enabled.
+            Withdrawals are temporarily paused. Your casino balance is safe — payouts
+            resume when the operator enables them.
           </p>
         )}
 
         {rpcMisconfigured && mode === "deposit" && (
           <p className="wallet-hint warning">
-            Server RPC is not connected to Alchemy (using public mainnet RPC). Deposits will not
-            confirm reliably until <code>ALCHEMY_API_KEY</code> is set in production
-            environment variables and the app is redeployed.
+            Deposits may take longer to confirm right now. If SOL left your wallet but
+            balance did not update, use recovery below.
           </p>
         )}
 

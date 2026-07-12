@@ -8,7 +8,8 @@ import {
 import { crashEngine } from "./crash.js";
 import { getBetPda, getRoundPda } from "./pdas.js";
 
-const GROWTH_RATE_MILLI = 60;
+/** Must match backend `crash.ts` / frontend `crashCurve.ts`. */
+const CRASH_GROWTH_RATE = 0.00008;
 
 interface TrackedBet {
   walletAddress: string;
@@ -19,8 +20,8 @@ interface TrackedBet {
 }
 
 function multiplierAtElapsedMs(elapsedMs: number): number {
-  const growth = 1000 + (GROWTH_RATE_MILLI * elapsedMs) / 1000;
-  return Math.min(growth, 1_000_000);
+  const t = Math.max(0, elapsedMs);
+  return Math.min(Math.floor(Math.exp(CRASH_GROWTH_RATE * t) * 1000), 1_000_000);
 }
 
 const trackedBets = new Map<string, TrackedBet>();

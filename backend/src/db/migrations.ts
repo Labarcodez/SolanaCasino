@@ -1,27 +1,27 @@
-import { db } from "./index.js";
+import type Database from "better-sqlite3";
 
-export function runMigrations(): void {
-  const columns = db
+export function runMigrations(database: Database.Database): void {
+  const columns = database
     .prepare("PRAGMA table_info(users)")
     .all() as { name: string }[];
   const userCols = new Set(columns.map((c) => c.name));
 
   if (!userCols.has("referral_code")) {
-    db.exec("ALTER TABLE users ADD COLUMN referral_code TEXT");
-    db.exec(
+    database.exec("ALTER TABLE users ADD COLUMN referral_code TEXT");
+    database.exec(
       "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_referral_code ON users(referral_code)",
     );
   }
   if (!userCols.has("referred_by")) {
-    db.exec("ALTER TABLE users ADD COLUMN referred_by TEXT");
+    database.exec("ALTER TABLE users ADD COLUMN referred_by TEXT");
   }
   if (!userCols.has("rakeback_pending_lamports")) {
-    db.exec(
+    database.exec(
       "ALTER TABLE users ADD COLUMN rakeback_pending_lamports INTEGER NOT NULL DEFAULT 0",
     );
   }
 
-  db.exec(`
+  database.exec(`
     CREATE TABLE IF NOT EXISTS pending_game_prepares (
       id TEXT PRIMARY KEY,
       wallet_address TEXT NOT NULL,
@@ -91,5 +91,58 @@ export function runMigrations(): void {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS jackpot_contributions (
+      id TEXT PRIMARY KEY,
+      round_id TEXT NOT NULL,
+      bet_id TEXT NOT NULL,
+      wallet_address TEXT NOT NULL,
+      amount_lamports INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_jackpot_contributions_round
+      ON jackpot_contributions(round_id);
+
+    CREATE TABLE IF NOT EXISTS jackpot_payouts (
+      id TEXT PRIMARY KEY,
+      round_id TEXT NOT NULL,
+      wallet_address TEXT NOT NULL,
+      amount_lamports INTEGER NOT NULL,
+      cashout_multiplier REAL NOT NULL,
+      crash_point REAL NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_jackpot_payouts_created
+      ON jackpot_payouts(created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS balance_adjustments (
+      id TEXT PRIMARY KEY,
+      wallet_address TEXT NOT NULL,
+      delta_lamports INTEGER NOT NULL,
+      reason TEXT NOT NULL,
+      admin_wallet TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_balance_adjustments_wallet
+      ON balance_adjustments(wallet_address);
+
+    CREATE TABLE IF NOT EXISTS token_reward_distributions (
+      id TEXT PRIMARY KEY,
+      mint TEXT NOT NULL,
+      winner_wallet TEXT NOT NULL,
+      claimed_lamports INTEGER NOT NULL,
+      winner_lamports INTEGER NOT NULL,
+      treasury_lamports INTEGER NOT NULL,
+      claim_signature TEXT NOT NULL,
+      payout_signature TEXT,
+      holder_balance TEXT NOT NULL DEFAULT '0',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_token_rewards_created
+      ON token_reward_distributions(created_at DESC);
   `);
 }

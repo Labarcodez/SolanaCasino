@@ -36,9 +36,10 @@ const region = regionMatch?.[1] ?? env.AWS_REGION ?? env.AWS_DEFAULT_REGION ?? "
 const buildArgs = [
   `VITE_PHANTOM_APP_ID=${env.VITE_PHANTOM_APP_ID ?? env.PHANTOM_APP_ID ?? ""}`,
   `VITE_PROGRAM_ID=${env.VITE_PROGRAM_ID ?? env.PROGRAM_ID ?? "Be5brMe2AvA68zEdiFKxa6KfYJdeQAeY12eWtZiC41vU"}`,
-  `VITE_CASINO_WALLET=${env.VITE_CASINO_WALLET ?? "C9W7nGv2ZBJp4zcmtvBHkrtTPhB1FQ7JaNNPRNhiA4Ze"}`,
+  `VITE_CASINO_WALLET=${env.VITE_CASINO_WALLET ?? "3BSEfRdZsZz87EDafo5rcY87uLt6RCbPqQZsmNMxYfcu"}`,
   `VITE_SOLANA_RPC=${env.VITE_SOLANA_RPC}`,
   `VITE_API_URL=${env.VITE_API_URL ?? ""}`,
+  `VITE_SENTRY_DSN=${env.VITE_SENTRY_DSN ?? ""}`,
 ]
   .map((arg) => `--build-arg ${arg}`)
   .join(" ");

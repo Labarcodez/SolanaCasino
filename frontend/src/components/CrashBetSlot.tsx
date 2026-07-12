@@ -1,5 +1,6 @@
 import { AutoCashoutControl } from "./AutoCashoutControl";
 import { BetAmountControls } from "./BetAmountControls";
+import { GameActionSpinner } from "./GameActionSpinner";
 
 export type CrashBetSlotIndex = 0 | 1;
 
@@ -91,15 +92,19 @@ export function CrashBetSlot({
           disabled={spectator || loading || hasActiveBet || !canBet}
           data-testid={`crash-place-bet-${slot}`}
         >
-          {spectator
-            ? "Connect"
-            : hasActiveBet
-              ? "Locked in"
-              : pendingQueued
-                ? "Queued"
-                : phase !== "betting"
-                  ? "Bet next"
-                  : "Place bet"}
+          {loading ? (
+            <GameActionSpinner label="Placing bet…" />
+          ) : spectator ? (
+            "Connect"
+          ) : hasActiveBet ? (
+            "Locked in"
+          ) : pendingQueued ? (
+            "Queued"
+          ) : phase !== "betting" ? (
+            "Bet next"
+          ) : (
+            "Place bet"
+          )}
         </button>
         <button
           type="button"

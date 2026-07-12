@@ -3,33 +3,118 @@ import { mkdirSync, writeFileSync, readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { v4 as uuidv4 } from "uuid";
 import { config } from "../config.js";
+import {
+  getBagsCreatorProfile,
+  getBagsTokenLiveStats,
+  isBagsApiConfigured,
+} from "../services/bagsApi.js";
+import { getTokenRewardLotteryStatus } from "../services/pumpCreatorRewards.js";
 import { db } from "../db/index.js";
+import { getTokenMetadataDir } from "../dataPaths.js";
+import rateLimit from "express-rate-limit";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
+import { requireAdmin } from "../middleware/admin.js";
 
 export const tokenRouter = Router();
 
-const METADATA_DIR = join(process.cwd(), "data", "token-metadata");
+const tokenUploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const MAX_IMAGE_BASE64_CHARS = 500_000;
+
+export type TokenLaunchPlatform = "bags" | "pump";
+export type TokenLaunchStatus = "coming_soon" | "live";
+
+const DEPRECATED_MINTS = new Set(config.orbitTokenDeprecatedMints);
 
 function ensureMetadataDir(): void {
-  if (!existsSync(METADATA_DIR)) {
-    mkdirSync(METADATA_DIR, { recursive: true });
+  const dir = getTokenMetadataDir();
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
   }
 }
 
-tokenRouter.get("/orbit", (_req, res) => {
-  const row = db
-    .prepare("SELECT mint FROM site_tokens ORDER BY registered_at DESC LIMIT 1")
-    .get() as { mint: string } | undefined;
+function isDeprecatedMint(mint: string | null | undefined): boolean {
+  return Boolean(mint && DEPRECATED_MINTS.has(mint));
+}
+
+/** Only an explicit env mint can go live on the site — never auto-promote DB registrations. */
+function resolveActiveMint(): string | null {
+  const mint = config.orbitTokenMint.trim();
+  if (!mint || isDeprecatedMint(mint)) {
+    return null;
+  }
+  return mint;
+}
+
+function resolveLaunchStatus(mint: string | null): TokenLaunchStatus {
+  if (config.orbitTokenLaunchStatus === "coming_soon") {
+    return "coming_soon";
+  }
+  if (!mint || isDeprecatedMint(mint)) {
+    return "coming_soon";
+  }
+  if (config.orbitTokenLaunchStatus !== "live") {
+    return "coming_soon";
+  }
+  if (config.orbitTokenLaunchPlatform === "bags" && !config.bagsFmTokenUrl) {
+    return "coming_soon";
+  }
+  return "live";
+}
+
+tokenRouter.get("/orbit", async (_req, res) => {
+  const mint = resolveActiveMint();
+  const launchPlatform = config.orbitTokenLaunchPlatform;
+  const launchStatus = resolveLaunchStatus(mint);
+  const bagsFmUrl =
+    config.bagsFmTokenUrl ||
+    (mint && launchPlatform === "bags" ? `https://bags.fm/${mint}` : null);
+
+  const bagsCreator = isBagsApiConfigured()
+    ? await getBagsCreatorProfile()
+    : null;
+  const bagsLiveStats =
+    launchStatus === "live" && mint && isBagsApiConfigured()
+      ? await getBagsTokenLiveStats(mint)
+      : null;
+
+  const rewardLottery = getTokenRewardLotteryStatus();
 
   res.json({
-    mint: config.orbitTokenMint ?? row?.mint ?? null,
+    mint: launchStatus === "live" ? mint : null,
+    launchPlatform,
+    launchStatus,
+    treasuryWallet: config.casinoWalletAddress,
+    bagsFmUrl: launchStatus === "live" ? bagsFmUrl : null,
+    bagsFmProfileUrl: bagsCreator?.profileUrl ?? config.bagsFmProfileUrl,
+    bagsCreator,
+    bagsLiveStats,
+    bagsApiConfigured: isBagsApiConfigured(),
+    launchDateLabel: "TBA",
     pumpProgramId: config.pumpProgramId,
     cluster: config.solanaCluster,
+    rewardLottery: {
+      enabled: rewardLottery.enabled,
+      intervalMs: rewardLottery.intervalMs,
+      winnerPercent: rewardLottery.winnerPercent,
+      nextRunAt: rewardLottery.nextRunAt,
+      lastRunAt: rewardLottery.lastRunAt,
+      recent: rewardLottery.recent.slice(0, 5),
+    },
   });
 });
 
+tokenRouter.get("/rewards", (_req, res) => {
+  res.json(getTokenRewardLotteryStatus());
+});
+
 tokenRouter.get("/metadata/:id", (req, res) => {
-  const filePath = join(METADATA_DIR, `${req.params.id}.json`);
+  const filePath = join(getTokenMetadataDir(), `${req.params.id}.json`);
   if (!existsSync(filePath)) {
     res.status(404).json({ error: "Metadata not found" });
     return;
@@ -39,7 +124,12 @@ tokenRouter.get("/metadata/:id", (req, res) => {
   res.send(raw);
 });
 
-tokenRouter.post("/upload-metadata", (req, res) => {
+tokenRouter.post(
+  "/upload-metadata",
+  tokenUploadLimiter,
+  requireAuth,
+  requireAdmin,
+  (req, res) => {
   const { name, symbol, description, imageBase64, twitter, telegram, website } =
     req.body as {
       name?: string;
@@ -67,6 +157,10 @@ tokenRouter.post("/upload-metadata", (req, res) => {
     res.status(400).json({ error: "Valid image required (PNG/JPG base64)" });
     return;
   }
+  if (imageBase64.length > MAX_IMAGE_BASE64_CHARS) {
+    res.status(400).json({ error: "Image too large (max ~375KB)" });
+    return;
+  }
 
   ensureMetadataDir();
   const id = uuidv4();
@@ -88,24 +182,32 @@ tokenRouter.post("/upload-metadata", (req, res) => {
     },
   };
 
-  writeFileSync(join(METADATA_DIR, `${id}.json`), JSON.stringify(metadata));
+  writeFileSync(join(getTokenMetadataDir(), `${id}.json`), JSON.stringify(metadata));
 
   const uri = `${baseUrl}/api/token/metadata/${id}`;
   res.json({ uri, metadataId: id });
-});
+  },
+);
 
 tokenRouter.post(
   "/register",
   requireAuth,
+  requireAdmin,
   (req: AuthenticatedRequest, res) => {
     const { mint, signature } = req.body as { mint?: string; signature?: string };
     if (!mint || !signature) {
       res.status(400).json({ error: "mint and signature required" });
       return;
     }
-    db.prepare(
-      "INSERT OR REPLACE INTO site_tokens (mint, signature) VALUES (?, ?)",
-    ).run(mint, signature);
+    if (isDeprecatedMint(mint)) {
+      res.status(400).json({ error: "This mint is retired and cannot be registered" });
+      return;
+    }
+    db.prepare("DELETE FROM site_tokens").run();
+    db.prepare("INSERT INTO site_tokens (mint, signature) VALUES (?, ?)").run(
+      mint,
+      signature,
+    );
     res.json({ success: true, mint });
   },
 );

@@ -56,7 +56,7 @@ export function WalletPage({
   onCreditDeposit,
 }: WalletPageProps) {
   return (
-    <div className="container wallet-page">
+    <div className="container wallet-page" data-testid="wallet-page">
       <PageHeader
         title="Wallet"
         subtitle="Deposit SOL to play, withdraw winnings anytime. Balances update after each game."

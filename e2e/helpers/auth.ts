@@ -1,6 +1,5 @@
 import type { APIRequestContext } from "@playwright/test";
-
-const API_BASE = process.env.PLAYWRIGHT_API_URL ?? "http://127.0.0.1:3001";
+import { API_BASE } from "./api";
 
 export const TEST_E2E_WALLET =
   "HEqvDJ1111111111111111111111111111116fq6";

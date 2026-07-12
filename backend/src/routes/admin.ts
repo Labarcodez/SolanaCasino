@@ -1,29 +1,46 @@
 import { Router } from "express";
-import { db } from "../db/index.js";
-import { config, lamportsToSol } from "../config.js";
+import rateLimit from "express-rate-limit";
+import { db, getOrCreateUser, updateBalance } from "../db/index.js";
+import { config, lamportsToSol, solToLamports } from "../config.js";
 import {
   isAnchorEnabled,
   setPausedOnChain,
 } from "../services/anchor.js";
 import { getIndexerStatus } from "../services/indexer.js";
 import { getTournamentLeaderboard } from "../services/tournament.js";
-import { isWithdrawalEnabled, sendWithdrawal } from "../services/solana.js";
+import { isWithdrawalEnabled, sendWithdrawal, getCasinoWalletBalance } from "../services/solana.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/admin.js";
 import { isCasinoPaused, setLegacyCasinoPaused } from "../services/pause.js";
+import {
+  getTreasurySnapshot,
+  listUserBalances,
+} from "../services/treasury.js";
+import { v4 as uuidv4 } from "uuid";
+import { appendOpsLog, listDatabaseBackups } from "../db/backup.js";
+import {
+  getAdminAnalytics,
+  listAdminActivity,
+  parseAdminPeriod,
+} from "../services/adminAnalytics.js";
 
 export const adminRouter = Router();
 
-adminRouter.use(requireAuth, requireAdmin);
+const adminLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+adminRouter.use(adminLimiter, requireAuth, requireAdmin);
 
 adminRouter.get("/dashboard", async (_req, res) => {
   const paused = await isCasinoPaused();
-  const totalUsers = db
-    .prepare("SELECT COUNT(*) as count FROM users")
-    .get() as { count: number };
-  const totalBets = db
-    .prepare("SELECT COUNT(*) as count FROM bets")
-    .get() as { count: number };
+  const analytics1d = getAdminAnalytics("1d");
+  const analytics7d = getAdminAnalytics("7d");
+  const analyticsAll = getAdminAnalytics("all");
+
   const pendingWithdrawals = db
     .prepare(
       `SELECT id, wallet_address, amount_lamports, created_at
@@ -36,26 +53,24 @@ adminRouter.get("/dashboard", async (_req, res) => {
       created_at: string;
     }>;
 
-  const last24h = db
-    .prepare(
-      `SELECT
-        COALESCE(SUM(amount_lamports), 0) as handle,
-        COALESCE(SUM(amount_lamports - payout_lamports), 0) as gross
-       FROM bets WHERE created_at >= datetime('now', '-1 day')`,
-    )
-    .get() as { handle: number; gross: number };
-
   const indexer = getIndexerStatus();
   const tournament = getTournamentLeaderboard();
+  const treasury = await getTreasurySnapshot();
 
   res.json({
     casinoPaused: paused,
     onChainEnabled: isAnchorEnabled(),
     withdrawalsEnabled: isWithdrawalEnabled(),
-    totalUsers: totalUsers.count,
-    totalBets: totalBets.count,
-    handle24hSol: lamportsToSol(last24h.handle),
-    grossRevenue24hSol: lamportsToSol(last24h.gross),
+    totalUsers: analyticsAll.players.total,
+    totalBets: analyticsAll.profit.betCount,
+    handle24hSol: analytics1d.profit.handleSol,
+    grossRevenue24hSol: analytics1d.profit.grossProfitSol,
+    netProfit24hSol: analytics1d.profit.netProfitSol,
+    netProfit7dSol: analytics7d.profit.netProfitSol,
+    netProfitAllTimeSol: analyticsAll.profit.netProfitSol,
+    profitAllTime: analyticsAll.profit,
+    flow7d: analytics7d.flow,
+    games7d: analytics7d.games,
     pendingWithdrawals: pendingWithdrawals.map((w) => ({
       id: w.id,
       walletAddress: w.wallet_address,
@@ -65,8 +80,113 @@ adminRouter.get("/dashboard", async (_req, res) => {
     tournamentPrizePoolSol: tournament.prizePoolSol,
     indexer,
     adminWallet: config.adminWallet,
+    treasury,
   });
 });
+
+adminRouter.get("/analytics", (req, res) => {
+  const period = parseAdminPeriod(req.query.period);
+  res.json(getAdminAnalytics(period));
+});
+
+adminRouter.get("/activity", (req, res) => {
+  const limit = Number.parseInt(String(req.query.limit ?? "50"), 10);
+  const offset = Number.parseInt(String(req.query.offset ?? "0"), 10);
+  const typeRaw = req.query.type;
+  const type =
+    typeRaw === "bet" ||
+    typeRaw === "deposit" ||
+    typeRaw === "withdrawal" ||
+    typeRaw === "all"
+      ? typeRaw
+      : "all";
+  const wallet =
+    typeof req.query.wallet === "string" ? req.query.wallet.trim() : undefined;
+
+  res.json(listAdminActivity({ limit, offset, type, wallet }));
+});
+
+adminRouter.get("/users", (req, res) => {
+  const limit = Number.parseInt(String(req.query.limit ?? "100"), 10);
+  const offset = Number.parseInt(String(req.query.offset ?? "0"), 10);
+  const search =
+    typeof req.query.search === "string" ? req.query.search : undefined;
+
+  const result = listUserBalances({ limit, offset, search });
+  res.json(result);
+});
+
+adminRouter.get("/treasury", async (_req, res) => {
+  const treasury = await getTreasurySnapshot();
+  res.json(treasury);
+});
+
+adminRouter.get("/backups", (_req, res) => {
+  res.json({ backups: listDatabaseBackups() });
+});
+
+adminRouter.post(
+  "/users/:walletAddress/credit",
+  (req: AuthenticatedRequest, res) => {
+    try {
+      const { amountSol, reason } = req.body as {
+        amountSol?: number;
+        reason?: string;
+      };
+      const walletParam = req.params.walletAddress;
+      const walletAddress =
+        typeof walletParam === "string" ? walletParam.trim() : "";
+
+      if (!walletAddress || walletAddress.length < 32) {
+        res.status(400).json({ error: "Valid walletAddress required" });
+        return;
+      }
+      if (
+        typeof amountSol !== "number" ||
+        !Number.isFinite(amountSol) ||
+        amountSol <= 0 ||
+        amountSol > 1000
+      ) {
+        res.status(400).json({ error: "amountSol must be between 0 and 1000" });
+        return;
+      }
+      if (!reason?.trim()) {
+        res.status(400).json({ error: "reason required for audit trail" });
+        return;
+      }
+
+      const lamports = solToLamports(amountSol);
+      getOrCreateUser(walletAddress);
+      const newBalanceLamports = updateBalance(walletAddress, lamports);
+
+      db.prepare(
+        `INSERT INTO balance_adjustments (id, wallet_address, delta_lamports, reason, admin_wallet)
+         VALUES (?, ?, ?, ?, ?)`,
+      ).run(
+        uuidv4(),
+        walletAddress,
+        lamports,
+        reason.trim(),
+        req.walletAddress ?? config.adminWallet,
+      );
+
+      const msg = `admin credit ${amountSol} SOL → ${walletAddress} (${reason.trim()})`;
+      appendOpsLog(msg);
+
+      res.json({
+        success: true,
+        walletAddress,
+        creditedSol: amountSol,
+        balanceSol: lamportsToSol(newBalanceLamports),
+        reason: reason.trim(),
+      });
+    } catch (err) {
+      res.status(500).json({
+        error: err instanceof Error ? err.message : "Credit failed",
+      });
+    }
+  },
+);
 
 adminRouter.post("/pause", async (req: AuthenticatedRequest, res) => {
   try {
@@ -120,7 +240,7 @@ adminRouter.post(
     try {
       const withdrawal = db
         .prepare(
-          "SELECT id, wallet_address, amount_lamports, status FROM withdrawals WHERE id = ?",
+          "SELECT id, wallet_address, amount_lamports, status, signature FROM withdrawals WHERE id = ?",
         )
         .get(req.params.id) as
         | {
@@ -128,6 +248,7 @@ adminRouter.post(
             wallet_address: string;
             amount_lamports: number;
             status: string;
+            signature: string | null;
           }
         | undefined;
 
@@ -136,8 +257,25 @@ adminRouter.post(
         return;
       }
 
+      if (withdrawal.signature) {
+        res.status(409).json({
+          error: "Withdrawal already sent on-chain — do not re-process",
+          signature: withdrawal.signature,
+        });
+        return;
+      }
+
       if (!isWithdrawalEnabled()) {
         res.status(400).json({ error: "Withdrawal wallet not configured" });
+        return;
+      }
+
+      const treasuryLamports = await getCasinoWalletBalance();
+      if (treasuryLamports < withdrawal.amount_lamports) {
+        res.status(503).json({
+          error:
+            "Treasury wallet has insufficient on-chain SOL for this withdrawal",
+        });
         return;
       }
 

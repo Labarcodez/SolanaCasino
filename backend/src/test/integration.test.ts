@@ -62,6 +62,7 @@ function startServer(): Promise<ChildProcess> {
         PROGRAM_AUTHORITY_PRIVATE_KEY: "",
         CASINO_WALLET_PRIVATE_KEY: "",
         SERVE_FRONTEND: "false",
+        ENABLE_E2E_HELPERS: "true",
         FRONTEND_URL: "http://localhost:5173",
         ADMIN_WALLET: "AdminWallet1111111111111111111111111111111111",
       },
@@ -157,6 +158,10 @@ async function testPublicEndpoints(): Promise<void> {
 
   const tournament = await api<{ prizePoolSol: number }>("GET", "/tournament");
   assert.equal(tournament.status, 200);
+
+  const crashStats = await api<{ hourlyHigh: number }>("GET", "/crash/stats");
+  assert.equal(crashStats.status, 200);
+  assert.ok(crashStats.data.hourlyHigh >= 1);
 }
 
 async function testFairnessEndpoints(): Promise<void> {
@@ -209,10 +214,14 @@ async function testAuthAndGames(): Promise<{ token: string; wallet: string }> {
   const keypair = Keypair.generate();
   const { token, wallet } = await authenticateTestUser(keypair);
 
-  // Seed balance directly (custodial test path)
-  process.env.SQLITE_PATH = testDbPath;
-  const { updateBalance } = await import("../db/index.js");
-  updateBalance(wallet, 100_000_000); // 0.1 SOL
+  const seed = await api<{ balanceSol: number }>(
+    "POST",
+    "/test/seed-balance",
+    { amountSol: 0.1 },
+    token,
+  );
+  assert.equal(seed.status, 200);
+  assert.ok(seed.data.balanceSol >= 0.09);
 
   const user = await api<{ balanceSol: number; displayName: string }>(
     "GET",

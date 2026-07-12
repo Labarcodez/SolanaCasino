@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { v4 as uuidv4 } from "uuid";
-import { db, updateBalance } from "../db/index.js";
+import { db, deductBalanceIfSufficient, runDbTask, updateBalance } from "../db/index.js";
 import { recordBetWithRewards } from "./limbo.js";
 import {
   generateCrashPoint,
@@ -9,13 +9,18 @@ import {
   hashServerSeed,
   hashServerSeedBytes,
 } from "./provablyFair.js";
-import { config } from "../config.js";
+import { config, lamportsToSol, solToLamports } from "../config.js";
 import {
   finalizeRoundOnChain,
   isAnchorEnabled,
   startRoundOnChain,
   startRunningOnChain,
 } from "./anchor.js";
+import {
+  getJackpotState,
+  recordJackpotContribution,
+  tryAwardJackpot,
+} from "./jackpot.js";
 
 export type CrashPhase = "betting" | "running" | "crashed" | "cooldown";
 
@@ -41,6 +46,7 @@ export interface CrashRoundState {
   multiplier: number;
   bets: CrashBet[];
   startedAt: number;
+  runningStartedAt?: number;
   elapsedMs: number;
   history: { roundId: string; crashPoint: number }[];
   onChainEnabled: boolean;
@@ -50,11 +56,12 @@ export interface CrashRoundState {
 const BETTING_DURATION_MS = 8000;
 const COOLDOWN_DURATION_MS = 3000;
 const TICK_MS = 50;
-const GROWTH_RATE_MILLI = 60;
+/** Bustabit-style e^(r·t) — ~2× in 9s, ~100× in ~58s (was linear 0.06×/s → 40min for 144×). */
+const CRASH_GROWTH_RATE = 0.00008;
 
 function multiplierAtElapsedMs(elapsedMs: number): number {
-  const growth = 1000 + (GROWTH_RATE_MILLI * elapsedMs) / 1000;
-  return Math.min(growth / 1000, 1000);
+  const t = Math.max(0, elapsedMs);
+  return Math.min(Math.exp(CRASH_GROWTH_RATE * t), 1000);
 }
 
 function isLegacyPausedSync(): boolean {
@@ -116,13 +123,24 @@ export class CrashGameEngine extends EventEmitter {
     const serverSeedHash = this.onChain
       ? hashServerSeedBytes(this.serverSeed)
       : hashServerSeed(this.serverSeed);
-    const crashPoint = this.onChain
+    let crashPoint = this.onChain
       ? generateOnChainCrashPoint(this.serverSeed, Number(nextId))
       : generateCrashPoint(this.serverSeed, nextId, []);
 
-    db.prepare(
-      "INSERT INTO crash_rounds (id, server_seed_hash, crash_point, status) VALUES (?, ?, ?, 'betting')",
-    ).run(nextId, serverSeedHash, crashPoint);
+    const testMaxCrash = parseFloat(process.env.CRASH_TEST_MAX_CRASH ?? "");
+    if (
+      !Number.isNaN(testMaxCrash) &&
+      testMaxCrash >= 1 &&
+      crashPoint > testMaxCrash
+    ) {
+      crashPoint = testMaxCrash;
+    }
+
+    runDbTask(() => {
+      db.prepare(
+        "INSERT INTO crash_rounds (id, server_seed_hash, crash_point, status) VALUES (?, ?, ?, 'betting')",
+      ).run(nextId, serverSeedHash, crashPoint);
+    });
 
     return {
       id: nextId,
@@ -140,8 +158,11 @@ export class CrashGameEngine extends EventEmitter {
   }
 
   getState(): CrashRoundState {
+    const revealCrashPoint =
+      this.round.phase === "crashed" || this.round.phase === "cooldown";
     return {
       ...this.round,
+      crashPoint: revealCrashPoint ? this.round.crashPoint : 0,
       bets: this.round.bets.map((b) => ({
         ...b,
         walletAddress:
@@ -176,11 +197,20 @@ export class CrashGameEngine extends EventEmitter {
       throw new Error("Betting is closed for this round");
     }
 
-    const user = db
-      .prepare("SELECT balance_lamports FROM users WHERE wallet_address = ?")
-      .get(walletAddress) as { balance_lamports: number } | undefined;
+    if (
+      amountLamports < solToLamports(config.minBetSol) ||
+      amountLamports > solToLamports(config.maxBetSol)
+    ) {
+      throw new Error(
+        `Bet must be between ${config.minBetSol} and ${config.maxBetSol} SOL`,
+      );
+    }
 
-    if (!user || user.balance_lamports < amountLamports) {
+    const balanceAfterDeduct = deductBalanceIfSufficient(
+      walletAddress,
+      amountLamports,
+    );
+    if (balanceAfterDeduct === null) {
       throw new Error("Insufficient balance");
     }
 
@@ -199,8 +229,6 @@ export class CrashGameEngine extends EventEmitter {
       throw new Error(`Bet ${slot === 0 ? "A" : "B"} already placed this round`);
     }
 
-    updateBalance(walletAddress, -amountLamports);
-
     const bet: CrashBet = {
       id: uuidv4(),
       walletAddress,
@@ -212,6 +240,8 @@ export class CrashGameEngine extends EventEmitter {
     };
 
     this.round.bets.push(bet);
+    recordJackpotContribution(bet.id, this.round.id, walletAddress, amountLamports);
+    this.emit("jackpot_update", getJackpotState());
     this.emit("bet_placed", bet);
     return bet;
   }
@@ -281,7 +311,9 @@ export class CrashGameEngine extends EventEmitter {
   private async startRunningPhase(): Promise<void> {
     this.round.phase = "running";
     this.round.multiplier = 1.0;
+    this.round.elapsedMs = 0;
     this.startTime = Date.now();
+    this.round.runningStartedAt = this.startTime;
 
     if (this.onChain) {
       try {
@@ -294,26 +326,33 @@ export class CrashGameEngine extends EventEmitter {
     this.emit("round_running", this.getState());
 
     this.tickInterval = setInterval(() => {
-      this.tick();
+      try {
+        this.tick();
+      } catch (err) {
+        console.error("Crash tick failed:", err);
+        this.clearTimers();
+        this.emit("engine_error", err);
+        try {
+          this.startBettingPhase();
+        } catch (restartErr) {
+          console.error("Crash engine restart failed:", restartErr);
+        }
+      }
     }, TICK_MS);
   }
 
   private tick(): void {
     const elapsed = Date.now() - this.startTime;
     this.round.elapsedMs = elapsed;
-    this.round.multiplier = this.onChain
-      ? multiplierAtElapsedMs(elapsed)
-      : Math.floor(Math.pow(Math.E, 0.00006 * elapsed) * 100) / 100;
+    this.round.multiplier = multiplierAtElapsedMs(elapsed);
 
-    if (!this.onChain) {
-      for (const bet of this.round.bets) {
-        if (
-          !bet.cashedOut &&
-          bet.autoCashout &&
-          this.round.multiplier >= bet.autoCashout
-        ) {
-          this.processCashout(bet, bet.autoCashout);
-        }
+    for (const bet of this.round.bets) {
+      if (
+        !bet.cashedOut &&
+        bet.autoCashout &&
+        this.round.multiplier >= bet.autoCashout
+      ) {
+        this.processCashout(bet, bet.autoCashout);
       }
     }
 
@@ -361,15 +400,34 @@ export class CrashGameEngine extends EventEmitter {
       }
     }
 
-    db.prepare(
-      "UPDATE crash_rounds SET status = 'complete', server_seed = ?, ended_at = datetime('now') WHERE id = ?",
-    ).run(this.serverSeed, this.round.id);
+    runDbTask(() => {
+      db.prepare(
+        "UPDATE crash_rounds SET status = 'complete', server_seed = ?, ended_at = datetime('now') WHERE id = ?",
+      ).run(this.serverSeed, this.round.id);
+    });
 
     this.history.unshift({
       roundId: this.round.id,
       crashPoint: this.round.crashPoint,
     });
     if (this.history.length > 10) this.history.pop();
+
+    const jackpotAward = await tryAwardJackpot(
+      this.round.id,
+      this.round.crashPoint,
+      this.round.bets,
+    );
+    if (jackpotAward) {
+      this.emit("jackpot_won", {
+        ...jackpotAward,
+        walletAddress:
+          jackpotAward.walletAddress.slice(0, 4) +
+          "..." +
+          jackpotAward.walletAddress.slice(-4),
+        amountSol: lamportsToSol(jackpotAward.amountLamports),
+      });
+    }
+    this.emit("jackpot_update", getJackpotState());
 
     this.emit("crash", {
       crashPoint: this.round.crashPoint,

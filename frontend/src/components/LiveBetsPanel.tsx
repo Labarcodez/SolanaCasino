@@ -1,5 +1,6 @@
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { formatSol } from "../lib/api";
+import { shortenAddress } from "../lib/utils";
 import type { CrashBetView } from "../hooks/useSocket";
 
 interface LiveBetsPanelProps {
@@ -39,7 +40,7 @@ export function LiveBetsPanel({
                 <span className="live-bet-avatar">
                   {bet.walletAddress.slice(0, 1)}
                 </span>
-                <span className="mono-cell">{bet.walletAddress}</span>
+                <span className="mono-cell">{shortenAddress(bet.walletAddress, 4)}</span>
               </div>
               <div className="live-bet-amount">
                 {formatSol(bet.amountLamports / LAMPORTS_PER_SOL)} SOL

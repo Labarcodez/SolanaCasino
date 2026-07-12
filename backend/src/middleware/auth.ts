@@ -52,14 +52,6 @@ export function attachSocketAuth(
   next();
 }
 
-/** @deprecated Use attachSocketAuth — kept for imports that expect strict auth */
-export function requireAuthSocket(
-  socket: Socket,
-  next: (err?: Error) => void,
-): void {
-  attachSocketAuth(socket, next);
-}
-
 export function requireMatchingWallet(
   req: AuthenticatedRequest,
   res: Response,

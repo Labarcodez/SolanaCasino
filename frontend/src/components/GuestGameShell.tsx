@@ -6,13 +6,21 @@ import { LiveActivityMarquee } from "./LiveActivityMarquee";
 import { SocketStatusBanner } from "./SocketStatusBanner";
 import { SiteFooter } from "./SiteFooter";
 import { ConnectTrigger } from "./ConnectTrigger";
+import { GuestMobileNav } from "./GuestMobileNav";
 import { GameErrorBoundary } from "./GameErrorBoundary";
 import { GameIcon, type GameIconId } from "./icons/GameIcons";
 import { GAMES } from "../lib/brand";
 import { tabToPath, type GameTab } from "../hooks/useGameTab";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 const CrashArena = lazy(() =>
   import("./CrashArena").then((m) => ({ default: m.CrashArena })),
+);
+const LimboGame = lazy(() =>
+  import("./LimboGame").then((m) => ({ default: m.LimboGame })),
+);
+const CoinflipGame = lazy(() =>
+  import("./CoinflipGame").then((m) => ({ default: m.CoinflipGame })),
 );
 const Leaderboard = lazy(() =>
   import("./Leaderboard").then((m) => ({ default: m.Leaderboard })),
@@ -23,17 +31,23 @@ const TournamentPanel = lazy(() =>
 const FairnessPanel = lazy(() =>
   import("./FairnessPanel").then((m) => ({ default: m.FairnessPanel })),
 );
+const SiteTokenPage = lazy(() =>
+  import("../pages/SiteToken").then((m) => ({ default: m.SiteTokenPage })),
+);
 
 const GUEST_GAME_TABS = new Set<GameTab>(["crash", "coinflip", "limbo"]);
 const GUEST_PUBLIC_TABS = new Set<GameTab>([
   "leaderboard",
   "tournament",
   "fairness",
+  "token",
+  "wallet",
 ]);
 
 const GUEST_SOCIAL_NAV: { id: GameTab; label: string; icon: GameIconId }[] = [
   { id: "leaderboard", label: "Leaderboard", icon: "leaderboard" },
   { id: "tournament", label: "Tournament", icon: "tournament" },
+  { id: "token", label: "Token", icon: "wallet" },
   { id: "fairness", label: "Fairness", icon: "fairness" },
 ];
 
@@ -62,6 +76,7 @@ export function GuestGameShell({
   activeTab,
   onChainEnabled,
 }: GuestGameShellProps) {
+  useDocumentTitle(activeTab);
   const gameMeta = GAMES.find((g) => g.id === activeTab);
   const isGameTab = isGuestGameTab(activeTab);
 
@@ -86,7 +101,7 @@ export function GuestGameShell({
         </div>
       )}
 
-      <nav className="guest-game-nav container" aria-label="Site navigation">
+      <nav className="guest-game-nav container guest-game-nav--desktop" aria-label="Site navigation">
         {GAMES.map((game) => (
           <Link
             key={game.id}
@@ -128,21 +143,27 @@ export function GuestGameShell({
 
         {(activeTab === "coinflip" || activeTab === "limbo") && gameMeta && (
           <div className="container">
-            <div className="card card-glow guest-game-preview">
-              <div className="guest-game-preview-icon">
-                <GameIcon id={activeTab} size={40} />
-              </div>
-              <h2>{gameMeta.name}</h2>
-              <p>{gameMeta.desc}</p>
-              <p className="guest-game-preview-rtp">{gameMeta.rtp} RTP</p>
-              <div className="guest-game-preview-cta">
-                <ConnectTrigger intent="play" testId="guest-game-connect" />
-                <p className="guest-game-preview-hint">
-                  Connect your wallet to play {gameMeta.name.toLowerCase()} with
-                  instant settlement.
-                </p>
-              </div>
-            </div>
+            <GameErrorBoundary label={gameMeta.name}>
+              <Suspense fallback={<TabLoader />}>
+                {activeTab === "limbo" ? (
+                  <LimboGame
+                    balanceSol={0}
+                    minBetSol={0.001}
+                    maxBetSol={1}
+                    onBalanceUpdate={() => {}}
+                    spectator
+                  />
+                ) : (
+                  <CoinflipGame
+                    balanceSol={0}
+                    minBetSol={0.001}
+                    maxBetSol={1}
+                    onBalanceUpdate={() => {}}
+                    spectator
+                  />
+                )}
+              </Suspense>
+            </GameErrorBoundary>
           </div>
         )}
 
@@ -169,8 +190,38 @@ export function GuestGameShell({
             </Suspense>
           </div>
         )}
+
+        {activeTab === "token" && (
+          <div className="container">
+            <GameErrorBoundary label="Token">
+              <Suspense fallback={<TabLoader />}>
+                <SiteTokenPage />
+              </Suspense>
+            </GameErrorBoundary>
+          </div>
+        )}
+
+        {activeTab === "wallet" && (
+          <div className="container">
+            <div className="guest-game-banner guest-wallet-cta">
+              <div className="guest-game-banner-copy">
+                <p className="guest-game-eyebrow">Wallet</p>
+                <h1>Deposit SOL to play</h1>
+                <p>
+                  Connect Phantom to open your casino balance, deposit, and withdraw.
+                </p>
+              </div>
+              <ConnectTrigger
+                intent="play"
+                label="Connect wallet"
+                testId="guest-wallet-connect"
+              />
+            </div>
+          </div>
+        )}
       </main>
 
+      <GuestMobileNav />
       <SiteFooter />
     </div>
   );

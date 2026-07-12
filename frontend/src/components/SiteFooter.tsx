@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BRAND } from "../lib/brand";
+import { BRAND, GAMES } from "../lib/brand";
 import { CASINO_WALLET, fetchConfig } from "../lib/api";
 import { solscanAccountUrl, shortenAddress } from "../lib/utils";
 
@@ -38,7 +38,9 @@ export function SiteFooter() {
             Discord
           </a>
           <span className="site-footer-divider">·</span>
-          <span>{BRAND.rtp} Crash RTP</span>
+          <span>
+            {GAMES.map((g) => `${g.rtp} ${g.shortLabel}`).join(" · ")} RTP
+          </span>
         </div>
 
         <div className="site-footer-social">
@@ -53,8 +55,8 @@ export function SiteFooter() {
 
         <p className="site-footer-legal">
           Play responsibly. You must be of legal gambling age in your jurisdiction.
-          Cryptocurrency gambling involves risk of loss. {BRAND.name} is a decentralized
-          gaming platform on Solana.
+          Cryptocurrency gambling involves risk of loss. {BRAND.name} is a
+          deposit-first provably fair casino on Solana.
         </p>
       </div>
     </footer>

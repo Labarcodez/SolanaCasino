@@ -17,7 +17,7 @@
   },
   {
     "ParameterKey": "CasinoWalletAddress",
-    "ParameterValue": "C9W7nGv2ZBJp4zcmtvBHkrtTPhB1FQ7JaNNPRNhiA4Ze"
+    "ParameterValue": "3BSEfRdZsZz87EDafo5rcY87uLt6RCbPqQZsmNMxYfcu"
   },
   {
     "ParameterKey": "AdminWallet",
@@ -26,5 +26,13 @@
   {
     "ParameterKey": "SolanaCluster",
     "ParameterValue": "mainnet-beta"
+  },
+  {
+    "ParameterKey": "AlarmEmail",
+    "ParameterValue": "orbitsolanacasino@gmail.com"
+  },
+  {
+    "ParameterKey": "SentryDsn",
+    "ParameterValue": ""
   }
 ]

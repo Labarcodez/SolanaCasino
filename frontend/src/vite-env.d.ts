@@ -6,6 +6,7 @@ interface ImportMetaEnv {
   readonly VITE_SOLANA_RPC: string;
   readonly VITE_API_URL: string;
   readonly VITE_PROGRAM_ID: string;
+  readonly VITE_SENTRY_DSN: string;
 }
 
 interface ImportMeta {

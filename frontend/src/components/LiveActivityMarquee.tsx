@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchRecentWins, type RecentWin } from "../lib/api";
+import { fetchRecentWins, fetchConfig, type RecentWin } from "../lib/api";
 import { shortenAddress } from "../lib/utils";
 
 const GAME_LABELS: Record<string, string> = {
@@ -19,10 +19,17 @@ function formatWinMessage(win: RecentWin): string {
 
 export function LiveActivityMarquee() {
   const [wins, setWins] = useState<RecentWin[]>([]);
+  const [cluster, setCluster] = useState<string | undefined>();
 
   const load = useCallback(() => {
     fetchRecentWins()
       .then(setWins)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetchConfig()
+      .then((c) => setCluster(c.cluster))
       .catch(() => {});
   }, []);
 
@@ -32,13 +39,18 @@ export function LiveActivityMarquee() {
     return () => clearInterval(interval);
   }, [load]);
 
+  const isMainnet = cluster === "mainnet-beta";
+  const payoutHint = isMainnet
+    ? "Deposit-first vault · fast SOL withdrawals"
+    : "Deposit-first vault · devnet testing";
+
   const messages =
     wins.length > 0
       ? wins.map(formatWinMessage)
       : [
           "Orbit Solana Casino — provably fair Solana gaming",
           "Crash · Limbo · Coinflip — play with Phantom",
-          "Deposit-first vault · instant devnet payouts",
+          payoutHint,
         ];
 
   const doubled = [...messages, ...messages];

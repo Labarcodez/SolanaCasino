@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   fetchCoinflipRecent,
   formatSol,
@@ -13,15 +13,18 @@ import { SoundToggle } from "./SoundToggle";
 import { WinCelebration } from "./WinCelebration";
 import { FairnessModal } from "./FairnessModal";
 import { GameActionSpinner } from "./GameActionSpinner";
+import { ConnectTrigger } from "./ConnectTrigger";
 import { Coin3D } from "./coinflip/Coin3D";
 import { fairnessUrl } from "../lib/fairnessLink";
+import { hapticPulse } from "../lib/haptics";
 
 interface CoinflipGameProps {
-  walletAddress: string;
+  walletAddress?: string;
   balanceSol: number;
   minBetSol: number;
   maxBetSol: number;
   onBalanceUpdate: (balance: number) => void;
+  spectator?: boolean;
 }
 
 interface FlipRecord {
@@ -36,9 +39,10 @@ export function CoinflipGame({
   minBetSol,
   maxBetSol,
   onBalanceUpdate,
+  spectator = false,
 }: CoinflipGameProps) {
   const { toast } = useToast();
-  const { muted, toggleMute, play } = useSound();
+  const { muted, volume, toggleMute, setVolume, play } = useSound();
   const [betAmount, setBetAmount] = useState("0.01");
   const [choice, setChoice] = useState<"heads" | "tails">("heads");
   const [flipping, setFlipping] = useState(false);
@@ -72,7 +76,8 @@ export function CoinflipGame({
       });
   }, []);
 
-  const handleFlip = async () => {
+  const handleFlip = useCallback(async () => {
+    if (spectator || !walletAddress) return;
     const amount = parseFloat(betAmount);
     if (isNaN(amount) || amount < minBetSol || amount > maxBetSol) {
       toast(`Bet must be between ${minBetSol} and ${maxBetSol} SOL`, "error");
@@ -98,7 +103,12 @@ export function CoinflipGame({
         ].slice(0, 10),
       );
       play(flipResult.won ? "win" : "limboBust");
-      if (flipResult.won) setCelebrateWin(true);
+      if (flipResult.won) {
+        setCelebrateWin(true);
+        hapticPulse(16);
+      } else {
+        hapticPulse(28);
+      }
       setLastFairness({
         betId: flipResult.betId,
         serverSeed: flipResult.serverSeed,
@@ -116,14 +126,46 @@ export function CoinflipGame({
     } finally {
       setFlipping(false);
     }
-  };
+  }, [
+    spectator,
+    walletAddress,
+    betAmount,
+    minBetSol,
+    maxBetSol,
+    choice,
+    toast,
+    play,
+    onBalanceUpdate,
+  ]);
+
+  useEffect(() => {
+    if (spectator) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.key === "h" || e.key === "H") {
+        setChoice("heads");
+        return;
+      }
+      if (e.key === "t" || e.key === "T") {
+        setChoice("tails");
+        return;
+      }
+      if (e.code === "Enter" && !flipping) {
+        e.preventDefault();
+        void handleFlip();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [spectator, flipping, handleFlip]);
 
   return (
     <div className="card card-glow">
       <div className="game-header-row">
         <PageHeader
           title="Coinflip"
-          subtitle="50/50 instant flips · commit-reveal fairness"
+          subtitle="50/50 instant flips · 1.95× payout · commit-reveal fairness"
         />
         <button
           type="button"
@@ -133,7 +175,12 @@ export function CoinflipGame({
         >
           Fairness
         </button>
-        <SoundToggle muted={muted} onToggle={toggleMute} />
+        <SoundToggle
+          muted={muted}
+          volume={volume}
+          onToggle={toggleMute}
+          onVolumeChange={setVolume}
+        />
       </div>
 
       <RecentResultsStrip
@@ -146,13 +193,18 @@ export function CoinflipGame({
       />
 
       <div className="coinflip-container">
-        <div className="game-action-stage">
+        <div className="game-action-stage" aria-live="polite" aria-atomic="true">
           <WinCelebration active={celebrateWin} onDone={() => setCelebrateWin(false)} />
           <Coin3D
             flipping={flipping}
             result={result?.flipResult ?? null}
             won={result?.won ?? null}
           />
+          {result && !flipping && (
+            <p className="coinflip-result-sr">
+              {result.won ? "You won" : "You lost"} — {result.flipResult}
+            </p>
+          )}
         </div>
 
         <div className="choice-buttons">
@@ -160,7 +212,7 @@ export function CoinflipGame({
             type="button"
             className={`choice-btn ${choice === "heads" ? "selected" : ""}`}
             onClick={() => setChoice("heads")}
-            disabled={flipping}
+            disabled={flipping || spectator}
           >
             Heads
           </button>
@@ -168,11 +220,15 @@ export function CoinflipGame({
             type="button"
             className={`choice-btn ${choice === "tails" ? "selected" : ""}`}
             onClick={() => setChoice("tails")}
-            disabled={flipping}
+            disabled={flipping || spectator}
           >
             Tails
           </button>
         </div>
+
+        <p className="coinflip-payout-preview text-muted">
+          Win pays <strong>1.95×</strong> your bet (5% house edge)
+        </p>
 
         <BetAmountControls
           balanceSol={balanceSol}
@@ -180,18 +236,28 @@ export function CoinflipGame({
           maxBetSol={maxBetSol}
           amount={betAmount}
           onAmountChange={setBetAmount}
-          disabled={flipping}
+          disabled={flipping || spectator}
         />
 
+        {spectator ? (
+          <ConnectTrigger intent="play" label="Connect to play" fullWidth testId="coinflip-spectator-connect" />
+        ) : (
         <button
           type="button"
           className="btn btn-primary"
-          onClick={handleFlip}
+          onClick={() => void handleFlip()}
           disabled={flipping}
           style={{ width: "100%", maxWidth: 320 }}
         >
           {flipping ? <GameActionSpinner label="Flipping..." /> : `Flip for ${betAmount} SOL`}
         </button>
+        )}
+
+        {!spectator && (
+          <p className="game-shortcut-hint text-muted">
+            H = heads · T = tails · Enter = flip
+          </p>
+        )}
 
         {lastFairness && (
           <a className="fairness-link" href={fairnessUrl({

@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /launch
+Disallow: /preview-
+
+Sitemap: https://orbit-casino.com/sitemap.xml

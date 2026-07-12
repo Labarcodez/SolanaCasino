@@ -42,16 +42,33 @@ export const config = {
     process.env.PROGRAM_ID ??
     "Be5brMe2AvA68zEdiFKxa6KfYJdeQAeY12eWtZiC41vU",
   programAuthorityPrivateKey: process.env.PROGRAM_AUTHORITY_PRIVATE_KEY ?? "",
+  /** Canonical hot-wallet pubkey — keep in sync with CFN / Vite / docker defaults. */
   casinoWalletAddress:
     process.env.CASINO_WALLET_ADDRESS ??
-    "C9W7nGv2ZBJp4zcmtvBHkrtTPhB1FQ7JaNNPRNhiA4Ze",
+    "3BSEfRdZsZz87EDafo5rcY87uLt6RCbPqQZsmNMxYfcu",
   casinoWalletPrivateKey: process.env.CASINO_WALLET_PRIVATE_KEY ?? "",
+  /**
+   * When true, new bets are rejected if hot wallet SOL < player liabilities.
+   * Default on in production; set BLOCK_BETS_WHEN_INSOLVENT=false to disable.
+   */
+  blockBetsWhenInsolvent:
+    process.env.BLOCK_BETS_WHEN_INSOLVENT === undefined ||
+    process.env.BLOCK_BETS_WHEN_INSOLVENT === ""
+      ? (process.env.NODE_ENV ?? "development") === "production"
+      : process.env.BLOCK_BETS_WHEN_INSOLVENT === "1" ||
+        process.env.BLOCK_BETS_WHEN_INSOLVENT.toLowerCase() === "true",
+  /** Pending withdrawal confirmation sweeper interval (ms). */
+  withdrawFinalizeIntervalMs: Math.max(
+    15_000,
+    parseInt(process.env.WITHDRAW_FINALIZE_INTERVAL_MS ?? "45000", 10) || 45_000,
+  ),
+  sentryDsn: process.env.SENTRY_DSN ?? "",
   frontendUrl:
     process.env.FRONTEND_URL ??
     "http://localhost:5173",
   jwtSecret:
     process.env.JWT_SECRET ??
-    "dev-only-change-in-production-" + "FMmho438Vv1Y9nov4mtfHZ4pYSZV8NfubiCeCB3bbGCb",
+    "dev-only-change-in-production-do-not-use-in-prod",
   houseEdge: parseFloat(process.env.HOUSE_EDGE ?? "0.05"),
   minBetSol: parseFloat(process.env.MIN_BET_SOL ?? "0.001"),
   maxBetSol: parseFloat(process.env.MAX_BET_SOL ?? "10"),
@@ -64,10 +81,43 @@ export const config = {
     .map((o) => o.trim())
     .filter(Boolean),
   orbitTokenMint: process.env.ORBIT_TOKEN_MINT ?? "",
+  /** Comma-separated mints that must never be promoted as the site token (e.g. sniped relaunch). */
+  orbitTokenDeprecatedMints: (process.env.ORBIT_TOKEN_DEPRECATED_MINTS ??
+    "F2Kg2sH7q8CbH14ouZySE41vtwoJTbiuYCWeppR7BAGS,4T4seM2KAyQ23yF6aqnQHWiuGkuAp22FSs4fNbGPBAGS")
+    .split(",")
+    .map((m) => m.trim())
+    .filter(Boolean),
+  /** Primary launch platform: pump (default) or bags. */
+  orbitTokenLaunchPlatform:
+    process.env.ORBIT_TOKEN_LAUNCH_PLATFORM === "bags" ? "bags" : "pump",
+  /** Override launch status: coming_soon | live. Empty = auto from mint + URL. */
+  orbitTokenLaunchStatus:
+    process.env.ORBIT_TOKEN_LAUNCH_STATUS === "live"
+      ? "live"
+      : process.env.ORBIT_TOKEN_LAUNCH_STATUS === "coming_soon"
+        ? "coming_soon"
+        : "",
+  /** Full Bags.fm coin URL after launch, e.g. https://bags.fm/{mint} */
+  bagsFmTokenUrl: process.env.BAGS_FM_TOKEN_URL ?? "",
+  /** Creator profile on Bags.fm (pre-launch landing). */
+  bagsFmProfileUrl:
+    process.env.BAGS_FM_PROFILE_URL ?? "https://bags.fm/@orbitsolanacasino",
+  /** Server-side Bags API key — never expose to the browser. */
+  bagsFmApiKey: process.env.BAGS_FM_API_KEY ?? "",
   pumpProgramId:
     process.env.PUMP_PROGRAM_ID ??
     "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
   publicApiUrl: process.env.PUBLIC_API_URL ?? "",
+  /**
+   * Pump creator-fee lottery: every N ms claim fees, pay winnerBps of the
+   * *claim delta only* to a weighted random holder (never treasury float).
+   */
+  tokenRewardLotteryEnabled:
+    process.env.TOKEN_REWARD_LOTTERY_ENABLED === undefined ||
+    process.env.TOKEN_REWARD_LOTTERY_ENABLED === ""
+      ? true
+      : process.env.TOKEN_REWARD_LOTTERY_ENABLED === "1" ||
+        process.env.TOKEN_REWARD_LOTTERY_ENABLED.toLowerCase() === "true",
 };
 
 if (

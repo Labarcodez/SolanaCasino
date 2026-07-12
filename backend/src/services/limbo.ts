@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { db, recordBet, updateBalance } from "../db/index.js";
+import { db, deductBalanceIfSufficient, recordBet, updateBalance } from "../db/index.js";
 import { config } from "../config.js";
 import {
   evaluateLimboBet,
@@ -11,8 +11,14 @@ import { recordAffiliateCommission } from "./affiliate.js";
 import { accrueRakeback } from "./vip.js";
 import { recordTournamentWager } from "./tournament.js";
 
-const MIN_TARGET = 1.01;
+const MIN_TARGET = 1.25;
 const MAX_TARGET = 1000;
+
+export function validateLimboTarget(targetMultiplier: number): void {
+  if (targetMultiplier < MIN_TARGET || targetMultiplier > MAX_TARGET) {
+    throw new Error(`Target must be between ${MIN_TARGET}x and ${MAX_TARGET}x`);
+  }
+}
 
 export interface LimboBetRequest {
   walletAddress: string;
@@ -34,24 +40,19 @@ export interface LimboBetResult {
 }
 
 export function placeLimboBet(request: LimboBetRequest): LimboBetResult {
-  if (
-    request.targetMultiplier < MIN_TARGET ||
-    request.targetMultiplier > MAX_TARGET
-  ) {
-    throw new Error(`Target must be between ${MIN_TARGET}x and ${MAX_TARGET}x`);
-  }
+  validateLimboTarget(request.targetMultiplier);
 
-  const user = db
-    .prepare("SELECT balance_lamports FROM users WHERE wallet_address = ?")
-    .get(request.walletAddress) as { balance_lamports: number } | undefined;
-
-  if (!user || user.balance_lamports < request.amountLamports) {
+  const balanceAfterDeduct = deductBalanceIfSufficient(
+    request.walletAddress,
+    request.amountLamports,
+  );
+  if (balanceAfterDeduct === null) {
     throw new Error("Insufficient balance");
   }
 
   const serverSeed = generateServerSeed();
   const serverSeedHash = hashServerSeed(serverSeed);
-  const clientSeed = request.clientSeed ?? uuidv4();
+  const clientSeed = uuidv4();
   const betId = uuidv4();
 
   const { roll, won, resultMultiplier } = evaluateLimboBet({
@@ -66,7 +67,6 @@ export function placeLimboBet(request: LimboBetRequest): LimboBetResult {
     ? Math.floor(request.amountLamports * request.targetMultiplier)
     : 0;
 
-  updateBalance(request.walletAddress, -request.amountLamports);
   if (payoutLamports > 0) {
     updateBalance(request.walletAddress, payoutLamports);
   }
