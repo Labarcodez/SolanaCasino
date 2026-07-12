@@ -21,7 +21,10 @@ interface TrackedBet {
 
 function multiplierAtElapsedMs(elapsedMs: number): number {
   const t = Math.max(0, elapsedMs);
-  return Math.min(Math.floor(Math.exp(CRASH_GROWTH_RATE * t) * 1000), 1_000_000);
+  return Math.min(
+    Math.floor(Math.exp(CRASH_GROWTH_RATE * t) * 1000),
+    1_000_000, // milli units (= 1000.000×)
+  );
 }
 
 const trackedBets = new Map<string, TrackedBet>();

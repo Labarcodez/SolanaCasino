@@ -28,7 +28,8 @@ export function generateOnChainCrashPoint(
   const e = Math.pow(2, 52);
   if (h % 33 === 0) return 1.0;
   const result = Math.floor((100 * e - h) / (e - h)) / 100;
-  return Math.max(1.0, Math.min(result, 1000000));
+  // Cap must match crash curve MAX (multiplierAtElapsedMs) or rounds never end.
+  return Math.max(1.0, Math.min(result, 1000));
 }
 
 /** On-chain coinflip: sha256(serverSeed ‖ owner ‖ clientSeed) */
@@ -64,7 +65,8 @@ export function generateCrashPoint(
   }
 
   const result = Math.floor((100 * e - h) / (e - h)) / 100;
-  return Math.max(1.0, Math.min(result, 1000000));
+  // Cap must match crash curve MAX (multiplierAtElapsedMs) or rounds never end.
+  return Math.max(1.0, Math.min(result, 1000));
 }
 
 export function generateCoinflipResult(

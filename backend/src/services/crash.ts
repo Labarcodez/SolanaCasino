@@ -58,10 +58,14 @@ const COOLDOWN_DURATION_MS = 3000;
 const TICK_MS = 50;
 /** Bustabit-style e^(r·t) — ~2× in 9s, ~100× in ~58s (was linear 0.06×/s → 40min for 144×). */
 const CRASH_GROWTH_RATE = 0.00008;
+/** Hard ceiling — must match frontend crashCurve + provablyFair crash-point cap. */
+export const MAX_CRASH_MULTIPLIER = 1000;
+/** ln(MAX) / rate + buffer — force-end if a round somehow never hits crashPoint. */
+const MAX_RUNNING_MS = Math.ceil(Math.log(MAX_CRASH_MULTIPLIER) / CRASH_GROWTH_RATE) + 5_000;
 
 function multiplierAtElapsedMs(elapsedMs: number): number {
   const t = Math.max(0, elapsedMs);
-  return Math.min(Math.exp(CRASH_GROWTH_RATE * t), 1000);
+  return Math.min(Math.exp(CRASH_GROWTH_RATE * t), MAX_CRASH_MULTIPLIER);
 }
 
 function isLegacyPausedSync(): boolean {
@@ -80,6 +84,7 @@ export class CrashGameEngine extends EventEmitter {
   private history: { roundId: string; crashPoint: number }[] = [];
   private roundCounter = 0;
   private onChain = isAnchorEnabled();
+  private crashing = false;
 
   constructor() {
     super();
@@ -126,6 +131,8 @@ export class CrashGameEngine extends EventEmitter {
     let crashPoint = this.onChain
       ? generateOnChainCrashPoint(this.serverSeed, Number(nextId))
       : generateCrashPoint(this.serverSeed, nextId, []);
+
+    crashPoint = Math.min(crashPoint, MAX_CRASH_MULTIPLIER);
 
     const testMaxCrash = parseFloat(process.env.CRASH_TEST_MAX_CRASH ?? "");
     if (
@@ -314,17 +321,11 @@ export class CrashGameEngine extends EventEmitter {
     this.round.elapsedMs = 0;
     this.startTime = Date.now();
     this.round.runningStartedAt = this.startTime;
-
-    if (this.onChain) {
-      try {
-        await startRunningOnChain(Number(this.round.id));
-      } catch (err) {
-        console.error("start_running on-chain failed:", err);
-      }
-    }
+    this.crashing = false;
 
     this.emit("round_running", this.getState());
 
+    // Start ticks immediately — never block the curve on RPC/on-chain awaits.
     this.tickInterval = setInterval(() => {
       try {
         this.tick();
@@ -339,9 +340,17 @@ export class CrashGameEngine extends EventEmitter {
         }
       }
     }, TICK_MS);
+
+    if (this.onChain) {
+      void startRunningOnChain(Number(this.round.id)).catch((err) => {
+        console.error("start_running on-chain failed:", err);
+      });
+    }
   }
 
   private tick(): void {
+    if (this.crashing || this.round.phase !== "running") return;
+
     const elapsed = Date.now() - this.startTime;
     this.round.elapsedMs = elapsed;
     this.round.multiplier = multiplierAtElapsedMs(elapsed);
@@ -356,7 +365,19 @@ export class CrashGameEngine extends EventEmitter {
       }
     }
 
-    if (this.round.multiplier >= this.round.crashPoint) {
+    const hitCrashPoint = this.round.multiplier >= this.round.crashPoint;
+    const hitCap = this.round.multiplier >= MAX_CRASH_MULTIPLIER;
+    const hitWatchdog = elapsed >= MAX_RUNNING_MS;
+    if (hitCrashPoint || hitCap || hitWatchdog) {
+      if (hitWatchdog && !hitCrashPoint) {
+        console.warn(
+          `Crash watchdog: round ${this.round.id} forced end at ${this.round.multiplier.toFixed(2)}x (crashPoint=${this.round.crashPoint})`,
+        );
+        this.round.crashPoint = Math.min(
+          this.round.crashPoint,
+          this.round.multiplier,
+        );
+      }
       void this.crash();
       return;
     }
@@ -368,6 +389,9 @@ export class CrashGameEngine extends EventEmitter {
   }
 
   private async crash(): Promise<void> {
+    if (this.crashing) return;
+    if (this.round.phase !== "running") return;
+    this.crashing = true;
     this.clearTimers();
     this.round.phase = "crashed";
     this.round.multiplier = this.round.crashPoint;
@@ -416,7 +440,10 @@ export class CrashGameEngine extends EventEmitter {
       this.round.id,
       this.round.crashPoint,
       this.round.bets,
-    );
+    ).catch((err) => {
+      console.error("Jackpot award failed:", err);
+      return null;
+    });
     if (jackpotAward) {
       this.emit("jackpot_won", {
         ...jackpotAward,

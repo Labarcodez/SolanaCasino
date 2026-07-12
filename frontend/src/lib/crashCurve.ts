@@ -3,10 +3,13 @@
 /** Bustabit-style exponential rate (1/ms). Keep in sync with backend crash.ts / crashKeeper.ts. */
 export const CRASH_GROWTH_RATE = 0.00008;
 
+/** Hard ceiling — must match backend MAX_CRASH_MULTIPLIER / provablyFair cap. */
+export const MAX_CRASH_MULTIPLIER = 1000;
+
 /** Same formula as backend `multiplierAtElapsedMs`. */
 export function multiplierAtElapsedMs(elapsedMs: number): number {
   const t = Math.max(0, elapsedMs);
-  return Math.min(Math.exp(CRASH_GROWTH_RATE * t), 1000);
+  return Math.min(Math.exp(CRASH_GROWTH_RATE * t), MAX_CRASH_MULTIPLIER);
 }
 
 export interface CrashPalette {
