@@ -61,6 +61,31 @@ function Require-Docker {
 Require-AwsCli
 $envVars = Read-DotEnv $EnvFile
 
+# Export .env into process env so Docker build (Vite) and helpers see them
+foreach ($key in $envVars.Keys) {
+  if ([string]::IsNullOrWhiteSpace([string](Get-Item -Path "Env:$key" -ErrorAction SilentlyContinue).Value)) {
+    Set-Item -Path "Env:$key" -Value $envVars[$key]
+  }
+}
+# Always prefer .env for Vite bake-ins and Sentry (must match Portal / Sentry projects)
+foreach ($key in @(
+  "VITE_SENTRY_DSN", "SENTRY_DSN", "VITE_PHANTOM_APP_ID", "PHANTOM_APP_ID",
+  "VITE_CASINO_WALLET", "CASINO_WALLET_ADDRESS", "VITE_SOLANA_RPC", "SOLANA_RPC_FALLBACK"
+)) {
+  if ($envVars.ContainsKey($key) -and -not [string]::IsNullOrWhiteSpace($envVars[$key])) {
+    Set-Item -Path "Env:$key" -Value $envVars[$key]
+  }
+}
+if (-not $env:VITE_SENTRY_DSN -and $envVars["VITE_SENTRY_DSN"]) {
+  $env:VITE_SENTRY_DSN = $envVars["VITE_SENTRY_DSN"]
+}
+if (-not $env:VITE_PHANTOM_APP_ID -and $envVars["PHANTOM_APP_ID"]) {
+  $env:VITE_PHANTOM_APP_ID = $envVars["PHANTOM_APP_ID"]
+}
+if (-not $env:VITE_CASINO_WALLET -and $envVars["CASINO_WALLET_ADDRESS"]) {
+  $env:VITE_CASINO_WALLET = $envVars["CASINO_WALLET_ADDRESS"]
+}
+
 $jwtSecret = $envVars["JWT_SECRET"]
 if ([string]::IsNullOrWhiteSpace($jwtSecret) -or $jwtSecret.StartsWith("dev-only-change-in-production")) {
   $jwtSecret = -join ((1..32) | ForEach-Object { "{0:x2}" -f (Get-Random -Maximum 256) })
@@ -110,11 +135,15 @@ $outputs = aws cloudformation describe-stacks `
 
 $ecrUri = ($outputs | Where-Object { $_.OutputKey -eq "EcrRepositoryUri" }).OutputValue
 $lbUrl = ($outputs | Where-Object { $_.OutputKey -eq "LoadBalancerUrl" }).OutputValue
+$publicUrl = ($outputs | Where-Object { $_.OutputKey -eq "PublicSiteUrl" }).OutputValue
 $cluster = ($outputs | Where-Object { $_.OutputKey -eq "EcsClusterName" }).OutputValue
 $service = ($outputs | Where-Object { $_.OutputKey -eq "EcsServiceName" }).OutputValue
 
+# Prefer HTTPS public URL for health checks (ALB HTTP may redirect / fail TLS clients)
+$healthBase = if ($publicUrl) { $publicUrl.TrimEnd("/") } else { $lbUrl.TrimEnd("/") }
+
 Write-Host "ECR: $ecrUri" -ForegroundColor Green
-Write-Host "URL: $lbUrl" -ForegroundColor Green
+Write-Host "URL: $healthBase" -ForegroundColor Green
 
 if (-not $SkipBuild) {
   Require-Docker
@@ -134,7 +163,7 @@ if (-not $SkipBuild) {
 
 Write-Host ""
 Write-Host "Waiting for health check..." -ForegroundColor Cyan
-$healthUrl = "$lbUrl/api/health"
+$healthUrl = "$healthBase/api/health"
 $healthy = $false
 for ($i = 1; $i -le 12; $i++) {
   try {
@@ -150,10 +179,10 @@ for ($i = 1; $i -le 12; $i++) {
   Start-Sleep -Seconds 15
 }
 if (-not $healthy) {
-  Write-Host "Health check did not pass — run: node scripts/verify-production.mjs $lbUrl" -ForegroundColor Red
+  Write-Host "Health check did not pass — run: node scripts/verify-production.mjs $healthBase" -ForegroundColor Red
 } else {
   Write-Host "Running production verify..." -ForegroundColor Cyan
-  node scripts/verify-production.mjs $lbUrl
+  node scripts/verify-production.mjs $healthBase
   if ($LASTEXITCODE -ne 0) {
     Write-Host "Production verify reported failures — check ECS logs." -ForegroundColor Yellow
   }
@@ -161,8 +190,8 @@ if (-not $healthy) {
 
 Write-Host ""
 Write-Host "Deploy complete." -ForegroundColor Green
-Write-Host "Health: $lbUrl/api/health" -ForegroundColor Yellow
-Write-Host "Config: $lbUrl/api/config" -ForegroundColor Yellow
+Write-Host "Health: $healthBase/api/health" -ForegroundColor Yellow
+Write-Host "Config: $healthBase/api/config" -ForegroundColor Yellow
 Write-Host "SQLite persists on EFS at /app/backend/data — survives redeploys." -ForegroundColor Yellow
 Write-Host "Backups: /app/backend/data/backups (pre-start + corrupt archives)" -ForegroundColor Yellow
 Write-Host "Ops log: /app/backend/data/ops.log (also in CloudWatch /ecs/orbit-casino)" -ForegroundColor Yellow
