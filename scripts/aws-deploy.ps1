@@ -159,6 +159,13 @@ if (-not $SkipBuild) {
     --force-new-deployment `
     --region $Region `
     --output text | Out-Null
+
+  Write-Host "Waiting for ECS service to stabilize (new task replaces old)..." -ForegroundColor Cyan
+  aws ecs wait services-stable `
+    --cluster $cluster `
+    --services $service `
+    --region $Region
+  Write-Host "ECS service stable." -ForegroundColor Green
 }
 
 Write-Host ""
